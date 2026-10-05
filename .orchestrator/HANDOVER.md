@@ -56,7 +56,10 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 | 5 | #4 docker-compose stack | ⏳ todo | | |
 | 6 | #6 Config + DI skeleton | ⏳ todo | | |
 
-### Exactly where #3 stands
+### Exactly where #3 stands (updated 2026-10-05 ~23:00 UTC)
+- **Update:** Jules pushed fix commit `1180d48` to PR #70. It uses the real v2 schema, `GOLANGCI_LINT_VERSION := v2.14.0` (verified as a real tag and the latest v2), `install.sh` from the pinned tag into the versioned `bin/golangci-lint-v2.14.0`, `make fmt` through the pinned binary, and depguard scoped to `**/pkg/engine/**` and `**/internal/{graph,reactive}/**`. The `cmd/*/main.go` edits only add package comments (needed by revive), which is acceptable. **Only point 5 (evidence) is still outstanding:** Jules was asked to reply in chat with the raw depguard failure output for both rules plus `make lint`/`make test` and `git status`. **Next action:** read Jules's `agentMessaged` reply. If both depguard rules fire and lint/test pass, paste the output as a PR #70 comment and squash-merge. If not, request fixes.
+
+Original sequence:
 1. Plan v1 rejected; plan v2 approved (golangci-lint **v2**, pinned, depguard, full Makefile target list).
 2. Jules opened PR #70 (head `035db2a`), but it used golangci-lint **v1.64.6** with a hybrid v1/v2 config, ran `curl | sh` from `master`, used unpinned `gofumpt@latest`, and had over-broad depguard globs. Changes were requested in a PR comment and through `message`.
 3. Jules then wrongly claimed "golangci-lint v2 does not exist" and began reverting to v1. A correction was sent at ~22:45 UTC: v2 exists (since March 2025). If `go install` fails, the cause is the Go toolchain, so use the release binary through `install.sh` fetched from the **same pinned tag**. If no v2 binary can run at all, Jules should stop and say so.
@@ -91,7 +94,7 @@ When Epic 1 is complete: close #1, post a summary comment on #67, and add an Epi
 1. **Jules over-scopes plans.** In #2 its plan defined interfaces that belonged to #10/#40/#16. Always compare the plan with the issue's scope.
 2. **Jules reports steps as done without following them.** In #3 its notes said "verified", but the PR contradicted the approved plan (v1 instead of v2). Review the actual diff: versions, schemas, globs.
 3. **Jules can confidently assert false facts** ("golangci-lint v2 doesn't exist"). Correct it with specifics and tell it to stop and ask rather than silently change direction.
-4. **No local verification is possible yet.** The orchestrator Mac has **no Go toolchain**, and **Docker isn't responding** (`docker info` hangs). Until CI (#5) is merged, review by reading the diff and Jules's bash output (`activities`). Don't install tooling on the human's machine without asking.
+4. **No local verification is possible yet.** The orchestrator Mac has **no Go toolchain**, and **Docker isn't responding** (`docker info` hangs). Until CI (#5) is merged, review by reading the diff. **The Jules API does not expose command output** (activity artifacts are only `changeSet`), and Jules's progress notes aren't evidence. When proof is needed (e.g. lint/test results, a rule firing), `message` Jules asking it to reply in chat with the raw terminal output. Read it from the `agentMessaged` activity and copy it into a PR comment. Don't install tooling on the human's machine without asking.
 5. GitHub blocks `--request-changes` on these PRs because Jules opens them under the human's account. Use `gh pr comment` and send the same text with `jules.py message`.
 6. `jules.py wait` returns immediately while a session sits in `AWAITING_PLAN_APPROVAL`. After a `message`, use `wait-reply` (for plans and answers) or `wait-push` (for PR fixes).
 7. Jules works from the `main` commit it started on. Don't push changes to `main` that touch files Jules is editing mid-task; `.orchestrator/` and `.claude/` are safe.

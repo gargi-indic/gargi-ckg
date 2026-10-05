@@ -25,11 +25,11 @@ All helper commands run from the repo root after `source ~/.config/jules/env`:
 |---|---|
 | `python3 .orchestrator/jules.py start <issue>` | Start a Jules session for a sub-issue (plan approval required, auto-PR) |
 | `... get <session>` | State, Jules URL, PR outputs |
-| `... activities <session> [n]` | Plans, messages, progress, bash output |
+| `... activities <session> [n]` | Plans, messages, progress notes, changeSets (**no command output**; ask Jules to paste it in a message) |
 | `... approve <session>` | Approve the pending plan |
 | `... message <session> "<text>"` | Correct a plan, answer a question, request PR fixes |
 | `... wait <session> [secs]` | Block until the session needs attention or finishes (returns at once if it's already awaiting plan approval) |
-| `... wait-reply <session> [secs]` | After `message`: block until Jules posts a new activity (e.g. a revised plan) |
+| `... wait-reply <session> [secs]` | After `message`: block until Jules replies with a message or plan, or the session ends (ignores progress pings) |
 | `... wait-push <session> <pr> [secs]` | After requesting PR fixes: block until the PR head changes and Jules is idle |
 
 Run waits **in the background** (they take 5–35 min) and react when they finish. Never poll in a tight loop.
@@ -46,7 +46,7 @@ Run waits **in the background** (they take 5–35 min) and react when they finis
    - Scope: no unrelated files; nothing under `.orchestrator/` or `.claude/` touched.
    - The diff itself matches the **approved plan**: versions, schemas, paths. Don't trust Jules's progress notes.
    - No secrets, `@latest`, unpinned installers, global state or `:latest` images.
-   - CI green (`gh pr checks <n>`) once #5 is merged. Before that, read Jules's bash output in `activities`.
+   - CI green (`gh pr checks <n>`) once #5 is merged. Before that, the API can't show command output, so `message` Jules to reply with raw lint/test output, then copy it into a PR comment as evidence.
    - If fixes are needed: `gh pr comment <n> --body-file <review.md>` **and** `message` the same text with "push fixes to the same PR branch", then `wait-push`. (`gh pr review --request-changes` fails because PRs are under the human's account.)
 5. **Merge:** `gh pr merge <n> -R gargi-indic/gargi-ckg --squash --delete-branch`. Confirm the issue closed, then tick its acceptance-criteria boxes (`gh issue view N --json body --jq .body | sed 's/- \[ \]/- [x]/g'` → `gh issue edit N --body-file`). Pull `main`, update #67 (row ✅ + PR), log, and start the next task.
 6. **Epic complete:** close the epic, post a summary comment on #67, and add the next epic's build-order table to the #67 body (justify the order by dependencies; HANDOVER §6 suggests Epic #8's).

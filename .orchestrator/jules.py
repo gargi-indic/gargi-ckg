@@ -135,7 +135,9 @@ def main():
         seen = {a["id"] for a in call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])}
         while True:
             acts = call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])
-            new = [a for a in acts if a["id"] not in seen and a.get("originator") == "agent"]
+            # Ignore Jules's frequent progressUpdated pings; wait for a real reply (message, plan, end).
+            new = [a for a in acts if a["id"] not in seen and a.get("originator") == "agent"
+                   and any(k in a for k in ("agentMessaged", "planGenerated", "sessionCompleted", "sessionFailed"))]
             if new or time.time() > deadline:
                 print(json.dumps({"session": summary(call("GET", sid(arg))), "newActivities": new}, indent=2))
                 return

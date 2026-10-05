@@ -17,6 +17,76 @@ func TestLoad_MissingFile(t *testing.T) {
 	}
 }
 
+func TestLoad_EmptyFile(t *testing.T) {
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("failed to load config without path: %v", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("default config should validate: %v", err)
+	}
+
+	if cfg.Store.Driver != "memory" {
+		t.Errorf("expected default driver 'memory', got '%s'", cfg.Store.Driver)
+	}
+	if cfg.Server.HTTPAddress != ":8080" {
+		t.Errorf("expected default http_address ':8080', got '%s'", cfg.Server.HTTPAddress)
+	}
+}
+
+func TestLoad_PartialYAML(t *testing.T) {
+	yamlContent := `
+store:
+  driver: redis
+  redis:
+    addr: localhost:6379
+`
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	cfg, err := Load(configFile)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// Should have yaml values
+	if cfg.Store.Driver != "redis" {
+		t.Errorf("expected driver 'redis', got '%s'", cfg.Store.Driver)
+	}
+	// Should keep default values
+	if cfg.Server.HTTPAddress != ":8080" {
+		t.Errorf("expected default server address ':8080', got '%s'", cfg.Server.HTTPAddress)
+	}
+	if cfg.Temporal.TaskQueue != "gargi_tasks" {
+		t.Errorf("expected default task queue 'gargi_tasks', got '%s'", cfg.Temporal.TaskQueue)
+	}
+}
+
+func TestLoad_UnknownYAMLKey(t *testing.T) {
+	yamlContent := `
+store:
+  driver: memory
+  unknown_key: value
+`
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	_, err := Load(configFile)
+	if err == nil {
+		t.Fatal("expected error on unknown yaml key, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown field") && !strings.Contains(err.Error(), "not found in type") {
+		t.Fatalf("expected unknown field error, got: %v", err)
+	}
+}
+
 func TestLoad_YAML(t *testing.T) {
 	yamlContent := `
 store:
@@ -120,6 +190,26 @@ func TestValidate(t *testing.T) {
 				Server:   ServerConfig{HTTPAddress: "h", GRPCAddress: "g"},
 			},
 			expectError: false,
+		},
+		{
+			name: "invalid driver capitalization",
+			cfg: Config{
+				Store:    StoreConfig{Driver: "Redis", Redis: &RedisConfig{Addr: "localhost:6379"}},
+				Temporal: TemporalConfig{HostPort: "h", Namespace: "n", TaskQueue: "t"},
+				Server:   ServerConfig{HTTPAddress: "h", GRPCAddress: "g"},
+			},
+			expectError: true,
+			errContains: "Allowed values: memory, redis, postgres, neo4j",
+		},
+		{
+			name: "invalid driver spacing",
+			cfg: Config{
+				Store:    StoreConfig{Driver: " memory "},
+				Temporal: TemporalConfig{HostPort: "h", Namespace: "n", TaskQueue: "t"},
+				Server:   ServerConfig{HTTPAddress: "h", GRPCAddress: "g"},
+			},
+			expectError: true,
+			errContains: "Allowed values: memory, redis, postgres, neo4j",
 		},
 		{
 			name: "invalid driver",

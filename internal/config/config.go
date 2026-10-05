@@ -2,10 +2,11 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -55,17 +56,39 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 }
 
+// Default returns a new configuration instance with default values populated.
+func Default() *Config {
+	return &Config{
+		Store: StoreConfig{
+			Driver: "memory",
+		},
+		Temporal: TemporalConfig{
+			HostPort:  "localhost:7233",
+			Namespace: "default",
+			TaskQueue: "gargi_tasks",
+		},
+		Server: ServerConfig{
+			HTTPAddress: ":8080",
+			GRPCAddress: ":9090",
+		},
+	}
+}
+
 // Load reads the configuration from a YAML file (if path is provided)
-// and applies environment variable overrides.
+// and applies environment variable overrides on top of defaults.
 func Load(path string) (*Config, error) {
-	cfg := &Config{}
+	cfg := Default()
 
 	if path != "" {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
-		if err := yaml.Unmarshal(data, cfg); err != nil {
+
+		dec := yaml.NewDecoder(bytes.NewReader(data))
+		dec.KnownFields(true)
+
+		if err := dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("failed to parse config file: %w", err)
 		}
 	}
@@ -131,7 +154,7 @@ func applyEnvOverrides(cfg *Config) {
 
 // Validate checks the configuration for required fields and valid options.
 func (c *Config) Validate() error {
-	driver := strings.ToLower(strings.TrimSpace(c.Store.Driver))
+	driver := c.Store.Driver
 
 	switch driver {
 	case "memory":

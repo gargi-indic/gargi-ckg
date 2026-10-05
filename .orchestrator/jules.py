@@ -56,6 +56,17 @@ def key():
     return k
 
 
+def all_activities(session):
+    """Fetch every activity, following nextPageToken (sessions can exceed one page of 100)."""
+    acts, token = [], ""
+    while True:
+        page = call("GET", f"{sid(session)}/activities?pageSize=100" + (f"&pageToken={token}" if token else ""))
+        acts.extend(page.get("activities", []))
+        token = page.get("nextPageToken")
+        if not token:
+            return acts
+
+
 def call(method, path, body=None):
     req = urllib.request.Request(
         f"{API}/{path}",
@@ -114,7 +125,7 @@ def main():
         print(json.dumps(summary(call("GET", sid(arg))), indent=2))
     elif cmd == "activities":
         n = int(sys.argv[3]) if len(sys.argv) > 3 else 10
-        acts = call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])
+        acts = all_activities(arg)
         print(json.dumps(acts[-n:], indent=2))
     elif cmd == "approve":
         call("POST", f"{sid(arg)}:approvePlan", {})
@@ -132,9 +143,9 @@ def main():
             time.sleep(60)
     elif cmd == "wait-reply":
         deadline = time.time() + (int(sys.argv[3]) if len(sys.argv) > 3 else 3600)
-        seen = {a["id"] for a in call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])}
+        seen = {a["id"] for a in all_activities(arg)}
         while True:
-            acts = call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])
+            acts = all_activities(arg)
             # Ignore Jules's frequent progressUpdated pings; wait for a real reply (message, plan, end).
             new = [a for a in acts if a["id"] not in seen and a.get("originator") == "agent"
                    and any(k in a for k in ("agentMessaged", "planGenerated", "sessionCompleted", "sessionFailed"))]

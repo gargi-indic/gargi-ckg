@@ -13,6 +13,9 @@ Usage:
   jules.py wait-reply <session-id> [timeout-s]
                                            Block until Jules posts a new activity (e.g. a revised plan
                                            or an answer) after the latest one existing now
+  jules.py wait-push <session-id> <pr-number> [timeout-s]
+                                           After asking Jules for PR fixes: block until the PR head commit
+                                           changes and the session stops working (or needs attention)
 """
 import json
 import os
@@ -137,6 +140,23 @@ def main():
                 print(json.dumps({"session": summary(call("GET", sid(arg))), "newActivities": new}, indent=2))
                 return
             time.sleep(60)
+    elif cmd == "wait-push":
+        pr = sys.argv[3]
+        deadline = time.time() + (int(sys.argv[4]) if len(sys.argv) > 4 else 3600)
+
+        def head():
+            return subprocess.check_output(
+                ["gh", "pr", "view", pr, "-R", REPO, "--json", "headRefOid", "--jq", ".headRefOid"], text=True).strip()
+
+        start_head = head()
+        while True:
+            time.sleep(60)
+            s = summary(call("GET", sid(arg)))
+            pushed = head() != start_head
+            busy = s["state"] in {"QUEUED", "PLANNING", "IN_PROGRESS"}
+            if (pushed and not busy) or s["state"] in ATTENTION - {"COMPLETED"} or time.time() > deadline:
+                print(json.dumps({"session": s, "prHeadChanged": pushed, "prHead": head()}, indent=2))
+                return
     else:
         sys.exit(__doc__)
 

@@ -10,6 +10,9 @@ Usage:
   jules.py approve <session-id>            Approve the pending plan
   jules.py message <session-id> <text>     Send a follow-up message to Jules
   jules.py wait <session-id> [timeout-s]   Block until the session needs attention or finishes
+  jules.py wait-reply <session-id> [timeout-s]
+                                           Block until Jules posts a new activity (e.g. a revised plan
+                                           or an answer) after the latest one existing now
 """
 import json
 import os
@@ -122,6 +125,16 @@ def main():
             s = summary(call("GET", sid(arg)))
             if s["state"] in ATTENTION or time.time() > deadline:
                 print(json.dumps(s, indent=2))
+                return
+            time.sleep(60)
+    elif cmd == "wait-reply":
+        deadline = time.time() + (int(sys.argv[3]) if len(sys.argv) > 3 else 3600)
+        seen = {a["id"] for a in call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])}
+        while True:
+            acts = call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])
+            new = [a for a in acts if a["id"] not in seen and a.get("originator") == "agent"]
+            if new or time.time() > deadline:
+                print(json.dumps({"session": summary(call("GET", sid(arg))), "newActivities": new}, indent=2))
                 return
             time.sleep(60)
     else:

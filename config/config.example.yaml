@@ -1,0 +1,20 @@
+store:
+  # Allowed values: memory, redis, postgres, neo4j
+  driver: memory
+  # redis:
+  #   addr: "localhost:6379"
+  # postgres:
+  #   dsn: "postgres://user:pass@localhost:5432/db"
+  # neo4j:
+  #   uri: "neo4j://localhost:7687"
+  #   user: "neo4j"
+  #   password: "password"
+
+temporal:
+  host_port: "localhost:7233"
+  namespace: "default"
+  task_queue: "gargi_tasks"
+
+server:
+  http_address: ":8080"
+  grpc_address: ":9090"

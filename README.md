@@ -86,3 +86,12 @@ The CI pipeline runs on GitHub Actions. The following required status checks mus
 - `Integration Tests` (`integration` job)
 
 Branch protection rules are configured by the repository owner to enforce these checks.
+
+## Configuration
+
+The application is configured using a YAML file (by default `config/config.example.yaml`) and can be overridden by environment variables with the `GARGI_` prefix.
+
+Examples of environment overrides:
+- `GARGI_STORE_DRIVER=redis`
+- `GARGI_STORE_REDIS_ADDR=localhost:6379`
+- `GARGI_TEMPORAL_HOST_PORT=remote:7233`

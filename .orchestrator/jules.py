@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Minimal Jules API client used by the orchestrator agent.
+
+Requires JULES_API_KEY in the environment (e.g. `source ~/.config/jules/env`).
+
+Usage:
+  jules.py start <issue-number>            Start a Jules session for a sub-issue (prompt built from the issue)
+  jules.py get <session-id>                Print session state, URL and PR outputs as JSON
+  jules.py activities <session-id> [n]     Print the latest n activities (default 10)
+  jules.py approve <session-id>            Approve the pending plan
+  jules.py message <session-id> <text>     Send a follow-up message to Jules
+  jules.py wait <session-id> [timeout-s]   Block until the session needs attention or finishes
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+API = "https://jules.googleapis.com/v1alpha"
+REPO = "gargi-indic/gargi-ckg"
+SOURCE = f"sources/github/{REPO}"
+# States in which the orchestrator must act (or the session is over).
+ATTENTION = {"AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "PAUSED", "COMPLETED", "FAILED"}
+
+PROMPT = """You are implementing one sub-task of the gargi-ckg project: a pluggable Reactive Graph Engine middleware written in Go.
+
+Read docs/SPEC.md for the overall requirements before starting.
+
+## Task: #{number} {title}
+Parent epic: {epic}
+
+{body}
+
+## Rules
+- Implement ONLY the scope of this task. Do not start other backlog items; leave TODOs referencing issue numbers if needed.
+- Language: Go (1.23+). Keep code idiomatic: gofmt/goimports clean, no global state, dependencies injected via constructors.
+- Before finishing, run `go build ./...`, `go vet ./...` and `go test ./...` (and `make lint` / `make test` once a Makefile exists) and make sure they pass.
+- Do not modify anything under `.orchestrator/`.
+- Open one pull request titled "#{number}: {title}" whose description starts with "Closes #{number}" and lists how each acceptance criterion is met.
+"""
+
+
+def key():
+    k = os.environ.get("JULES_API_KEY")
+    if not k:
+        sys.exit("JULES_API_KEY is not set (source ~/.config/jules/env)")
+    return k
+
+
+def call(method, path, body=None):
+    req = urllib.request.Request(
+        f"{API}/{path}",
+        method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"X-Goog-Api-Key": key(), "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()}")
+
+
+def sid(s):
+    return s if s.startswith("sessions/") else f"sessions/{s}"
+
+
+def summary(sess):
+    prs = [o["pullRequest"] for o in sess.get("outputs", []) if "pullRequest" in o]
+    return {
+        "id": sess.get("id") or sess.get("name", "").split("/")[-1],
+        "title": sess.get("title"),
+        "state": sess.get("state"),
+        "url": sess.get("url"),
+        "updateTime": sess.get("updateTime"),
+        "pullRequests": [{"url": p.get("url"), "title": p.get("title")} for p in prs],
+    }
+
+
+def start(number):
+    issue = json.loads(subprocess.check_output(
+        ["gh", "issue", "view", str(number), "-R", REPO, "--json", "title,body"]))
+    parent = json.loads(subprocess.check_output(
+        ["gh", "api", f"repos/{REPO}/issues/{number}/parent", "--jq", "{number, title}"]))
+    prompt = PROMPT.format(number=number, title=issue["title"], body=issue["body"],
+                           epic=f"#{parent['number']} {parent['title']}")
+    sess = call("POST", "sessions", {
+        "title": f"#{number}: {issue['title']}",
+        "prompt": prompt,
+        "sourceContext": {"source": SOURCE, "githubRepoContext": {"startingBranch": "main"}},
+        "automationMode": "AUTO_CREATE_PR",
+        "requirePlanApproval": True,
+    })
+    print(json.dumps(summary(sess), indent=2))
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    cmd, arg = sys.argv[1], sys.argv[2]
+    if cmd == "start":
+        start(int(arg))
+    elif cmd == "get":
+        print(json.dumps(summary(call("GET", sid(arg))), indent=2))
+    elif cmd == "activities":
+        n = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+        acts = call("GET", f"{sid(arg)}/activities?pageSize=100").get("activities", [])
+        print(json.dumps(acts[-n:], indent=2))
+    elif cmd == "approve":
+        call("POST", f"{sid(arg)}:approvePlan", {})
+        print("plan approved")
+    elif cmd == "message":
+        call("POST", f"{sid(arg)}:sendMessage", {"prompt": " ".join(sys.argv[3:])})
+        print("message sent")
+    elif cmd == "wait":
+        deadline = time.time() + (int(sys.argv[3]) if len(sys.argv) > 3 else 3600)
+        while True:
+            s = summary(call("GET", sid(arg)))
+            if s["state"] in ATTENTION or time.time() > deadline:
+                print(json.dumps(s, indent=2))
+                return
+            time.sleep(60)
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

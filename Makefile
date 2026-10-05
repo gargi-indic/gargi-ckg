@@ -18,7 +18,7 @@ help:
 	@echo "  lint             Run linters"
 	@echo "  fmt              Format the code"
 	@echo "  generate         Run code generation"
-	@echo "  up               Start services (requires docker-compose.yml)"
+	@echo "  up               Start services"
 	@echo "  down             Stop services"
 
 tools:

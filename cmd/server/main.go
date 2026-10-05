@@ -1,7 +1,5 @@
+// Package main is the entry point for the server.
 package main
 
-import "fmt"
-
 func main() {
-	fmt.Println("Server placeholder")
 }

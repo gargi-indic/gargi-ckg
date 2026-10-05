@@ -1,7 +1,8 @@
 # Makefile for gargi-ckg
 
-GOLANGCI_LINT_VERSION := v1.64.6
+GOLANGCI_LINT_VERSION := v2.14.0
 COMPOSE_FILE ?= docker-compose.yml
+GOLANGCI_LINT_BIN := ./bin/golangci-lint-$(GOLANGCI_LINT_VERSION)
 
 .PHONY: help tools build test test-integration lint fmt generate up down
 
@@ -22,8 +23,9 @@ help:
 
 tools:
 	@mkdir -p ./bin
-	@if [ ! -f ./bin/golangci-lint ]; then \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./bin $(GOLANGCI_LINT_VERSION); \
+	@if [ ! -f $(GOLANGCI_LINT_BIN) ]; then \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh | sh -s -- -b ./bin $(GOLANGCI_LINT_VERSION) && \
+		mv ./bin/golangci-lint $(GOLANGCI_LINT_BIN); \
 	fi
 
 build:
@@ -36,11 +38,10 @@ test-integration:
 	go test -race -count=1 -tags=integration ./...
 
 lint: tools
-	./bin/golangci-lint run
+	$(GOLANGCI_LINT_BIN) run
 
-fmt:
-	go fmt ./...
-	go run mvdan.cc/gofumpt@latest -l -w .
+fmt: tools
+	$(GOLANGCI_LINT_BIN) fmt
 
 generate:
 	go generate ./...

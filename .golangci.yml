@@ -1,37 +1,32 @@
 version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - govet
     - staticcheck
     - revive
     - depguard
+  settings:
+    depguard:
+      rules:
+        engine:
+          files:
+            - "**/pkg/engine/**"
+          deny:
+            - pkg: "github.com/gargi-indic/gargi-ckg/internal"
+              desc: "pkg/engine must not import internal packages"
+        graph_and_reactive:
+          files:
+            - "**/internal/graph/**"
+            - "**/internal/reactive/**"
+          deny:
+            - pkg: "github.com/gargi-indic/gargi-ckg/internal/api"
+              desc: "domain packages must not import internal/api"
+            - pkg: "github.com/gargi-indic/gargi-ckg/internal/orchestrator"
+              desc: "domain packages must not import internal/orchestrator"
+            - pkg: "github.com/gargi-indic/gargi-ckg/internal/store"
+              desc: "domain packages must not import internal/store"
+formatters:
+  enable:
     - gofumpt
-
-linters-settings:
-  depguard:
-    rules:
-      engine:
-        files:
-          - "$all"
-          - "!**/internal/**"
-          - "!**/cmd/**"
-        deny:
-          - pkg: "github.com/gargi-indic/gargi-ckg/internal"
-            desc: "pkg/engine must not import internal packages"
-      graph_and_reactive:
-        files:
-          - "$all"
-          - "!**/internal/api/**"
-          - "!**/internal/orchestrator/**"
-          - "!**/internal/store/**"
-          - "!**/cmd/**"
-          - "!**/pkg/**"
-        deny:
-          - pkg: "github.com/gargi-indic/gargi-ckg/internal/api"
-            desc: "domain packages must not import internal/api"
-          - pkg: "github.com/gargi-indic/gargi-ckg/internal/orchestrator"
-            desc: "domain packages must not import internal/orchestrator"
-          - pkg: "github.com/gargi-indic/gargi-ckg/internal/store"
-            desc: "domain packages must not import internal/store"

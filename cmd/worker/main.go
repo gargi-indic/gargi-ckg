@@ -1,7 +1,5 @@
+// Package main is the entry point for the worker.
 package main
 
-import "fmt"
-
 func main() {
-	fmt.Println("Worker placeholder")
 }

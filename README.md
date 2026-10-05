@@ -31,6 +31,35 @@ To maintain a clean architecture, the following dependency rules must be strictl
 3. Domain packages (`internal/graph` and `internal/reactive`) **must never import** `internal/api`, `internal/orchestrator`, or `internal/store`.
 4. Only entry points in `cmd/*` are permitted to wire these components together.
 
+## Local development stack
+
+A local development stack can be brought up using Docker Compose. This includes Temporal (Server and UI), Redis, Postgres, and Neo4j.
+
+To start the local stack:
+```bash
+make up
+```
+
+To stop the local stack:
+```bash
+make down
+```
+
+### Credentials
+
+Default credentials for local development are stored in `.env.example`. The `make up` command will automatically copy this to `.env` if it doesn't exist. **These credentials are for LOCAL DEV ONLY.**
+
+### Service Ports
+
+| Service | Port Mapping | Purpose |
+|---------|--------------|---------|
+| Postgres | `127.0.0.1:5432` | Relational storage (app and Temporal) |
+| Redis | `127.0.0.1:6379` | Caching and pub/sub |
+| Neo4j | `127.0.0.1:7474` | Graph database (HTTP) |
+| Neo4j | `127.0.0.1:7687` | Graph database (Bolt) |
+| Temporal | `127.0.0.1:7233` | Orchestration server |
+| Temporal UI | `127.0.0.1:8233` | Web dashboard |
+
 ## Makefile Targets
 
 Common development tasks are managed via `make`:

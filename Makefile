@@ -47,17 +47,11 @@ generate:
 	go generate ./...
 
 up:
-	@if [ ! -f $(COMPOSE_FILE) ]; then \
-		echo "arrives with #4"; \
-		false; \
-	else \
-		docker compose -f $(COMPOSE_FILE) up -d; \
+	@if [ ! -f .env ]; then \
+		cp .env.example .env; \
+		echo "Copied .env.example to .env"; \
 	fi
+	docker compose -f $(COMPOSE_FILE) up -d
 
 down:
-	@if [ ! -f $(COMPOSE_FILE) ]; then \
-		echo "arrives with #4"; \
-		false; \
-	else \
-		docker compose -f $(COMPOSE_FILE) down; \
-	fi
+	docker compose -f $(COMPOSE_FILE) down

@@ -29,3 +29,22 @@ To maintain a clean architecture, the following dependency rules must be strictl
 2. Packages in `internal/*` may depend on `pkg/engine`.
 3. Domain packages (`internal/graph` and `internal/reactive`) **must never import** `internal/api`, `internal/orchestrator`, or `internal/store`.
 4. Only entry points in `cmd/*` are permitted to wire these components together.
+
+## Makefile Targets
+
+Common development tasks are managed via `make`:
+
+- `make build`: Build the project binaries.
+- `make test`: Run unit tests with race detection.
+- `make test-integration`: Run integration tests.
+- `make lint`: Run golangci-lint (automatically installed via `make tools`).
+- `make fmt`: Format source code using `go fmt` and `gofumpt`.
+- `make generate`: Run code generation.
+- `make up`: Start local infrastructure via docker-compose (arrives with #4).
+- `make down`: Stop local infrastructure.
+- `make tools`: Install necessary development tools (e.g., golangci-lint).
+
+## Code Generation
+
+- **Protobuf**: Protobuf generation via `buf` arrives with #49.
+- **Mocks**: Mock generation gets added alongside the interfaces (#10, #40).

@@ -48,3 +48,11 @@ Common development tasks are managed via `make`:
 
 - **Protobuf**: Protobuf generation via `buf` arrives with #49.
 - **Mocks**: Mock generation gets added alongside the interfaces (#10, #40).
+
+## CI
+
+The CI pipeline runs on GitHub Actions. The following required status checks must pass for a PR to be merged:
+- `Lint and Unit Tests` (`lint-and-unit` job)
+- `Integration Tests` (`integration` job)
+
+Branch protection rules are configured by the repository owner to enforce these checks.

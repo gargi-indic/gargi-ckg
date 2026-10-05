@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-unit:
+    name: Lint and Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@v5.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Cache bin directory
+        uses: actions/cache@v4.1.2
+        with:
+          path: ./bin
+          key: ${{ runner.os }}-bin-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-bin-
+
+      - name: Run tools, lint, test, build
+        run: make tools lint test build
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@v5.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Note: Service containers or testcontainers-go will be used here when integration tests are added
+      - name: Run integration tests
+        run: make test-integration

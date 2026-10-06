@@ -1,6 +1,6 @@
 # Orchestrator Handover: gargi-ckg
 
-Snapshot written by the first orchestrator (Claude Code, Opus 5.5) on **2026-10-05, ~22:45 UTC** and refreshed at the end of **Epic #1** and again at the end of **Epic #8** (2026-10-06) by the second/third orchestrator (Claude Code, Sonnet 5.5).
+Snapshot written by the first orchestrator (Claude Code, Opus 5.5) on **2026-10-05, ~22:45 UTC** and refreshed at the end of **Epic #1** and again at the end of **Epic #8** and at the end of the 2026-10-06 session (mid-Epic #15, waiting on PR #83) by the second/third orchestrator (Claude Code, Sonnet 5.5).
 The **live** state is always in GitHub issue **#67 Orchestrator Logs**. If this file and #67 disagree, #67 wins.
 To resume, invoke the `gargi-orchestrator` skill (`.claude/skills/gargi-orchestrator/SKILL.md`).
 
@@ -44,30 +44,42 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 
 `needs-discussion` issues: **#6** (decided, see §5), **#20**, **#40**, **#41**, **#51** (all undecided, so escalate when you reach them).
 
-## 4. Current state (end of Epic #8)
-**Epics #1 and #8 are complete and closed.** No Jules session is running and no PR is open. The next orchestrator starts **Epic #15**; build order **#16 → #21 → #17 → #18 → #19 → #20** (table and rationale are in the #67 body). **#20 is `needs-discussion`**: a human decision (CEL via cel-go vs hand-written grammar vs JSONPath-style) is requested in the last #67 comment; do not start #20 until it is recorded.
+## 4. Current state (mid-Epic #15, end of the 2026-10-06 session)
+**Epics #1 and #8 are complete and closed. Epic #15 is in progress: #16 and #21 are merged; #17 is IN REVIEW with fixes requested.** One Jules session is open (#17) and **PR #83 is open**. #18, #19 and #20 have not been started.
 
-| Epic #8 step | Issue | Status | PR / commit |
-|---|---|---|---|
-| 1 | #9 domain types | ✅ | #75 `6be34c2` |
-| 2 | #13 DAG utilities | ✅ | #76 `9fa2371` |
-| 3 | #12 state model | ✅ | #77 `3cd1397` |
-| 4 | #10 NodeInterface contract | ✅ | #78 `f018ffd` |
-| 5 | #11 registry | ✅ | #79 `8479214` |
-| 6 | #14 reference nodes | ✅ | #80 `846411e` |
+| Epic #15 step | Issue | Status | Session | PR / commit |
+|---|---|---|---|---|
+| 1 | #16 schema | ✅ | `595744714603540031` | #81 `ed4c51a` |
+| 2 | #21 validation errors | ✅ | `16903364258271397831` | #82 `d30d45b` |
+| 3 | #17 JSON/YAML parsers | 🔍 round-1 fixes requested | `18419591797003617012` | #83 open, head `87403fc` (pre-fix; CI was green on it) |
+| 4 | #18 structural validation | ⏳ | | |
+| 5 | #19 semantic validation | ⏳ | | |
+| 6 | #20 edge condition language | ⏳ **needs the human's decision first** | | |
 
-(Epic #1: #2 #69, #3 #70, #5 #71, #7 #72, #4 #73, #6 #74; sessions are in #67.)
+(Epic #8: #9 #75 `6be34c2`, #13 #76 `9fa2371`, #12 #77 `3cd1397`, #10 #78 `f018ffd`, #11 #79 `8479214`, #14 #80 `846411e`. Epic #1: #2 #69, #3 #70, #5 #71, #7 #72, #4 #73, #6 #74. Sessions are in #67.)
 
-**What exists on `main` now (beyond Epic #1):**
-- `pkg/engine` (public contracts, stdlib only): `NodeID`, `Node`, `Edge`, `Graph` (immutable, validated, indexed lookups), `ExecutionID`; `Status` + `CanTransition` table; `StateMutation`; immutable `NodeState`/`GraphState` with `Apply`/`WithStatus` and versions; `NodeInterface` + `NodeContext` + `BaseNode`; error contract (`ErrorClass`, `NodeError`, `ClassOf`, `IsRetryable`, `IsCritical`); injected `Registry` (`Register`/`Instantiate`/`Has`/`Types`, strict config decoding).
-- `internal/graph`: `Roots`, `Leaves`, `Upstream`, `Downstream`, `FindCycle`, `TopologicalSort`, `ErrCycle`/`CycleError`, 10k benchmarks.
-- `internal/nodes`: `RegisterDefaults(reg, Dependencies)` with `passthrough`, `transform`, `conditional_branch`, `http_call`, `wait_for_signal` (`HTTPDoer`, `SignalSource` interfaces).
+### Resume point: #17 / PR #83 (do this first)
+1. Boot sequence, then `python3 .orchestrator/jules.py get 18419591797003617012` and `activities 18419591797003617012 5`, and `gh pr view 83 -R gargi-indic/gargi-ckg --json headRefOid` (pre-fix head is `87403fc`).
+2. The round-1 review (full text posted as a comment on PR #83 and sent to Jules) asked for six things. A background `wait-push` was running when this session ended; it is gone, so if the head is unchanged restart it: `python3 .orchestrator/jules.py wait-push 18419591797003617012 83 2400` (in the background). If Jules asks a question or the session is `COMPLETED` without a push, answer or `message` it.
+   1. **Security:** reject YAML aliases (alias-bomb) + test with a bomb input that must fail fast.
+   2. Thread `engine.Path` through the parse stage so duplicate keys / non-string keys / depth / bad scalars carry their path (syntax errors stay at `$`); update goldens; add a nested duplicate-key case.
+   3. Binder messages must use JSON type names (`string|number|boolean|object|array|null`), never Go type names.
+   4. `bindInt`: `f == math.Trunc(f)` and `|f| <= 2^53`; non-integer → `invalid_type`, out of range → `invalid_value`.
+   5. Test gaps: real table-driven binder tests (all sections, pointer fields absent vs present), goldens for YAML syntax error / non-string key / unsupported apiVersion / `nodes: []`, number-normalisation test (`1000`, `1e3`, `1000.0` in JSON and YAML all `float64(1000)`), shuffled-key-order DeepEqual test.
+   6. Tidy: merge the stray `import "flag"`, real newlines in the no-panic YAML inputs, document the `-update` flag.
+3. Re-review the pushed diff against that list (also re-read `parse.go` for any remaining unbounded expansion), wait for CI (`gh pr checks 83`), then squash-merge, tick #17's boxes, update the #67 tables (row ✅, PR #83) and log. Then start #18.
 
-**Next action for the successor:** boot sequence, check #67 for a human reply on #20 and on the open decisions in §9, then `python3 .orchestrator/jules.py start 16` and update the #67 tables.
+**What exists on `main` now:**
+- `pkg/engine` (public contracts, stdlib only): `NodeID`, `Node`, `Edge`, `Graph` (immutable, indexed), `ExecutionID`; `Status` + `CanTransition`; `StateMutation`; immutable `NodeState`/`GraphState` (`Apply`/`WithStatus`, versions); `NodeInterface` + `NodeContext` + `BaseNode`; error contract (`ErrorClass`, `NodeError`, `ClassOf`, `IsRetryable`, `IsCritical`); injected `Registry` (strict typed config decoding); validation errors (`ErrorCode` ×16, `ValidationIssue`, `ValidationErrors`, `ErrInvalidDefinition`, `Path`/`PathRoot`).
+- `internal/graph`: DAG utilities (`Roots`, `Leaves`, `Upstream`, `Downstream`, `FindCycle`, `TopologicalSort`, `ErrCycle`/`CycleError`); `schema_test.go` (checks the schema, YAML≡JSON example, and instantiates every example node through the real registry).
+- `internal/nodes`: `RegisterDefaults(reg, Dependencies)` with `passthrough`, `transform`, `conditional_branch`, `http_call`, `wait_for_signal`.
+- `schemas/graph/v1/`: `schema.json` (draft 2020-12, `apiVersion: graph/v1`), `example.yaml` ≡ `example.json`, README.
+- NOT yet on main (in PR #83): `pkg/engine/definition.go` (`GraphDefinition` model, `Format`, `DefinitionParser`, `(*GraphDefinition).ToGraph()`), `internal/graph` parser + binder + golden tests.
 
 **Warnings carried over:**
 - The compose stack (#73) was **never started** (no working Docker on the orchestrator Mac). The human should run `make up` and confirm all five services go healthy; the Temporal healthcheck is the likeliest to need a tweak.
-- Branch protection on `main` is not enabled (the human's call). CI (`Lint and Unit Tests`, `Integration Tests`; tests run with `-race`) is live, but it has caught none of the design problems below; diff review has.
+- Branch protection on `main` is not enabled (the human's call). CI (`Lint and Unit Tests`, `Integration Tests`; tests run with `-race`) is live but has caught none of the design problems listed in §7; diff review has.
+- **#20 is blocked on a human decision** (question posted in #67 under the Epic #8 summary; options CEL via cel-go (recommended) / hand-written grammar / JSONPath-style). Do not start #20 without a recorded answer; #18 and #19 do not need it.
 
 ## 5. Decisions recorded
 | Date | Decision | By |
@@ -88,18 +100,19 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 | 2026-10-05 | **Default for Epic #8 (human may override):** public domain value types and `NodeInterface` live in `pkg/engine` (the public contract references them); algorithms/parsing in `internal/graph`. Check each plan against ADR-002 | orchestrator |
 | 2026-10-06 | Epic #8 designs (human may override): reference nodes in `internal/nodes`; hooks `OnInit`/`EvaluateReactivity`/`Execute`/`OnSuccess`/`OnFailure` with `NodeContext`; only `Execute` returns a `*StateMutation` and the engine stamps `NodeID`/`ExpectedVersion` and owns every status transition; transition table (Pending→Ready\|Skipped, Ready→Running\|Skipped, Running→Succeeded\|Failed, Succeeded\|Failed→Compensating, Compensating→Compensated; terminal Skipped/Compensated); error classes retryable/non-retryable/critical, unclassified = non-retryable; `Registry` injected, no globals, `DisallowUnknownFields`; `wait_for_signal` via injected `SignalSource` (Temporal implementation in Epic #29) | orchestrator |
 | 2026-10-06 | Epic #15 order #16 → #21 → #17 → #18 → #19 → #20; `condition` is an opaque string until #20 is decided | orchestrator |
+| 2026-10-06 | Epic #15 designs (human may override): schema `graph/v1` (JSON Schema 2020-12, strict, `$id` URN); nodes reference retry policies and compensation handlers **by name**; compensation handlers are NOT DAG nodes (top-level `compensations`, run in reverse completion order after a critical failure); `failurePolicy` = `onNodeFailure` (fail_graph\|continue), `onCriticalFailure` (compensate\|fail_graph); `condition` and `dataMapping` source paths are opaque strings until #20 | orchestrator |
+| 2026-10-06 | Validation errors (#21): 16 stable lower_snake_case `ErrorCode`s (additions only), `ValidationIssue{Path,Code,Message}`, collector `ValidationErrors` reporting all issues, JSONPath-style `Path`; the gRPC `InvalidArgument`/`BadRequest` and HTTP 400 mapping is documented only and belongs to Epic #48 | orchestrator |
+| 2026-10-06 | Parser (#17): public **unvalidated** `GraphDefinition` model in `pkg/engine` (so #18/#19 can report all problems), parser/binder in `internal/graph`; JSON via token stream (duplicate keys rejected), YAML single document, aliases rejected (after review), all numbers `float64`; the parser checks SHAPE AND TYPES ONLY (value rules are #18); limits 4 MiB / depth 64 | orchestrator |
 
-## 6. Review checklists for Epic #15
-Every PR must stay within its issue's scope, leave `.orchestrator/` and `.claude/` untouched, contain no secrets, meet every acceptance criterion in its issue, and have **both CI checks green** (`gh pr checks <n>`). `go.mod` changes need justification (stdlib/yaml.v3 only unless decided). Keep to ADR-002/003/004 and the depguard rules; `pkg/engine` stays contracts-only and must not import `internal/*`.
+## 6. Review checklists for the rest of Epic #15
+Every PR must stay within its issue's scope, leave `.orchestrator/` and `.claude/` untouched, contain no secrets, meet every acceptance criterion in its issue, and have **both CI checks green** (`gh pr checks <n>`). `go.mod` changes need justification (stdlib/yaml.v3 only unless decided). Keep to ADR-002/003/004 and the depguard rules; `pkg/engine` stays contracts-only and must not import `internal/*` (or yaml).
 
-- **#16 schema:** JSON Schema under `schemas/graph/v1`, `apiVersion` field, annotated example doc; fields cover nodes (id/type/config), edges (from/to/condition as an opaque string/data mapping), retry policy, compensation references, failure policy; must be consistent with `engine.Node`/`Edge` (#9) and not invent semantics the engine lacks; no Go code beyond what is needed to test the schema.
-- **#21 errors:** one machine-readable error type (JSON path, code, message), multiple errors aggregated; stable string codes; maps cleanly to gRPC `InvalidArgument`/HTTP 400 details later (no API-layer code now); `errors.Is/As` friendly.
-- **#17 parsers:** `Parse(bytes, format)` for JSON and YAML giving identical models (yaml.v3 already a dependency); strict decoding (unknown fields rejected, errors with JSON path via #21); produces #9 domain types; golden-file tests; no validation beyond decoding (that is #18/#19).
-- **#18 structural validation:** unique IDs, no dangling edges, no self-loops, acyclicity via `internal/graph.FindCycle`, at least one root and one leaf, ALL errors reported at once; fetch accessors once per node (see lessons).
-- **#19 semantic validation:** unknown node types rejected via the `Registry` (`Has`), node config validated through the registry's schema decoding without instantiating side-effectful nodes, retry/compensation references resolve; reuses `engine.ErrInvalidConfig`; errors via #21.
-- **#20 expression language:** BLOCKED on the human's decision (see #67). Conditions must be deterministic and side-effect free, type-checked at validation time; ADR required.
+- **#17 parsers (PR #83): see the resume point in §4.** Final check: JSON and YAML example models are `reflect.DeepEqual`, goldens match, no alias expansion, issues deterministic and path-correct, `ToGraph` pointer API, go.mod/go.sum untouched.
+- **#18 structural validation** (`internal/graph`, input = unvalidated `*engine.GraphDefinition`, output = `*engine.ValidationErrors`, ALL errors at once, deterministic order): unique node IDs (`duplicate_id`), no dangling edges (`dangling_edge`), no self-loops (`self_loop`), no duplicate edges, acyclicity via `FindCycle` (`cycle`, path in the message), at least one root and one leaf (`no_root`/`no_leaf`), `nodes` non-empty. **It must also enforce the schema VALUE rules the parser deliberately skips** (the parser checks shape/types only): id/type/name patterns (`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`, `^[A-Za-z][A-Za-z0-9_.-]*$`), retry-policy ranges (`maxAttempts>=1`, `initialIntervalMs>=1`, `backoffCoefficient>=1`, `maxIntervalMs>=1`), `failurePolicy` enums, `condition` length 1..4096, `dataMapping` non-empty keys/values (`invalid_value`). Fetch `Graph`/definition accessors once per node (hot loops). Do not duplicate parser checks.
+- **#19 semantic validation:** unknown node types via `Registry.Has` (`unknown_node_type`); node/compensation config validated through the registry's strict decoding WITHOUT instantiating side-effectful nodes if avoidable (`invalid_node_config`; see `Registry.Instantiate` and the example test, which instantiates every example node); `retryPolicy` and `compensation` references must exist (`unresolved_reference`); compensation handlers' types are registry types; unused policies/handlers are not errors. Errors via #21; the registry is injected, never global.
+- **#20 expression language:** BLOCKED on the human's decision (see #67). Conditions must be deterministic and side-effect free, type-checked at validation time; ADR required; a new dependency (cel-go) needs the human's explicit approval.
 
-When Epic #15 is complete: close #15, post a summary on #67 and add the next epic's build-order table (suggested: #22 Reactive Event System & Scheduler; check dependencies between epics before fixing the order).
+When Epic #15 is complete: close #15, post a summary on #67 and add the next epic's build-order table (suggested: #22 Reactive Event System & Scheduler; check dependencies between epics before fixing the order). Remaining epics: #22, #29, #39, #48, #56, #61 (observability, human to confirm keep/drop).
 
 ## 7. Lessons learned (read before reviewing anything)
 1. **Jules over-scopes plans.** In #2 its plan defined interfaces that belonged to #10/#40/#16. Always compare the plan with the issue's scope.
@@ -125,6 +138,13 @@ When Epic #15 is complete: close #15, post a summary on #67 and add the next epi
 21. **Jules' completion message usually has no command output**; rely on CI and on diff review, and ask for raw output in the plan-approval message anyway.
 22. **Approving a plan and sending binding clarifications in the same breath works** (approve, then `message`); Jules folds them into a v2.1 plan.
 23. **Table edits in the #67 body:** `str.replace` on a row template can hit every occurrence (an early edit corrupted the Epic #1 header). Anchor on the full row and re-read the body after every edit.
+24. **Verify "message sent" (and the wait started) after every `jules.py message`.** A long inline message with shell metacharacters broke once (#21's first rejection never reached Jules; it surfaced only as a failed background task). Write long messages to a file in the scratchpad and pass `"$(cat file)"`.
+25. **Untrusted-input parsers need a budget for every expansion mechanism**, not just input length and depth: YAML aliases (alias bomb) in #17, plus duplicate keys that `encoding/json` silently accepts. Review parsers adversarially.
+26. **Review public types for method receivers and `errors.As` targets and JSON behaviour** (#21: `Unwrap` returned values so `errors.As(*ValidationIssue)` never matched; a pointer-receiver `MarshalJSON` produced `{}` for values).
+27. **Reference examples must be checked against the real implementations** (#16's example had node configs the #14 built-ins reject); keep a test that instantiates them through the registry.
+28. **Errors shown to API clients must not contain Go type names** (`float64`, `map[string]interface {}`); use JSON type names.
+29. **Jules's first plan is usually a bullet list of intentions; the useful lever is a complete spec in the rejection message** (files, exact signatures, error codes, test list, out-of-scope list). It keeps rounds to two (plan v2 + one PR fix round).
+30. **Don't leave a background `wait` running across a handover**; record the resume command in HANDOVER §4 instead.
 
 
 ## 8. Chronological log (condensed; the full entries are #67's comments)
@@ -145,6 +165,7 @@ When Epic #15 is complete: close #15, post a summary on #67 and add the next epi
   - **#6:** plan v1 rejected (duplicate ADR, store stubs, viper); v2 approved; PR #74 needed defaults, exact driver matching and strict YAML keys; merged `210f6a0`.
   - **Epic #1 closed**; Epic #8 build-order table added to #67; handover refreshed.
 - **2026-10-05/06, third orchestration run (Sonnet 5.5):** fixed `jules.py` activities pagination (`40b63f4`); completed **Epic #8**: #9 (PR #75, `6be34c2`), #13 (#76, `9fa2371`), #12 (#77, `3cd1397`), #10 (#78, `f018ffd`), #11 (#79, `8479214`), #14 (#80, `846411e`). Every task: plan v1 rejected, v2 approved; five of six needed one PR fix round. Epic #8 closed; Epic #15 table and the #20 escalation posted on #67.
+- **2026-10-06, same run, Epic #15 so far:** #16 (PR #81, `ed4c51a`), #21 (PR #82, `d30d45b`) merged; Epic #8 summary and the #20 escalation posted; handover refreshed (`e20c0e8`). **#17** started (session `18419591797003617012`): plan v1 rejected (parser in `pkg/engine`, plain struct decoding, no paths), plan v2 approved (with a `ToGraph` signature correction); PR #83 reviewed, **round-1 fixes requested** (alias-bomb security fix, parse-stage paths, JSON type names, int range, test gaps, tidy); waiting for Jules to push. Session ended here by the human; handover docs updated (this commit).
 
 
 ## 9. Open questions for the human

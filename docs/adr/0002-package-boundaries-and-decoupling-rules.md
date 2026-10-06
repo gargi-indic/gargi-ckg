@@ -19,6 +19,7 @@ We establish the following directory layout and dependency rules, which will be 
 - `internal/`: Contains private application and library code.
   - `internal/graph/`: Handles graph parsing, validation, and structure.
   - `internal/reactive/`: Handles state transitions, events, and reactivity.
+  - `internal/nodes/`: Reference node implementations built on pkg/engine contracts.
   - `internal/orchestrator/`: Temporal integration and workflow orchestration.
   - `internal/store/`: State persistence adapters (e.g., in-memory, Redis, PostgreSQL).
   - `internal/api/`: External communication interfaces (gRPC, REST, SSE).

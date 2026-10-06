@@ -1,0 +1,7 @@
+apiVersion: graph/v1
+id: test
+nodes: []
+---
+apiVersion: graph/v1
+id: test2
+nodes: []

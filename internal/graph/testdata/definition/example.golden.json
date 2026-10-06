@@ -1,0 +1,89 @@
+{
+  "apiVersion": "graph/v1",
+  "id": "checkout_workflow",
+  "name": "Checkout Graph",
+  "description": "An example checkout graph processing an order.",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "passthrough"
+    },
+    {
+      "id": "map_order",
+      "type": "transform",
+      "config": {
+        "mapping": {
+          "order": "payload"
+        }
+      }
+    },
+    {
+      "id": "reserve_inventory",
+      "type": "http_call",
+      "config": {
+        "method": "POST",
+        "url": "https://inventory.example.com/reserve"
+      },
+      "retryPolicy": "standard_retry",
+      "compensation": "cancel_inventory"
+    },
+    {
+      "id": "check_stock",
+      "type": "conditional_branch",
+      "config": {
+        "input": "stock_ok",
+        "operator": "truthy"
+      }
+    },
+    {
+      "id": "wait_for_payment",
+      "type": "wait_for_signal",
+      "config": {
+        "signal": "payment_success"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "start",
+      "to": "map_order"
+    },
+    {
+      "from": "map_order",
+      "to": "reserve_inventory",
+      "dataMapping": {
+        "orderId": "start.orderId"
+      }
+    },
+    {
+      "from": "reserve_inventory",
+      "to": "check_stock"
+    },
+    {
+      "from": "check_stock",
+      "to": "wait_for_payment",
+      "condition": "reserve_inventory.status == 'reserved'"
+    }
+  ],
+  "retryPolicies": {
+    "standard_retry": {
+      "maxAttempts": 3,
+      "initialIntervalMs": 1000,
+      "backoffCoefficient": 2,
+      "maxIntervalMs": 10000
+    }
+  },
+  "compensations": {
+    "cancel_inventory": {
+      "type": "http_call",
+      "config": {
+        "method": "POST",
+        "url": "https://inventory.example.com/cancel"
+      }
+    }
+  },
+  "failurePolicy": {
+    "onNodeFailure": "fail_graph",
+    "onCriticalFailure": "compensate"
+  }
+}

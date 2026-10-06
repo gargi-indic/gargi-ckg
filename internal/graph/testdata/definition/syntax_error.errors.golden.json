@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$",
+      "code": "invalid_format",
+      "message": "error reading JSON object key: invalid character '\"' after object key:value pair"
+    }
+  ]
+}

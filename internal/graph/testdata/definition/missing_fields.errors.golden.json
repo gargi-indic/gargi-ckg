@@ -1,0 +1,14 @@
+{
+  "errors": [
+    {
+      "path": "$.apiVersion",
+      "code": "missing_required",
+      "message": "missing required field 'apiVersion'"
+    },
+    {
+      "path": "$.id",
+      "code": "missing_required",
+      "message": "missing required field 'id'"
+    }
+  ]
+}

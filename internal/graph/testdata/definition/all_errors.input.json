@@ -1,0 +1,13 @@
+{
+	"unknown": "field",
+	"nodes": [
+		{
+			"unknown_node_field": 1
+		}
+	],
+	"edges": [
+		{
+			"from": "n1"
+		}
+	]
+}

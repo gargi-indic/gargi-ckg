@@ -1,7 +1,7 @@
 {
   "errors": [
     {
-      "path": "$",
+      "path": "$.nodes",
       "code": "invalid_format",
       "message": "duplicate key 'nodes'"
     }

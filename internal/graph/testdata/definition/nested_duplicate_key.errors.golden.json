@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.nodes[0].config.a",
+      "code": "invalid_format",
+      "message": "duplicate key 'a'"
+    }
+  ]
+}

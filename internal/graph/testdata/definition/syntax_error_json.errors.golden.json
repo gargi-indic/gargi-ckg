@@ -1,7 +1,7 @@
 {
   "errors": [
     {
-      "path": "$",
+      "path": "$.nodes[0]",
       "code": "invalid_format",
       "message": "error reading JSON object key: invalid character '\"' after object key:value pair"
     }

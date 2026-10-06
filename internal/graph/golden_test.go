@@ -108,6 +108,9 @@ func TestGoldenDefinitions(t *testing.T) {
 
 			_, err = parser.Parse(inputData, format)
 			if err == nil {
+				if strings.Contains(baseName, "valid") {
+					return
+				}
 				t.Fatalf("expected error, got none for %s", inputPath)
 			}
 

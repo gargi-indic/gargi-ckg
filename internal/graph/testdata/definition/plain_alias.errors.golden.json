@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.nodes[1].type",
+      "code": "invalid_format",
+      "message": "YAML aliases are not supported"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+apiVersion: graph/v1
+id: test
+nodes:
+  - id: n1
+    type: t1
+    config:
+      1: val

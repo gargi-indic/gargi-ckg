@@ -1,0 +1,7 @@
+apiVersion: graph/v1
+id: test
+nodes:
+  - id: n1
+    type: &type t1
+  - id: n2
+    type: *type

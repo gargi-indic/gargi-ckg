@@ -2,10 +2,30 @@ package graph
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 )
+
+func jsonTypeName(v any) string {
+	switch v.(type) {
+	case string:
+		return "string"
+	case float64, int, int64:
+		return "number"
+	case bool:
+		return "boolean"
+	case map[string]any:
+		return "object"
+	case []any:
+		return "array"
+	case nil:
+		return "null"
+	default:
+		return fmt.Sprintf("%T", v)
+	}
+}
 
 func bindDefinition(tree any) (*engine.GraphDefinition, error) {
 	errs := &engine.ValidationErrors{}
@@ -18,7 +38,7 @@ func bindDefinition(tree any) (*engine.GraphDefinition, error) {
 
 	rootMap, ok := tree.(map[string]any)
 	if !ok {
-		errs.Add(string(path), engine.CodeInvalidType, fmt.Sprintf("expected object, got %T", tree))
+		errs.Add(string(path), engine.CodeInvalidType, fmt.Sprintf("expected object, got %s", jsonTypeName(tree)))
 		return nil, errs.Err()
 	}
 
@@ -318,19 +338,23 @@ func bindString(v any, p engine.Path, errs *engine.ValidationErrors) (string, bo
 	if s, ok := v.(string); ok {
 		return s, true
 	}
-	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected string, got %T", v))
+	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected string, got %s", jsonTypeName(v)))
 	return "", false
 }
 
 func bindInt(v any, p engine.Path, errs *engine.ValidationErrors) (int, bool) {
 	if f, ok := v.(float64); ok {
-		if float64(int(f)) == f {
-			return int(f), true
+		if f != math.Trunc(f) {
+			errs.Add(string(p), engine.CodeInvalidType, "expected integer, got number with a fractional part")
+			return 0, false
 		}
-		errs.Add(string(p), engine.CodeInvalidType, "expected integer, got float")
-		return 0, false
+		if math.Abs(f) > 1<<53 {
+			errs.Add(string(p), engine.CodeInvalidValue, "integer out of range")
+			return 0, false
+		}
+		return int(f), true
 	}
-	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected integer, got %T", v))
+	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected integer, got %s", jsonTypeName(v)))
 	return 0, false
 }
 
@@ -338,7 +362,7 @@ func bindFloat(v any, p engine.Path, errs *engine.ValidationErrors) (float64, bo
 	if f, ok := v.(float64); ok {
 		return f, true
 	}
-	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected float, got %T", v))
+	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected float, got %s", jsonTypeName(v)))
 	return 0, false
 }
 
@@ -346,7 +370,7 @@ func bindArray(v any, p engine.Path, errs *engine.ValidationErrors) ([]any, bool
 	if arr, ok := v.([]any); ok {
 		return arr, true
 	}
-	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected array, got %T", v))
+	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected array, got %s", jsonTypeName(v)))
 	return nil, false
 }
 
@@ -354,7 +378,7 @@ func bindObject(v any, p engine.Path, errs *engine.ValidationErrors) (map[string
 	if obj, ok := v.(map[string]any); ok {
 		return obj, true
 	}
-	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected object, got %T", v))
+	errs.Add(string(p), engine.CodeInvalidType, fmt.Sprintf("expected object, got %s", jsonTypeName(v)))
 	return nil, false
 }
 

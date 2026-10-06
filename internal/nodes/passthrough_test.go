@@ -76,6 +76,27 @@ func TestPassthroughNode(t *testing.T) {
 		}
 	})
 
+	t.Run("empty inputs returns nil mutation", func(t *testing.T) {
+		node, err := reg.Instantiate("passthrough", nil)
+		if err != nil {
+			t.Fatalf("failed to instantiate: %v", err)
+		}
+
+		nc := &fakeNodeContext{
+			nodeID: "node1",
+			inputs: map[string]any{},
+			state:  nil, // Verify it does not panic when State() is nil
+		}
+
+		mut, err := node.Execute(context.Background(), nc)
+		if err != nil {
+			t.Fatalf("Execute failed: %v", err)
+		}
+		if mut != nil {
+			t.Errorf("expected nil mutation, got %v", mut)
+		}
+	})
+
 	t.Run("rejects unknown config", func(t *testing.T) {
 		_, err := reg.Instantiate("passthrough", map[string]any{"unknown": "key"})
 		if err == nil {

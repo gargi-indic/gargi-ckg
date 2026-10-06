@@ -48,14 +48,15 @@ func (n *branchNode) Execute(_ context.Context, nc engine.NodeContext) (*engine.
 	inputs := nc.Inputs()
 	val, exists := inputs[n.cfg.Input]
 
-	if n.cfg.Operator == "" {
-		n.cfg.Operator = "truthy"
+	op := n.cfg.Operator
+	if op == "" {
+		op = "truthy"
 	}
 
 	var result bool
 	var err error
 
-	switch n.cfg.Operator {
+	switch op {
 	case "exists":
 		result = exists
 	case "truthy":
@@ -68,12 +69,12 @@ func (n *branchNode) Execute(_ context.Context, nc engine.NodeContext) (*engine.
 		if !exists {
 			return nil, engine.NewNonRetryableError(errors.New("missing input key for comparison: " + n.cfg.Input))
 		}
-		result, err = compare(val, n.cfg.Value, n.cfg.Operator)
+		result, err = compare(val, n.cfg.Value, op)
 		if err != nil {
 			return nil, engine.NewNonRetryableError(err)
 		}
 	default:
-		return nil, engine.NewNonRetryableError(errors.New("unknown operator: " + n.cfg.Operator))
+		return nil, engine.NewNonRetryableError(errors.New("unknown operator: " + op))
 	}
 
 	branch := "false"
@@ -81,7 +82,8 @@ func (n *branchNode) Execute(_ context.Context, nc engine.NodeContext) (*engine.
 		branch = "true"
 	}
 
-	mut := engine.NewStateMutation(nc.NodeID(), nc.State().Version(), nil, map[string]any{
+	// We pass 0 for ExpectedVersion as the engine is responsible for stamping it.
+	mut := engine.NewStateMutation(nc.NodeID(), 0, nil, map[string]any{
 		"result": result,
 		"branch": branch,
 	}, nil, nil)

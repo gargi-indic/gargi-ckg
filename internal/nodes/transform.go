@@ -54,47 +54,12 @@ func (n *transformNode) Execute(_ context.Context, nc engine.NodeContext) (*engi
 		outputs[outKey] = val
 	}
 
-	// We need to deep copy the static config values to prevent state aliasing.
-	copiedSet := deepCopyMap(n.cfg.Set)
-	for k, v := range copiedSet {
+	for k, v := range n.cfg.Set {
 		outputs[k] = v
 	}
 
 	// NewStateMutation will deep copy the 'outputs' map again, preventing any aliasing with nc.Inputs()
-	mut := engine.NewStateMutation(nc.NodeID(), nc.State().Version(), nil, outputs, nil, nil)
+	// We pass 0 for ExpectedVersion as the engine is responsible for stamping it.
+	mut := engine.NewStateMutation(nc.NodeID(), 0, nil, outputs, nil, nil)
 	return &mut, nil
-}
-
-// deepCopyMap creates a deep copy of a map[string]any.
-func deepCopyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	cp := make(map[string]any, len(m))
-	for k, v := range m {
-		cp[k] = deepCopyAny(v)
-	}
-	return cp
-}
-
-func deepCopySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	cp := make([]any, len(s))
-	for i, v := range s {
-		cp[i] = deepCopyAny(v)
-	}
-	return cp
-}
-
-func deepCopyAny(v any) any {
-	switch val := v.(type) {
-	case map[string]any:
-		return deepCopyMap(val)
-	case []any:
-		return deepCopySlice(val)
-	default:
-		return val
-	}
 }

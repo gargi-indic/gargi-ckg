@@ -64,12 +64,11 @@ func (n *waitSignalNode) Execute(ctx context.Context, nc engine.NodeContext) (*e
 		return nil, engine.NewRetryableError(err)
 	}
 
-	// Deep copy the payload
-	copiedPayload := deepCopyMap(payload)
-
-	mut := engine.NewStateMutation(nc.NodeID(), nc.State().Version(), nil, map[string]any{
+	// NewStateMutation deeply copies the set mapping.
+	// We pass 0 for ExpectedVersion as the engine is responsible for stamping it.
+	mut := engine.NewStateMutation(nc.NodeID(), 0, nil, map[string]any{
 		"signal":  n.cfg.Signal,
-		"payload": copiedPayload,
+		"payload": payload,
 	}, nil, nil)
 
 	return &mut, nil

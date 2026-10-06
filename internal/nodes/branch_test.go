@@ -137,4 +137,33 @@ func TestBranchNode(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("race condition on concurrent execution", func(t *testing.T) {
+		node, err := reg.Instantiate("conditional_branch", map[string]any{"input": "val"})
+		if err != nil {
+			t.Fatalf("failed to instantiate: %v", err)
+		}
+
+		nc := &fakeNodeContext{
+			nodeID: "node1",
+			inputs: map[string]any{"val": "hello"},
+			state:  nil, // also test that state can be nil
+		}
+
+		concurrency := 10
+		errs := make(chan error, concurrency)
+
+		for i := 0; i < concurrency; i++ {
+			go func() {
+				_, e := node.Execute(context.Background(), nc)
+				errs <- e
+			}()
+		}
+
+		for i := 0; i < concurrency; i++ {
+			if e := <-errs; e != nil {
+				t.Errorf("concurrent execution failed: %v", e)
+			}
+		}
+	})
 }

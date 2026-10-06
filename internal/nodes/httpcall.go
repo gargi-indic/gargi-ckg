@@ -120,7 +120,7 @@ func (n *httpCallNode) Execute(ctx context.Context, nc engine.NodeContext) (*eng
 	resp, err := n.client.Do(req)
 
 	// Prepare safe URL for error messages (strip query params and userinfo)
-	safeURL := req.URL
+	safeURL := *req.URL
 	safeURL.RawQuery = ""
 	safeURL.User = nil
 	safeURLStr := safeURL.String()
@@ -184,7 +184,8 @@ func (n *httpCallNode) Execute(ctx context.Context, nc engine.NodeContext) (*eng
 		}
 	}
 
-	mut := engine.NewStateMutation(nc.NodeID(), nc.State().Version(), nil, map[string]any{
+	// We pass 0 for ExpectedVersion as the engine is responsible for stamping it.
+	mut := engine.NewStateMutation(nc.NodeID(), 0, nil, map[string]any{
 		"status_code":  resp.StatusCode,
 		"body":         finalBody,
 		"content_type": respContentType,

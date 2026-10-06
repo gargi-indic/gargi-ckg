@@ -51,7 +51,7 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 |---|---|---|---|---|
 | 1 | #16 schema | ✅ | `595744714603540031` | #81 `ed4c51a` |
 | 2 | #21 validation errors | ✅ | `16903364258271397831` | #82 `d30d45b` |
-| 3 | #17 JSON/YAML parsers | 🔍 round-1 fixes requested | `18419591797003617012` | #83 open, head `87403fc` (pre-fix; CI was green on it) |
+| 3 | #17 JSON/YAML parsers | 🔍 **Jules pushed round-1 fixes; RE-REVIEW PENDING** | `18419591797003617012` | #83 open, head `43db22a` (pre-fix head was `87403fc`); CI on the new head was still running at handover |
 | 4 | #18 structural validation | ⏳ | | |
 | 5 | #19 semantic validation | ⏳ | | |
 | 6 | #20 edge condition language | ⏳ **needs the human's decision first** | | |
@@ -59,15 +59,15 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 (Epic #8: #9 #75 `6be34c2`, #13 #76 `9fa2371`, #12 #77 `3cd1397`, #10 #78 `f018ffd`, #11 #79 `8479214`, #14 #80 `846411e`. Epic #1: #2 #69, #3 #70, #5 #71, #7 #72, #4 #73, #6 #74. Sessions are in #67.)
 
 ### Resume point: #17 / PR #83 (do this first)
-1. Boot sequence, then `python3 .orchestrator/jules.py get 18419591797003617012` and `activities 18419591797003617012 5`, and `gh pr view 83 -R gargi-indic/gargi-ckg --json headRefOid` (pre-fix head is `87403fc`).
-2. The round-1 review (full text posted as a comment on PR #83 and sent to Jules) asked for six things. A background `wait-push` was running when this session ended; it is gone, so if the head is unchanged restart it: `python3 .orchestrator/jules.py wait-push 18419591797003617012 83 2400` (in the background). If Jules asks a question or the session is `COMPLETED` without a push, answer or `message` it.
+1. Boot sequence, then `python3 .orchestrator/jules.py get 18419591797003617012`, `activities 18419591797003617012 5` (look for Jules's chat message with raw command output) and `gh pr checks 83 -R gargi-indic/gargi-ckg`. **Jules already pushed the fixes (PR head `43db22a`); nothing has been re-reviewed or merged yet.** Do not start a second Jules session.
+2. The round-1 review (full text posted as a comment on PR #83 and sent to Jules) asked for six things; verify each in the diff of head `43db22a` (`gh pr diff 83`). If something is still wrong, post a round-2 review (`gh pr comment 83 --body-file` and `jules.py message`, then `wait-push`).
    1. **Security:** reject YAML aliases (alias-bomb) + test with a bomb input that must fail fast.
    2. Thread `engine.Path` through the parse stage so duplicate keys / non-string keys / depth / bad scalars carry their path (syntax errors stay at `$`); update goldens; add a nested duplicate-key case.
    3. Binder messages must use JSON type names (`string|number|boolean|object|array|null`), never Go type names.
    4. `bindInt`: `f == math.Trunc(f)` and `|f| <= 2^53`; non-integer → `invalid_type`, out of range → `invalid_value`.
    5. Test gaps: real table-driven binder tests (all sections, pointer fields absent vs present), goldens for YAML syntax error / non-string key / unsupported apiVersion / `nodes: []`, number-normalisation test (`1000`, `1e3`, `1000.0` in JSON and YAML all `float64(1000)`), shuffled-key-order DeepEqual test.
    6. Tidy: merge the stray `import "flag"`, real newlines in the no-panic YAML inputs, document the `-update` flag.
-3. Re-review the pushed diff against that list (also re-read `parse.go` for any remaining unbounded expansion), wait for CI (`gh pr checks 83`), then squash-merge, tick #17's boxes, update the #67 tables (row ✅, PR #83) and log. Then start #18.
+3. Re-review the pushed diff against that list (also re-read `parse.go` for any remaining unbounded expansion), make sure both CI checks are green, then squash-merge (`gh pr merge 83 -R gargi-indic/gargi-ckg --squash --delete-branch`), tick #17's boxes, update the #67 tables (row ✅, PR #83) and log. Then start #18.
 
 **What exists on `main` now:**
 - `pkg/engine` (public contracts, stdlib only): `NodeID`, `Node`, `Edge`, `Graph` (immutable, indexed), `ExecutionID`; `Status` + `CanTransition`; `StateMutation`; immutable `NodeState`/`GraphState` (`Apply`/`WithStatus`, versions); `NodeInterface` + `NodeContext` + `BaseNode`; error contract (`ErrorClass`, `NodeError`, `ClassOf`, `IsRetryable`, `IsCritical`); injected `Registry` (strict typed config decoding); validation errors (`ErrorCode` ×16, `ValidationIssue`, `ValidationErrors`, `ErrInvalidDefinition`, `Path`/`PathRoot`).
@@ -165,7 +165,7 @@ When Epic #15 is complete: close #15, post a summary on #67 and add the next epi
   - **#6:** plan v1 rejected (duplicate ADR, store stubs, viper); v2 approved; PR #74 needed defaults, exact driver matching and strict YAML keys; merged `210f6a0`.
   - **Epic #1 closed**; Epic #8 build-order table added to #67; handover refreshed.
 - **2026-10-05/06, third orchestration run (Sonnet 5.5):** fixed `jules.py` activities pagination (`40b63f4`); completed **Epic #8**: #9 (PR #75, `6be34c2`), #13 (#76, `9fa2371`), #12 (#77, `3cd1397`), #10 (#78, `f018ffd`), #11 (#79, `8479214`), #14 (#80, `846411e`). Every task: plan v1 rejected, v2 approved; five of six needed one PR fix round. Epic #8 closed; Epic #15 table and the #20 escalation posted on #67.
-- **2026-10-06, same run, Epic #15 so far:** #16 (PR #81, `ed4c51a`), #21 (PR #82, `d30d45b`) merged; Epic #8 summary and the #20 escalation posted; handover refreshed (`e20c0e8`). **#17** started (session `18419591797003617012`): plan v1 rejected (parser in `pkg/engine`, plain struct decoding, no paths), plan v2 approved (with a `ToGraph` signature correction); PR #83 reviewed, **round-1 fixes requested** (alias-bomb security fix, parse-stage paths, JSON type names, int range, test gaps, tidy); waiting for Jules to push. Session ended here by the human; handover docs updated (this commit).
+- **2026-10-06, same run, Epic #15 so far:** #16 (PR #81, `ed4c51a`), #21 (PR #82, `d30d45b`) merged; Epic #8 summary and the #20 escalation posted; handover refreshed (`e20c0e8`). **#17** started (session `18419591797003617012`): plan v1 rejected (parser in `pkg/engine`, plain struct decoding, no paths), plan v2 approved (with a `ToGraph` signature correction); PR #83 reviewed, **round-1 fixes requested** (alias-bomb security fix, parse-stage paths, JSON type names, int range, test gaps, tidy); Jules then pushed the fixes (PR head `43db22a`, re-review pending). Session ended here by the human; handover docs updated.
 
 
 ## 9. Open questions for the human

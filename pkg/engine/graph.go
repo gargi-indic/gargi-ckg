@@ -5,12 +5,15 @@ import (
 	"fmt"
 )
 
-// Graph represents a directed acyclic graph of execution nodes.
+// Graph represents a directed graph (acyclicity is validated separately).
 // Once created via NewGraph, the Graph and its components are immutable.
 type Graph struct {
-	id    string
-	nodes []*Node
-	edges []*Edge
+	id       string
+	nodes    []*Node
+	edges    []*Edge
+	nodeMap  map[NodeID]*Node
+	outgoing map[NodeID][]*Edge
+	incoming map[NodeID][]*Edge
 }
 
 // NewGraph creates a new immutable Graph instance.
@@ -28,7 +31,7 @@ func NewGraph(id string, nodes []*Node, edges []*Edge) (*Graph, error) {
 		return nil, errors.New("graph ID cannot be empty")
 	}
 
-	nodeMap := make(map[NodeID]struct{})
+	nodeMap := make(map[NodeID]*Node)
 	cpNodes := make([]*Node, 0, len(nodes))
 
 	for i, n := range nodes {
@@ -41,16 +44,15 @@ func NewGraph(id string, nodes []*Node, edges []*Edge) (*Graph, error) {
 		if _, exists := nodeMap[n.id]; exists {
 			return nil, fmt.Errorf("duplicate node ID found: %s", n.id)
 		}
-		nodeMap[n.id] = struct{}{}
-
-		// Create a deep copy of the node to ensure immutability
-		cpNode, _ := NewNode(n.id, n.nodeType, n.config) // Error impossible here due to previous checks
-		cpNodes = append(cpNodes, cpNode)
+		nodeMap[n.id] = n
+		cpNodes = append(cpNodes, n)
 	}
 
 	type edgeKey struct{ from, to NodeID }
 	edgeMap := make(map[edgeKey]struct{})
 	cpEdges := make([]*Edge, 0, len(edges))
+	outgoing := make(map[NodeID][]*Edge)
+	incoming := make(map[NodeID][]*Edge)
 
 	for i, e := range edges {
 		if e == nil {
@@ -73,15 +75,18 @@ func NewGraph(id string, nodes []*Node, edges []*Edge) (*Graph, error) {
 		}
 		edgeMap[key] = struct{}{}
 
-		// Create a defensive copy of the edge
-		cpEdge, _ := NewEdge(e.from, e.to, e.condition, e.dataMapping) // Error impossible here due to previous checks
-		cpEdges = append(cpEdges, cpEdge)
+		cpEdges = append(cpEdges, e)
+		outgoing[e.from] = append(outgoing[e.from], e)
+		incoming[e.to] = append(incoming[e.to], e)
 	}
 
 	return &Graph{
-		id:    id,
-		nodes: cpNodes,
-		edges: cpEdges,
+		id:       id,
+		nodes:    cpNodes,
+		edges:    cpEdges,
+		nodeMap:  nodeMap,
+		outgoing: outgoing,
+		incoming: incoming,
 	}, nil
 }
 
@@ -90,62 +95,41 @@ func (g *Graph) ID() string {
 	return g.id
 }
 
-// Nodes returns a copy of the graph's nodes in insertion order.
-// The returned nodes themselves are immutable.
+// Nodes returns a fresh slice of the graph's nodes in insertion order.
+// The returned nodes themselves are immutable pointers.
 func (g *Graph) Nodes() []*Node {
 	cp := make([]*Node, len(g.nodes))
-	for i, n := range g.nodes {
-		cp[i], _ = NewNode(n.id, n.nodeType, n.config)
-	}
+	copy(cp, g.nodes)
 	return cp
 }
 
-// Edges returns a copy of the graph's edges.
-// The returned edges themselves are immutable.
+// Edges returns a fresh slice of the graph's edges.
+// The returned edges themselves are immutable pointers.
 func (g *Graph) Edges() []*Edge {
 	cp := make([]*Edge, len(g.edges))
-	for i, e := range g.edges {
-		cp[i], _ = NewEdge(e.from, e.to, e.condition, e.dataMapping)
-	}
+	copy(cp, g.edges)
 	return cp
 }
 
 // Node returns the node with the specified ID, or nil if not found.
-// The returned node is a copy.
 func (g *Graph) Node(id NodeID) *Node {
-	for _, n := range g.nodes {
-		if n.id == id {
-			cp, _ := NewNode(n.id, n.nodeType, n.config)
-			return cp
-		}
-	}
-	return nil
+	return g.nodeMap[id]
 }
 
-// OutgoingEdges returns a list of edges originating from the specified node ID.
+// OutgoingEdges returns a fresh slice of edges originating from the specified node ID.
 // The edges are returned in the order they were provided during graph creation.
-// The returned edges are copies.
 func (g *Graph) OutgoingEdges(id NodeID) []*Edge {
-	var result []*Edge
-	for _, e := range g.edges {
-		if e.from == id {
-			cp, _ := NewEdge(e.from, e.to, e.condition, e.dataMapping)
-			result = append(result, cp)
-		}
-	}
-	return result
+	edges := g.outgoing[id]
+	cp := make([]*Edge, len(edges))
+	copy(cp, edges)
+	return cp
 }
 
-// IncomingEdges returns a list of edges pointing to the specified node ID.
+// IncomingEdges returns a fresh slice of edges pointing to the specified node ID.
 // The edges are returned in the order they were provided during graph creation.
-// The returned edges are copies.
 func (g *Graph) IncomingEdges(id NodeID) []*Edge {
-	var result []*Edge
-	for _, e := range g.edges {
-		if e.to == id {
-			cp, _ := NewEdge(e.from, e.to, e.condition, e.dataMapping)
-			result = append(result, cp)
-		}
-	}
-	return result
+	edges := g.incoming[id]
+	cp := make([]*Edge, len(edges))
+	copy(cp, edges)
+	return cp
 }

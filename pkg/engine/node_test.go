@@ -123,4 +123,41 @@ func TestNodeImmutability(t *testing.T) {
 			t.Errorf("node config slice was mutated by changing previously returned map")
 		}
 	})
+
+	t.Run("nested slice of maps immutability", func(t *testing.T) {
+		config := map[string]any{
+			"complex_slice": []any{
+				map[string]any{"k1": "v1"},
+				map[string]any{"k2": "v2"},
+			},
+		}
+
+		node, err := NewNode("node1", "typeA", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Mutate original complex slice
+		complexSlice := config["complex_slice"].([]any)
+		innerMap := complexSlice[0].(map[string]any)
+		innerMap["k1"] = "mutated"
+
+		nodeConfig := node.Config()
+		nodeComplexSlice := nodeConfig["complex_slice"].([]any)
+		nodeInnerMap := nodeComplexSlice[0].(map[string]any)
+
+		if nodeInnerMap["k1"] == "mutated" {
+			t.Errorf("node config was mutated by changing original input slice of maps")
+		}
+
+		// Mutate returned complex slice
+		nodeInnerMap["k2"] = "mutated"
+		freshConfig := node.Config()
+		freshComplexSlice := freshConfig["complex_slice"].([]any)
+		freshInnerMap := freshComplexSlice[0].(map[string]any)
+
+		if freshInnerMap["k2"] == "mutated" {
+			t.Errorf("node config was mutated by changing previously returned slice of maps")
+		}
+	})
 }

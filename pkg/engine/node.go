@@ -18,6 +18,8 @@ type Node struct {
 // NewNode creates a new Node instance.
 // It returns an error if id or nodeType is empty.
 // A deep copy of the config map is made to ensure immutability.
+// Config is expected to hold JSON-like values (string, number, bool, nil, map[string]any, []any).
+// Only map[string]any and []any are deep-copied. Other types are shared.
 func NewNode(id NodeID, nodeType string, config map[string]any) (*Node, error) {
 	if id == "" {
 		return nil, errors.New("node ID cannot be empty")
@@ -44,6 +46,8 @@ func (n *Node) Type() string {
 }
 
 // Config returns a deep copy of the Node's configuration map.
+// Config is expected to hold JSON-like values (string, number, bool, nil, map[string]any, []any).
+// Only map[string]any and []any are deep-copied. Other types are shared.
 func (n *Node) Config() map[string]any {
 	return deepCopyMap(n.config)
 }

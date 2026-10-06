@@ -168,6 +168,29 @@ func TestGraphAccessors(t *testing.T) {
 			t.Errorf("IncomingEdges() len = %d, want 0", len(edges))
 		}
 	})
+
+	t.Run("Slice Accessors Return Fresh Slices", func(t *testing.T) {
+		nodes1 := g.Nodes()
+		nodes1[0] = nil
+		nodes2 := g.Nodes()
+		if nodes2[0] == nil {
+			t.Errorf("Nodes() did not return a fresh slice")
+		}
+
+		out1 := g.OutgoingEdges("n1")
+		out1[0] = nil
+		out2 := g.OutgoingEdges("n1")
+		if out2[0] == nil {
+			t.Errorf("OutgoingEdges() did not return a fresh slice")
+		}
+
+		in1 := g.IncomingEdges("n3")
+		in1[0] = nil
+		in2 := g.IncomingEdges("n3")
+		if in2[0] == nil {
+			t.Errorf("IncomingEdges() did not return a fresh slice")
+		}
+	})
 }
 
 func TestGraphImmutability(t *testing.T) {

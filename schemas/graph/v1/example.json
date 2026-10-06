@@ -1,6 +1,6 @@
 {
   "apiVersion": "graph/v1",
-  "id": "checkout-workflow",
+  "id": "checkout_workflow",
   "name": "Checkout Graph",
   "description": "An example checkout graph processing an order.",
   "nodes": [
@@ -10,59 +10,64 @@
       "config": {}
     },
     {
-      "id": "validate-order",
+      "id": "map_order",
       "type": "transform",
       "config": {
-        "schema": "order_schema"
+        "mapping": {
+          "order": "payload"
+        }
       }
     },
     {
-      "id": "reserve-inventory",
+      "id": "reserve_inventory",
       "type": "http_call",
       "config": {
         "url": "https://inventory.example.com/reserve",
         "method": "POST"
       },
-      "retryPolicy": "standard-retry",
-      "compensation": "cancel-inventory"
+      "retryPolicy": "standard_retry",
+      "compensation": "cancel_inventory"
     },
     {
-      "id": "check-discount",
+      "id": "check_stock",
       "type": "conditional_branch",
-      "config": {}
+      "config": {
+        "input": "stock_ok",
+        "operator": "truthy"
+      }
     },
     {
-      "id": "wait-for-payment",
+      "id": "wait_for_payment",
       "type": "wait_for_signal",
       "config": {
-        "signalName": "payment_success"
+        "signal": "payment_success"
       }
     }
   ],
   "edges": [
     {
       "from": "start",
-      "to": "validate-order"
+      "to": "map_order"
     },
     {
-      "from": "validate-order",
-      "to": "reserve-inventory",
+      "from": "map_order",
+      "to": "reserve_inventory",
       "dataMapping": {
         "orderId": "start.orderId"
       }
     },
     {
-      "from": "reserve-inventory",
-      "to": "check-discount"
+      "from": "reserve_inventory",
+      "to": "check_stock"
     },
     {
-      "from": "check-discount",
-      "to": "wait-for-payment",
-      "condition": "reserve-inventory.status == 'reserved'"
+      "from": "check_stock",
+      "to": "wait_for_payment",
+      "condition": "reserve_inventory.status == 'reserved'"
     }
   ],
   "retryPolicies": {
-    "standard-retry": {
+    "standard_retry": {
       "maxAttempts": 3,
       "initialIntervalMs": 1000,
       "backoffCoefficient": 2,
@@ -70,7 +75,7 @@
     }
   },
   "compensations": {
-    "cancel-inventory": {
+    "cancel_inventory": {
       "type": "http_call",
       "config": {
         "url": "https://inventory.example.com/cancel",

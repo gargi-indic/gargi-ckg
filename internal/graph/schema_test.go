@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gargi-indic/gargi-ckg/internal/nodes"
+	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 	"gopkg.in/yaml.v3"
 )
 
@@ -347,7 +350,7 @@ func TestNegativeCases(t *testing.T) {
 			name: "maxAttempts 0",
 			mutate: func(m map[string]any) {
 				rp := m["retryPolicies"].(map[string]any)
-				sr := rp["standard-retry"].(map[string]any)
+				sr := rp["standard_retry"].(map[string]any)
 				sr["maxAttempts"] = 0.0
 			},
 			wantErr: "< minimum 1",
@@ -412,10 +415,7 @@ func checkSchemaStructure(t *testing.T, schema map[string]any, root map[string]a
 
 	if typ, ok := schema["type"].(string); ok && typ == "object" {
 		if addl, ok := schema["additionalProperties"].(bool); !ok || addl {
-			// Some objects in config are free-form, skip them if they don't have properties
-			_, hasProps := schema["properties"]
-			_, hasPatternProps := schema["patternProperties"]
-			if hasProps || hasPatternProps {
+			if !strings.HasSuffix(path, ".config") {
 				t.Errorf("%s: object does not have additionalProperties: false", path)
 			}
 		}
@@ -465,4 +465,58 @@ func checkSchemaStructure(t *testing.T, schema map[string]any, root map[string]a
 func TestSchemaStructuralSanity(t *testing.T) {
 	schema := readSchema(t, "../../schemas/graph/v1/schema.json")
 	checkSchemaStructure(t, schema, schema, "$")
+}
+
+type fakeSignalSource struct{}
+
+func (f *fakeSignalSource) Wait(_ context.Context, _ engine.ExecutionID, _ engine.NodeID, _ string) (map[string]any, error) {
+	return nil, nil
+}
+
+func TestExampleNodesInstantiate(t *testing.T) {
+	example := readJSON(t, "../../schemas/graph/v1/example.json")
+	reg := engine.NewRegistry()
+
+	deps := nodes.Dependencies{
+		Signals: &fakeSignalSource{},
+	}
+	if err := nodes.RegisterDefaults(reg, deps); err != nil {
+		t.Fatalf("failed to register defaults: %v", err)
+	}
+
+	nodesList, ok := example["nodes"].([]any)
+	if !ok {
+		t.Fatalf("nodes not found or not an array")
+	}
+
+	for _, n := range nodesList {
+		nodeMap := n.(map[string]any)
+		typ := nodeMap["type"].(string)
+		config, ok := nodeMap["config"].(map[string]any)
+		if !ok {
+			config = nil
+		}
+
+		_, err := reg.Instantiate(typ, config)
+		if err != nil {
+			t.Errorf("failed to instantiate node %s of type %s: %v", nodeMap["id"], typ, err)
+		}
+	}
+
+	compensations, ok := example["compensations"].(map[string]any)
+	if ok {
+		for name, c := range compensations {
+			compMap := c.(map[string]any)
+			typ := compMap["type"].(string)
+			config, ok := compMap["config"].(map[string]any)
+			if !ok {
+				config = nil
+			}
+
+			_, err := reg.Instantiate(typ, config)
+			if err != nil {
+				t.Errorf("failed to instantiate compensation %s of type %s: %v", name, typ, err)
+			}
+		}
+	}
 }

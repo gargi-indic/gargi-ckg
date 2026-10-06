@@ -136,6 +136,7 @@ func Downstream(g *engine.Graph, id engine.NodeID) ([]engine.NodeID, error) {
 type dfsFrame struct {
 	node      engine.NodeID
 	edgeIndex int
+	edges     []*engine.Edge
 }
 
 // FindCycle detects if the graph contains a cycle using an iterative DFS approach.
@@ -149,18 +150,16 @@ func FindCycle(g *engine.Graph) []engine.NodeID {
 		startNode := n.ID()
 		if state[startNode] == 0 {
 			var stack []dfsFrame
-			stack = append(stack, dfsFrame{node: startNode, edgeIndex: 0})
+			stack = append(stack, dfsFrame{node: startNode, edgeIndex: 0, edges: g.OutgoingEdges(startNode)})
 			state[startNode] = 1 // visiting
 
 			for len(stack) > 0 {
 				topIdx := len(stack) - 1
 				frame := &stack[topIdx]
-				curr := frame.node
-				edges := g.OutgoingEdges(curr)
 
-				if frame.edgeIndex < len(edges) {
+				if frame.edgeIndex < len(frame.edges) {
 					// There are still outgoing edges to explore
-					nextEdge := edges[frame.edgeIndex]
+					nextEdge := frame.edges[frame.edgeIndex]
 					nextNode := nextEdge.To()
 					frame.edgeIndex++
 
@@ -168,7 +167,7 @@ func FindCycle(g *engine.Graph) []engine.NodeID {
 					case 0:
 						// Unvisited, push to stack
 						state[nextNode] = 1 // visiting
-						stack = append(stack, dfsFrame{node: nextNode, edgeIndex: 0})
+						stack = append(stack, dfsFrame{node: nextNode, edgeIndex: 0, edges: g.OutgoingEdges(nextNode)})
 					case 1:
 						// Cycle detected!
 						// Extract cycle path from the stack.
@@ -188,7 +187,7 @@ func FindCycle(g *engine.Graph) []engine.NodeID {
 					}
 				} else {
 					// No more edges to explore, pop from stack and mark as visited
-					state[curr] = 2 // visited
+					state[frame.node] = 2 // visited
 					stack = stack[:topIdx]
 				}
 			}

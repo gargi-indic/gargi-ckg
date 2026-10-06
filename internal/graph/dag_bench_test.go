@@ -34,7 +34,8 @@ func generateChainGraph(b *testing.B, size int) *engine.Graph {
 	return g
 }
 
-func generateLayeredGraph(b *testing.B, numLayers, nodesPerLayer int) *engine.Graph {
+func generateLayeredGraph(b *testing.B, numLayers, nodesPerLayer int, seed int64) *engine.Graph {
+	r := rand.New(rand.NewSource(seed))
 	size := numLayers * nodesPerLayer
 	nodes := make([]*engine.Node, size)
 	var edges []*engine.Edge
@@ -52,7 +53,7 @@ func generateLayeredGraph(b *testing.B, numLayers, nodesPerLayer int) *engine.Gr
 			from := l*nodesPerLayer + i
 			for j := 0; j < nodesPerLayer; j++ {
 				// Sparse connection (25% chance) to avoid too many edges
-				if rand.Float32() < 0.25 {
+				if r.Float32() < 0.25 {
 					to := (l+1)*nodesPerLayer + j
 					e, err := engine.NewEdge(nodes[from].ID(), nodes[to].ID(), "", nil)
 					if err != nil {
@@ -120,6 +121,58 @@ func generateRandomDAG(b *testing.B, size int, seed int64) *engine.Graph {
 	return g
 }
 
+func generateStarGraphFanOut(b *testing.B, size int) *engine.Graph {
+	nodes := make([]*engine.Node, size)
+	var edges []*engine.Edge
+
+	var err error
+	for i := 0; i < size; i++ {
+		nodes[i], err = engine.NewNode(engine.NodeID(fmt.Sprintf("n%d", i)), "test", nil)
+		if err != nil {
+			b.Fatalf("Failed to create node: %v", err)
+		}
+		if i > 0 {
+			e, err := engine.NewEdge(nodes[0].ID(), nodes[i].ID(), "", nil)
+			if err != nil {
+				b.Fatalf("Failed to create edge: %v", err)
+			}
+			edges = append(edges, e)
+		}
+	}
+
+	g, err := engine.NewGraph("star-fanout", nodes, edges)
+	if err != nil {
+		b.Fatalf("Failed to create graph: %v", err)
+	}
+	return g
+}
+
+func generateStarGraphFanIn(b *testing.B, size int) *engine.Graph {
+	nodes := make([]*engine.Node, size)
+	var edges []*engine.Edge
+
+	var err error
+	for i := 0; i < size; i++ {
+		nodes[i], err = engine.NewNode(engine.NodeID(fmt.Sprintf("n%d", i)), "test", nil)
+		if err != nil {
+			b.Fatalf("Failed to create node: %v", err)
+		}
+		if i > 0 {
+			e, err := engine.NewEdge(nodes[i].ID(), nodes[0].ID(), "", nil)
+			if err != nil {
+				b.Fatalf("Failed to create edge: %v", err)
+			}
+			edges = append(edges, e)
+		}
+	}
+
+	g, err := engine.NewGraph("star-fanin", nodes, edges)
+	if err != nil {
+		b.Fatalf("Failed to create graph: %v", err)
+	}
+	return g
+}
+
 func BenchmarkTopologicalSort10k(b *testing.B) {
 	b.Run("Chain", func(b *testing.B) {
 		g := generateChainGraph(b, 10000)
@@ -134,7 +187,7 @@ func BenchmarkTopologicalSort10k(b *testing.B) {
 	})
 
 	b.Run("Layered", func(b *testing.B) {
-		g := generateLayeredGraph(b, 100, 100) // 10k nodes
+		g := generateLayeredGraph(b, 100, 100, 42) // 10k nodes
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
@@ -147,6 +200,30 @@ func BenchmarkTopologicalSort10k(b *testing.B) {
 
 	b.Run("Random", func(b *testing.B) {
 		g := generateRandomDAG(b, 10000, 42) // Fixed seed
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := graph.TopologicalSort(g)
+			if err != nil {
+				b.Fatalf("unexpected error: %v", err)
+			}
+		}
+	})
+
+	b.Run("FanOut", func(b *testing.B) {
+		g := generateStarGraphFanOut(b, 10000)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := graph.TopologicalSort(g)
+			if err != nil {
+				b.Fatalf("unexpected error: %v", err)
+			}
+		}
+	})
+
+	b.Run("FanIn", func(b *testing.B) {
+		g := generateStarGraphFanIn(b, 10000)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
@@ -172,7 +249,7 @@ func BenchmarkFindCycle10k(b *testing.B) {
 	})
 
 	b.Run("Layered", func(b *testing.B) {
-		g := generateLayeredGraph(b, 100, 100) // 10k nodes
+		g := generateLayeredGraph(b, 100, 100, 42) // 10k nodes
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
@@ -185,6 +262,30 @@ func BenchmarkFindCycle10k(b *testing.B) {
 
 	b.Run("Random", func(b *testing.B) {
 		g := generateRandomDAG(b, 10000, 42) // Fixed seed
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			cycle := graph.FindCycle(g)
+			if cycle != nil {
+				b.Fatalf("expected no cycle, got %v", cycle)
+			}
+		}
+	})
+
+	b.Run("FanOut", func(b *testing.B) {
+		g := generateStarGraphFanOut(b, 10000)
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			cycle := graph.FindCycle(g)
+			if cycle != nil {
+				b.Fatalf("expected no cycle, got %v", cycle)
+			}
+		}
+	})
+
+	b.Run("FanIn", func(b *testing.B) {
+		g := generateStarGraphFanIn(b, 10000)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {

@@ -101,3 +101,54 @@ func TestNodeError_UnclassifiedAndNil(t *testing.T) {
 		t.Error("expected IsCritical to be false for unclassified error")
 	}
 }
+
+func TestNodeError_InvalidClasses(t *testing.T) {
+	// Empty class
+	emptyErr := &NodeError{}
+	if class := ClassOf(emptyErr); class != ClassNonRetryable {
+		t.Errorf("expected ClassNonRetryable for empty struct, got %s", class)
+	}
+	if emptyErr.Error() != "unclassified error" {
+		t.Errorf("expected 'unclassified error' string, got %s", emptyErr.Error())
+	}
+
+	// Bogus class
+	bogusErr := &NodeError{Class: "bogus", Err: errors.New("bad")}
+	if class := ClassOf(bogusErr); class != ClassNonRetryable {
+		t.Errorf("expected ClassNonRetryable for bogus class, got %s", class)
+	}
+	if bogusErr.Error() != "bad" {
+		t.Errorf("expected 'bad' string, got %s", bogusErr.Error())
+	}
+
+	// Wrapped empty and bogus
+	wrappedEmpty := fmt.Errorf("wrap: %w", emptyErr)
+	if class := ClassOf(wrappedEmpty); class != ClassNonRetryable {
+		t.Errorf("expected ClassNonRetryable for wrapped empty struct, got %s", class)
+	}
+
+	wrappedBogus := fmt.Errorf("wrap: %w", bogusErr)
+	if class := ClassOf(wrappedBogus); class != ClassNonRetryable {
+		t.Errorf("expected ClassNonRetryable for wrapped bogus class, got %s", class)
+	}
+}
+
+func TestNodeError_NilReceiver(t *testing.T) {
+	var nilErr *NodeError
+
+	// Error() should not panic
+	if str := nilErr.Error(); str != "nil NodeError" {
+		t.Errorf("expected 'nil NodeError' from nil receiver Error(), got %s", str)
+	}
+
+	// Unwrap() should not panic
+	if unwrapped := nilErr.Unwrap(); unwrapped != nil {
+		t.Errorf("expected nil from nil receiver Unwrap(), got %v", unwrapped)
+	}
+
+	// ClassOf() should handle typed nil gracefully
+	var typedNil error = nilErr
+	if class := ClassOf(typedNil); class != ClassNonRetryable {
+		t.Errorf("expected ClassNonRetryable for typed nil NodeError, got %s", class)
+	}
+}

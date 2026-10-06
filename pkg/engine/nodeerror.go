@@ -16,6 +16,16 @@ const (
 	ClassCritical ErrorClass = "critical"
 )
 
+// Valid returns true if the ErrorClass is one of the predefined constants.
+func (c ErrorClass) Valid() bool {
+	switch c {
+	case ClassRetryable, ClassNonRetryable, ClassCritical:
+		return true
+	default:
+		return false
+	}
+}
+
 // NodeError represents a classified error returned by a node's execution hooks.
 type NodeError struct {
 	Class ErrorClass
@@ -23,15 +33,26 @@ type NodeError struct {
 }
 
 // Error returns the underlying error message or a generic message if no underlying error is provided.
+// It is safe to call on a nil receiver.
 func (e *NodeError) Error() string {
+	if e == nil {
+		return "nil NodeError"
+	}
 	if e.Err != nil {
 		return e.Err.Error()
+	}
+	if !e.Class.Valid() {
+		return "unclassified error"
 	}
 	return string(e.Class) + " error"
 }
 
 // Unwrap returns the underlying error, allowing errors.Is and errors.As to work.
+// It is safe to call on a nil receiver.
 func (e *NodeError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
 	return e.Err
 }
 
@@ -73,10 +94,12 @@ func NewCriticalError(err error) *NodeError {
 
 // ClassOf determines the ErrorClass of an error.
 // It unwraps the error using errors.As to find a *NodeError.
-// If found, it returns the Class of the outermost *NodeError.
+// If found, and its Class is valid, it returns the Class of the outermost *NodeError.
 // If the error is nil, it returns an empty string.
-// If the error does not contain a *NodeError, it returns ClassNonRetryable
-// because unknown failures must not be retried blindly.
+// If the error does not contain a *NodeError, or if it contains a *NodeError
+// with an invalid or empty Class (e.g., manually constructed), or if the
+// matched *NodeError is a typed nil, it returns ClassNonRetryable because unknown
+// failures must not be retried blindly.
 func ClassOf(err error) ErrorClass {
 	if err == nil {
 		return ""
@@ -84,7 +107,10 @@ func ClassOf(err error) ErrorClass {
 
 	var nodeErr *NodeError
 	if errors.As(err, &nodeErr) {
-		return nodeErr.Class
+		if nodeErr != nil && nodeErr.Class.Valid() {
+			return nodeErr.Class
+		}
+		return ClassNonRetryable
 	}
 
 	return ClassNonRetryable

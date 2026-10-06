@@ -1,6 +1,6 @@
 # Orchestrator Handover: gargi-ckg
 
-Snapshot written by the first orchestrator (Claude Code, Opus 5.5) on **2026-10-05, ~22:45 UTC** and refreshed at the end of **Epic #1** by the second (Claude Code, Sonnet 5.5) on **2026-10-05, ~23:55 UTC**.
+Snapshot written by the first orchestrator (Claude Code, Opus 5.5) on **2026-10-05, ~22:45 UTC** and refreshed at the end of **Epic #1** and again at the end of **Epic #8** (2026-10-06) by the second/third orchestrator (Claude Code, Sonnet 5.5).
 The **live** state is always in GitHub issue **#67 Orchestrator Logs**. If this file and #67 disagree, #67 wins.
 To resume, invoke the `gargi-orchestrator` skill (`.claude/skills/gargi-orchestrator/SKILL.md`).
 
@@ -44,25 +44,30 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 
 `needs-discussion` issues: **#6** (decided, see §5), **#20**, **#40**, **#41**, **#51** (all undecided, so escalate when you reach them).
 
-## 4. Current state (end of Epic #1)
-**Epic #1 is complete and closed.** No Jules session is running and no PR is open. The next orchestrator starts **Epic #8**; build order **#9 → #13 → #12 → #10 → #11 → #14** (table and rationale are in the #67 body).
+## 4. Current state (end of Epic #8)
+**Epics #1 and #8 are complete and closed.** No Jules session is running and no PR is open. The next orchestrator starts **Epic #15**; build order **#16 → #21 → #17 → #18 → #19 → #20** (table and rationale are in the #67 body). **#20 is `needs-discussion`**: a human decision (CEL via cel-go vs hand-written grammar vs JSONPath-style) is requested in the last #67 comment; do not start #20 until it is recorded.
 
-| Epic #1 step | Issue | Status | Jules session | PR / commit |
-|---|---|---|---|---|
-| 1 | #2 Go module + layout | ✅ | `14117555043668616096` | #69 `832dc75` |
-| 2 | #3 Makefile, golangci-lint v2.14.0, depguard | ✅ | `7509376572595293231` | #70 `b41db29` |
-| 3 | #5 CI (GitHub Actions) | ✅ | `2953791257826166915` | #71 `2a77554` |
-| 4 | #7 ADRs 0001–0004 | ✅ | `9997667611197910973` | #72 `f7d1a31` |
-| 5 | #4 docker-compose stack | ✅ (see warning) | `17982997575160836669` | #73 `3b1295f` |
-| 6 | #6 Config loading + DI skeleton | ✅ | `1613978973304618491` | #74 `210f6a0` |
+| Epic #8 step | Issue | Status | PR / commit |
+|---|---|---|---|
+| 1 | #9 domain types | ✅ | #75 `6be34c2` |
+| 2 | #13 DAG utilities | ✅ | #76 `9fa2371` |
+| 3 | #12 state model | ✅ | #77 `3cd1397` |
+| 4 | #10 NodeInterface contract | ✅ | #78 `f018ffd` |
+| 5 | #11 registry | ✅ | #79 `8479214` |
+| 6 | #14 reference nodes | ✅ | #80 `846411e` |
 
-**What exists on `main` now:** Go module `github.com/gargi-indic/gargi-ckg` (go 1.23), `cmd/{server,worker}` (load and validate config, log the store driver, TODOs for #40/API), `internal/config` (yaml.v3, `GARGI_*` env overrides, fail-fast `Validate`), `config/config.example.yaml`, Makefile (`help tools build test test-integration lint fmt generate up down`), `.golangci.yml` (v2, depguard), `.github/workflows/ci.yml` (jobs `Lint and Unit Tests`, `Integration Tests`), `docker-compose.yml` + `.env.example` + `scripts/init-temporal-db.sh`, `docs/adr/`.
+(Epic #1: #2 #69, #3 #70, #5 #71, #7 #72, #4 #73, #6 #74; sessions are in #67.)
 
-**Next action for the successor:** boot sequence, then `python3 .orchestrator/jules.py start 9` and update the #67 tables.
+**What exists on `main` now (beyond Epic #1):**
+- `pkg/engine` (public contracts, stdlib only): `NodeID`, `Node`, `Edge`, `Graph` (immutable, validated, indexed lookups), `ExecutionID`; `Status` + `CanTransition` table; `StateMutation`; immutable `NodeState`/`GraphState` with `Apply`/`WithStatus` and versions; `NodeInterface` + `NodeContext` + `BaseNode`; error contract (`ErrorClass`, `NodeError`, `ClassOf`, `IsRetryable`, `IsCritical`); injected `Registry` (`Register`/`Instantiate`/`Has`/`Types`, strict config decoding).
+- `internal/graph`: `Roots`, `Leaves`, `Upstream`, `Downstream`, `FindCycle`, `TopologicalSort`, `ErrCycle`/`CycleError`, 10k benchmarks.
+- `internal/nodes`: `RegisterDefaults(reg, Dependencies)` with `passthrough`, `transform`, `conditional_branch`, `http_call`, `wait_for_signal` (`HTTPDoer`, `SignalSource` interfaces).
+
+**Next action for the successor:** boot sequence, check #67 for a human reply on #20 and on the open decisions in §9, then `python3 .orchestrator/jules.py start 16` and update the #67 tables.
 
 **Warnings carried over:**
-- The compose stack (#73) was **never started**: Docker doesn't work on the orchestrator Mac and Jules' sandbox couldn't pull the Neo4j/Temporal images. Only `docker compose config` ran. The human should run `make up` once and confirm all five services go healthy. The Temporal healthcheck (`temporal operator cluster health --address "$$(hostname -i):7233"`) is the likeliest to need a tweak. Treat any failure as a follow-up fix.
-- CI is now the machine check for every PR. Branch protection on `main` is not enabled (the human's call).
+- The compose stack (#73) was **never started** (no working Docker on the orchestrator Mac). The human should run `make up` and confirm all five services go healthy; the Temporal healthcheck is the likeliest to need a tweak.
+- Branch protection on `main` is not enabled (the human's call). CI (`Lint and Unit Tests`, `Integration Tests`; tests run with `-race`) is live, but it has caught none of the design problems below; diff review has.
 
 ## 5. Decisions recorded
 | Date | Decision | By |
@@ -81,18 +86,20 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 | 2026-10-05 | ADRs in `docs/adr/` (0001 Go, 0002 package boundaries, 0003 error model, 0004 manual DI wiring) | orchestrator (via #7) |
 | 2026-10-05 | Epic #8 order #9 → #13 → #12 → #10 → #11 → #14 | orchestrator |
 | 2026-10-05 | **Default for Epic #8 (human may override):** public domain value types and `NodeInterface` live in `pkg/engine` (the public contract references them); algorithms/parsing in `internal/graph`. Check each plan against ADR-002 | orchestrator |
+| 2026-10-06 | Epic #8 designs (human may override): reference nodes in `internal/nodes`; hooks `OnInit`/`EvaluateReactivity`/`Execute`/`OnSuccess`/`OnFailure` with `NodeContext`; only `Execute` returns a `*StateMutation` and the engine stamps `NodeID`/`ExpectedVersion` and owns every status transition; transition table (Pending→Ready\|Skipped, Ready→Running\|Skipped, Running→Succeeded\|Failed, Succeeded\|Failed→Compensating, Compensating→Compensated; terminal Skipped/Compensated); error classes retryable/non-retryable/critical, unclassified = non-retryable; `Registry` injected, no globals, `DisallowUnknownFields`; `wait_for_signal` via injected `SignalSource` (Temporal implementation in Epic #29) | orchestrator |
+| 2026-10-06 | Epic #15 order #16 → #21 → #17 → #18 → #19 → #20; `condition` is an opaque string until #20 is decided | orchestrator |
 
-## 6. Review checklists for Epic #8
-Every PR must stay within its issue's scope, leave `.orchestrator/` and `.claude/` untouched, contain no secrets, meet every acceptance criterion in its issue, and have **both CI checks green** (`gh pr checks <n>`). Run `go.mod` through a quick eye: new dependencies need justification. Keep to ADR-002/003/004 and the depguard rules.
+## 6. Review checklists for Epic #15
+Every PR must stay within its issue's scope, leave `.orchestrator/` and `.claude/` untouched, contain no secrets, meet every acceptance criterion in its issue, and have **both CI checks green** (`gh pr checks <n>`). `go.mod` changes need justification (stdlib/yaml.v3 only unless decided). Keep to ADR-002/003/004 and the depguard rules; `pkg/engine` stays contracts-only and must not import `internal/*`.
 
-- **#9 domain types:** immutable, transport-agnostic Graph/Node/Edge/ExecutionID with constructors enforcing invariants; no imports of Temporal, storage or API packages; unit tests for constructors/invariants. No NodeInterface, StateStore or state types (those are #10/#40/#12).
-- **#13 DAG utilities:** cycle detection returns the offending path; deterministic (stable) topological order; roots/leaves/upstream/downstream; benchmarks for 10k nodes; lives in `internal/graph`; operates on #9's types; no graph definition parsing (that's Epic #15).
-- **#12 state model:** GraphState/NodeState with the 8-status enum (Pending, Ready, Running, Succeeded, Failed, Skipped, Compensating, Compensated); StateMutation patch type; monotonic version for optimistic concurrency; transition table enforced and unit-tested (all valid and a sample of invalid transitions). No storage code.
-- **#10 NodeInterface:** `OnInit`, `Execute`, `OnSuccess`, `OnFailure`, `EvaluateReactivity` with `context.Context` and a node execution context; godoc maps each hook to the spec name (on_init, execute, ...); lifecycle order documented; `BaseNode` with no-op defaults; error contract implementing ADR-003 (retryable / non-retryable / critical → compensation). In `pkg/engine`, no imports of `internal/*`.
-- **#11 registry:** `Register(typeName, factory, configSchema)`; duplicate registration is an error; typed config decoding from definition JSON; registry is injected, never a package-level global (ADR-004).
-- **#14 reference nodes:** passthrough/transform, conditional branch, HTTP call (timeout + retryable status classification), wait-for-signal; each implements NodeInterface and is registered by default (through the injected registry, not `init()` globals); unit tests for each; no real network in tests.
+- **#16 schema:** JSON Schema under `schemas/graph/v1`, `apiVersion` field, annotated example doc; fields cover nodes (id/type/config), edges (from/to/condition as an opaque string/data mapping), retry policy, compensation references, failure policy; must be consistent with `engine.Node`/`Edge` (#9) and not invent semantics the engine lacks; no Go code beyond what is needed to test the schema.
+- **#21 errors:** one machine-readable error type (JSON path, code, message), multiple errors aggregated; stable string codes; maps cleanly to gRPC `InvalidArgument`/HTTP 400 details later (no API-layer code now); `errors.Is/As` friendly.
+- **#17 parsers:** `Parse(bytes, format)` for JSON and YAML giving identical models (yaml.v3 already a dependency); strict decoding (unknown fields rejected, errors with JSON path via #21); produces #9 domain types; golden-file tests; no validation beyond decoding (that is #18/#19).
+- **#18 structural validation:** unique IDs, no dangling edges, no self-loops, acyclicity via `internal/graph.FindCycle`, at least one root and one leaf, ALL errors reported at once; fetch accessors once per node (see lessons).
+- **#19 semantic validation:** unknown node types rejected via the `Registry` (`Has`), node config validated through the registry's schema decoding without instantiating side-effectful nodes, retry/compensation references resolve; reuses `engine.ErrInvalidConfig`; errors via #21.
+- **#20 expression language:** BLOCKED on the human's decision (see #67). Conditions must be deterministic and side-effect free, type-checked at validation time; ADR required.
 
-When Epic #8 is complete: close #8, post a summary on #67, and add the next epic's build-order table. Suggested next: Epic #15 (Graph Definition & Validation, #16–#21; **#20 is needs-discussion, escalate**), then #22 (Reactive Event System). Check dependencies between epics before fixing the order.
+When Epic #15 is complete: close #15, post a summary on #67 and add the next epic's build-order table (suggested: #22 Reactive Event System & Scheduler; check dependencies between epics before fixing the order).
 
 ## 7. Lessons learned (read before reviewing anything)
 1. **Jules over-scopes plans.** In #2 its plan defined interfaces that belonged to #10/#40/#16. Always compare the plan with the issue's scope.
@@ -110,6 +117,15 @@ When Epic #8 is complete: close #8, post a summary on #67, and add the next epic
 13. **Plan rounds are the cheap place to fix things.** Every task so far needed plan v2; most also needed one PR fix round. Put exact versions, file lists, scope limits and "do not touch" lists in the first correction message.
 14. **Jules claims verification it didn't do.** In #4 it could only run `docker compose config`. Ask it to state what it did and didn't run, and flag unverified runtime behaviour to the human in #67.
 15. A run of `sleep N && ...` in the Bash tool is blocked; use `run_in_background` for the helper waits and the Monitor tool (`until ...; do sleep 5; done`) to wait for CI.
+16. **Put concrete signatures, semantics and an explicit do-not-add list in the plan-rejection message.** For #12 this produced a PR needing no fix round. When Jules musings leak into a plan (as in #14's wait-for-signal), decide the design yourself and tell it not to reopen it.
+17. **Review against the layer above, not just the issue text:** what the engine stamps (`ExpectedVersion`), what a valid mutation is (effect-less mutations are rejected), who owns status transitions. #14's nodes violated several.
+18. **`Graph` accessors (and `Registry.Types`) return fresh slices by design.** Fetch once per node, not inside inner loops (#13's FindCycle was O(d²) until fixed).
+19. **Jules adds stray `// Package engine` comments to new files** (#11) and examples that are not compiled. Require exactly one package comment (doc.go) and runnable `Example` functions.
+20. **Nodes/instances must not write to their own config in `Execute`** (data race on shared instances); `-race` only catches it if a test executes concurrently, so request one.
+21. **Jules' completion message usually has no command output**; rely on CI and on diff review, and ask for raw output in the plan-approval message anyway.
+22. **Approving a plan and sending binding clarifications in the same breath works** (approve, then `message`); Jules folds them into a v2.1 plan.
+23. **Table edits in the #67 body:** `str.replace` on a row template can hit every occurrence (an early edit corrupted the Epic #1 header). Anchor on the full row and re-read the body after every edit.
+
 
 ## 8. Chronological log (condensed; the full entries are #67's comments)
 - **2026-10-03:** Spec read. 9 epics + 57 sub-issues created (first in `gishnucodes/gargi-ckg`). Language chosen: Go.
@@ -128,6 +144,8 @@ When Epic #8 is complete: close #8, post a summary on #67, and add the next epic
   - **#4:** plan v1 rejected (no tags/ports/credentials); v2 approved after verifying the image tags; PR #73 needed a Temporal healthcheck address fix; merged `3b1295f`. Runtime unverified (see §4).
   - **#6:** plan v1 rejected (duplicate ADR, store stubs, viper); v2 approved; PR #74 needed defaults, exact driver matching and strict YAML keys; merged `210f6a0`.
   - **Epic #1 closed**; Epic #8 build-order table added to #67; handover refreshed.
+- **2026-10-05/06, third orchestration run (Sonnet 5.5):** fixed `jules.py` activities pagination (`40b63f4`); completed **Epic #8**: #9 (PR #75, `6be34c2`), #13 (#76, `9fa2371`), #12 (#77, `3cd1397`), #10 (#78, `f018ffd`), #11 (#79, `8479214`), #14 (#80, `846411e`). Every task: plan v1 rejected, v2 approved; five of six needed one PR fix round. Epic #8 closed; Epic #15 table and the #20 escalation posted on #67.
+
 
 ## 9. Open questions for the human
 - Keep or drop Epic #61 (Observability), which isn't in the spec.
@@ -137,4 +155,5 @@ When Epic #8 is complete: close #8, post a summary on #67, and add the next epic
 - Rotate the Jules API key.
 - **Run `make up` once** and confirm all five compose services become healthy (never runtime-tested, see §4).
 - Enable branch protection on `main` requiring `Lint and Unit Tests` and `Integration Tests` (CI is live; repo settings are the human's call).
-- Confirm the Epic #8 default: public types and `NodeInterface` in `pkg/engine`, algorithms in `internal/graph`.
+- Confirm the Epic #8 designs recorded in §5 (public types and `NodeInterface` in `pkg/engine`, algorithms in `internal/graph`, reference nodes in `internal/nodes`, state transition table).
+- **Decide #20** (edge condition language): CEL via cel-go (recommended) vs hand-written grammar vs JSONPath-style; adding cel-go means a new dependency outside the spec stack.

@@ -153,13 +153,16 @@ func (v *ValidationErrors) Error() string {
 }
 
 // Unwrap returns a slice of all issues as individual errors, allowing errors.As to work.
+// It returns a slice of *ValidationIssue pointers.
 func (v *ValidationErrors) Unwrap() []error {
 	if v == nil || len(v.issues) == 0 {
 		return nil
 	}
 	errs := make([]error, len(v.issues))
 	for i, issue := range v.issues {
-		errs[i] = issue
+		// Store pointers to a copy so errors.As with *ValidationIssue works.
+		p := issue
+		errs[i] = &p
 	}
 	return errs
 }
@@ -170,8 +173,10 @@ func (v *ValidationErrors) Is(target error) bool {
 }
 
 // MarshalJSON customizes the JSON representation of ValidationErrors.
-func (v *ValidationErrors) MarshalJSON() ([]byte, error) {
-	if v == nil || len(v.issues) == 0 {
+// It uses a value receiver so that marshalling a value does not emit an empty object.
+// A nil pointer will be serialized as `null` by the encoding/json package before calling this.
+func (v ValidationErrors) MarshalJSON() ([]byte, error) {
+	if len(v.issues) == 0 {
 		return []byte(`{"errors":[]}`), nil
 	}
 

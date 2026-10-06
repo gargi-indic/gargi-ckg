@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -176,10 +177,10 @@ func TestValidationErrors_IsAsUnwrap(t *testing.T) {
 		t.Errorf("errors.Is(wrapped, ErrInvalidDefinition) returned false")
 	}
 
-	// Test As with ValidationIssue
-	var issue ValidationIssue
+	// Test As with *ValidationIssue
+	var issue *ValidationIssue
 	if !errors.As(wrapped, &issue) {
-		t.Fatalf("errors.As(wrapped, &ValidationIssue) returned false")
+		t.Fatalf("errors.As(wrapped, &*ValidationIssue) returned false")
 	}
 	if issue.Path != "$.id" {
 		t.Errorf("errors.As extracted wrong issue, Path = %q", issue.Path)
@@ -202,24 +203,33 @@ func TestValidationErrors_IsAsUnwrap(t *testing.T) {
 }
 
 func TestValidationErrors_MarshalJSON(t *testing.T) {
+	type wrapper struct {
+		Field ValidationErrors `json:"field"`
+	}
+
 	tests := []struct {
 		name     string
-		v        *ValidationErrors
+		input    any
 		expected string
 	}{
 		{
-			name:     "nil receiver",
-			v:        nil,
+			name:     "nil pointer",
+			input:    (*ValidationErrors)(nil),
+			expected: `null`,
+		},
+		{
+			name:     "empty receiver (pointer)",
+			input:    &ValidationErrors{},
 			expected: `{"errors":[]}`,
 		},
 		{
-			name:     "empty receiver",
-			v:        &ValidationErrors{},
+			name:     "empty receiver (value)",
+			input:    ValidationErrors{},
 			expected: `{"errors":[]}`,
 		},
 		{
-			name: "with issues",
-			v: func() *ValidationErrors {
+			name: "with issues (pointer)",
+			input: func() *ValidationErrors {
 				v := &ValidationErrors{}
 				v.Add("$.id", CodeInvalidValue, "bad \"id\"")
 				v.Add("$.nodes[0]", CodeMissingRequired, "missing type")
@@ -227,11 +237,29 @@ func TestValidationErrors_MarshalJSON(t *testing.T) {
 			}(),
 			expected: `{"errors":[{"path":"$.id","code":"invalid_value","message":"bad \"id\""},{"path":"$.nodes[0]","code":"missing_required","message":"missing type"}]}`,
 		},
+		{
+			name: "with issues (value)",
+			input: func() ValidationErrors {
+				v := &ValidationErrors{}
+				v.Add("$.id", CodeInvalidValue, "bad \"id\"")
+				return *v
+			}(),
+			expected: `{"errors":[{"path":"$.id","code":"invalid_value","message":"bad \"id\""}]}`,
+		},
+		{
+			name: "embedded in struct",
+			input: func() wrapper {
+				v := ValidationErrors{}
+				v.Add("$.id", CodeInvalidValue, "bad \"id\"")
+				return wrapper{Field: v}
+			}(),
+			expected: `{"field":{"errors":[{"path":"$.id","code":"invalid_value","message":"bad \"id\""}]}}`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, err := tt.v.MarshalJSON()
+			b, err := json.Marshal(tt.input)
 			if err != nil {
 				t.Fatalf("MarshalJSON error = %v", err)
 			}

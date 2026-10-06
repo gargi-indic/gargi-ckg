@@ -13,7 +13,7 @@ func TestPath_Field(t *testing.T) {
 	}{
 		{
 			name:     "simple identifier",
-			base:     Root,
+			base:     PathRoot,
 			field:    "config",
 			expected: "$.config",
 		},
@@ -25,43 +25,43 @@ func TestPath_Field(t *testing.T) {
 		},
 		{
 			name:     "starts with number (not simple)",
-			base:     Root,
+			base:     PathRoot,
 			field:    "123field",
 			expected: "$['123field']",
 		},
 		{
 			name:     "contains hyphen",
-			base:     Root,
+			base:     PathRoot,
 			field:    "my-key",
 			expected: "$['my-key']",
 		},
 		{
 			name:     "contains dot",
-			base:     Root,
+			base:     PathRoot,
 			field:    "my.key",
 			expected: "$['my.key']",
 		},
 		{
 			name:     "contains space",
-			base:     Root,
+			base:     PathRoot,
 			field:    "my key",
 			expected: "$['my key']",
 		},
 		{
 			name:     "contains single quote",
-			base:     Root,
+			base:     PathRoot,
 			field:    "my'key",
 			expected: "$['my\\'key']",
 		},
 		{
 			name:     "contains backslash",
-			base:     Root,
+			base:     PathRoot,
 			field:    "my\\key",
 			expected: "$['my\\\\key']",
 		},
 		{
 			name:     "empty string",
-			base:     Root,
+			base:     PathRoot,
 			field:    "",
 			expected: "$['']",
 		},
@@ -86,7 +86,7 @@ func TestPath_Index(t *testing.T) {
 	}{
 		{
 			name:     "root index",
-			base:     Root,
+			base:     PathRoot,
 			index:    0,
 			expected: "$[0]",
 		},
@@ -109,7 +109,7 @@ func TestPath_Index(t *testing.T) {
 }
 
 func TestPath_String(t *testing.T) {
-	p := Root.Field("nodes").Index(2).Field("config").Field("a-b")
+	p := PathRoot.Field("nodes").Index(2).Field("config").Field("a-b")
 	expected := "$.nodes[2].config['a-b']"
 	if p.String() != expected {
 		t.Errorf("Path.String() = %v, want %v", p.String(), expected)

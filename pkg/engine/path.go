@@ -9,8 +9,8 @@ import (
 type Path string
 
 const (
-	// Root is the root of the JSON document.
-	Root Path = "$"
+	// PathRoot is the root of the JSON document.
+	PathRoot Path = "$"
 )
 
 // Field appends a field access to the path.

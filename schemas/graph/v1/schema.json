@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gargi-ckg:schema:graph:v1",
+  "title": "Gargi CKG Graph Definition",
+  "description": "Version 1 Graph Definition Schema for Gargi CKG",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "id",
+    "nodes"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "graph/v1",
+      "description": "API Version for the graph schema definition"
+    },
+    "id": {
+      "$ref": "#/$defs/Identifier",
+      "description": "The unique identifier of the graph definition"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable name of the graph definition"
+    },
+    "description": {
+      "type": "string",
+      "description": "A longer description of the graph definition"
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "description": "A list of nodes making up the graph. At least one is required.",
+      "items": {
+        "$ref": "#/$defs/Node"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "A list of directed edges representing paths between nodes.",
+      "items": {
+        "$ref": "#/$defs/Edge"
+      }
+    },
+    "retryPolicies": {
+      "type": "object",
+      "description": "A map of retry policies reusable by nodes.",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$": {
+          "$ref": "#/$defs/RetryPolicy"
+        }
+      }
+    },
+    "compensations": {
+      "type": "object",
+      "description": "A map of compensation handlers reusable by nodes.",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$": {
+          "$ref": "#/$defs/Compensation"
+        }
+      }
+    },
+    "failurePolicy": {
+      "$ref": "#/$defs/FailurePolicy"
+    }
+  },
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "TypeName": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+    },
+    "Node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier",
+          "description": "The unique identifier of the node"
+        },
+        "type": {
+          "$ref": "#/$defs/TypeName",
+          "description": "The type of the node. Must map to an engine registry type."
+        },
+        "config": {
+          "type": "object",
+          "description": "Free-form configuration specific to the node's type. Checked at runtime by the specific node implementation."
+        },
+        "retryPolicy": {
+          "$ref": "#/$defs/Identifier",
+          "description": "Reference to a retry policy defined in retryPolicies."
+        },
+        "compensation": {
+          "$ref": "#/$defs/Identifier",
+          "description": "Reference to a compensation defined in compensations."
+        }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/Identifier",
+          "description": "The origin node of the edge."
+        },
+        "to": {
+          "$ref": "#/$defs/Identifier",
+          "description": "The destination node of the edge."
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "An opaque expression. Conditions are not evaluated or validated yet. Absent condition means 'always'."
+        },
+        "dataMapping": {
+          "type": "object",
+          "description": "Data mapping between the outgoing output and the incoming input variables.",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^.+$": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "RetryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Maximum number of execution attempts. 1 means no retry. Default is 1."
+        },
+        "initialIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Initial interval between retry attempts in milliseconds."
+        },
+        "backoffCoefficient": {
+          "type": "number",
+          "minimum": 1,
+          "default": 2,
+          "description": "The coefficient to multiply the backoff by after each failure. Default is 2."
+        },
+        "maxIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The maximum interval for any given backoff iteration."
+        }
+      }
+    },
+    "Compensation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/TypeName",
+          "description": "The specific type of compensation handler."
+        },
+        "config": {
+          "type": "object",
+          "description": "Free-form object containing specifics for the compensation handler type."
+        }
+      }
+    },
+    "FailurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Defines behavior around critical and retryable failures.",
+      "properties": {
+        "onNodeFailure": {
+          "type": "string",
+          "enum": [
+            "fail_graph",
+            "continue"
+          ],
+          "default": "fail_graph",
+          "description": "What happens after a node fails with a non-retryable error or exhausts retries. Default is fail_graph."
+        },
+        "onCriticalFailure": {
+          "type": "string",
+          "enum": [
+            "compensate",
+            "fail_graph"
+          ],
+          "default": "compensate",
+          "description": "What happens after a node fails with a critical error. Default is compensate."
+        }
+      }
+    }
+  }
+}

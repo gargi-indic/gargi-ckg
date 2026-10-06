@@ -1,0 +1,74 @@
+apiVersion: graph/v1
+id: checkout_workflow
+name: Checkout Graph
+description: An example checkout graph processing an order.
+
+nodes:
+  # Initial passthrough node to start the process
+  - id: start
+    type: passthrough
+    config: {}
+
+  # Maps the incoming payload to an order object
+  - id: map_order
+    type: transform
+    config:
+      mapping:
+        order: payload
+
+  # Calls inventory service via HTTP
+  - id: reserve_inventory
+    type: http_call
+    config:
+      url: "https://inventory.example.com/reserve"
+      method: "POST"
+    retryPolicy: standard_retry
+    compensation: cancel_inventory
+
+  # Conditional branch to check if stock is OK
+  - id: check_stock
+    type: conditional_branch
+    config:
+      input: stock_ok
+      operator: truthy
+
+  # Wait for an external payment signal
+  - id: wait_for_payment
+    type: wait_for_signal
+    config:
+      signal: "payment_success"
+
+edges:
+  - from: start
+    to: map_order
+
+  - from: map_order
+    to: reserve_inventory
+    dataMapping:
+      orderId: "start.orderId"
+
+  - from: reserve_inventory
+    to: check_stock
+
+  # Illustrative only: the expression syntax is decided by issue #20 and is not evaluated yet.
+  - from: check_stock
+    to: wait_for_payment
+    condition: "reserve_inventory.status == 'reserved'"
+
+retryPolicies:
+  standard_retry:
+    maxAttempts: 3
+    initialIntervalMs: 1000
+    backoffCoefficient: 2
+    maxIntervalMs: 10000
+
+compensations:
+  cancel_inventory:
+    type: http_call
+    config:
+      url: "https://inventory.example.com/cancel"
+      method: "POST"
+
+failurePolicy:
+  onNodeFailure: fail_graph
+  onCriticalFailure: compensate

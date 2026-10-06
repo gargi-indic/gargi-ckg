@@ -272,6 +272,23 @@ func TestRegistry_Instantiate(t *testing.T) {
 			checkInst: nil,
 		},
 		{
+			name:         "validate hook success (value) with struct schema",
+			registerType: "val_hook_val_ok_struct_schema",
+			schema:       validatableSchema{},
+			configMap: map[string]any{
+				"count": float64(10),
+			},
+			factory: newDummyFactory(),
+			wantErr: nil,
+			checkInst: func(t *testing.T, inst NodeInterface) {
+				dummy := inst.(*dummyNode)
+				cfg, ok := dummy.cfg.(validatableSchema)
+				if !ok || cfg.Count != 10 {
+					t.Errorf("decoded config incorrect: %#v", dummy.cfg)
+				}
+			},
+		},
+		{
 			name:         "wrong type rejected",
 			registerType: "wrong_type",
 			schema:       structSchema{},

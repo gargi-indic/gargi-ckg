@@ -1,36 +1,3 @@
-// Package engine provides the core runtime and interfaces for the reactive graph engine.
-//
-// Example of registering a custom node type:
-//
-//	type MyConfig struct {
-//		MaxRetries int `json:"max_retries"`
-//	}
-//
-//	func (c MyConfig) Validate() error {
-//		if c.MaxRetries < 0 {
-//			return errors.New("max_retries cannot be negative")
-//		}
-//		return nil
-//	}
-//
-//	type MyNode struct {
-//		*engine.BaseNode
-//		cfg MyConfig
-//	}
-//
-//	func (n *MyNode) Execute(ctx context.Context, nc engine.NodeContext) (*engine.StateMutation, error) {
-//		// custom logic here
-//		return nil, nil
-//	}
-//
-//	// Example of registry initialization (typically done during app startup):
-//	// reg := engine.NewRegistry()
-//	// err := reg.Register("my_node", func(cfg any) (engine.NodeInterface, error) {
-//	// 	return &MyNode{
-//	// 		BaseNode: &engine.BaseNode{},
-//	// 		cfg:      cfg.(MyConfig),
-//	// 	}, nil
-//	// }, MyConfig{})
 package engine
 
 import (
@@ -174,17 +141,11 @@ func (r *Registry) Instantiate(typeName string, config map[string]any) (NodeInte
 
 		decodedVal := val.Interface() // *Struct
 
-		// Call Validate() if implemented by the pointer
+		// Call Validate(). decodedVal is a pointer, so this correctly triggers Validate()
+		// whether it's implemented with a pointer receiver or value receiver.
 		if v, ok := decodedVal.(validator); ok {
 			if err := v.Validate(); err != nil {
 				return nil, fmt.Errorf("%w for type %q: validation failed: %w", ErrInvalidConfig, typeName, err)
-			}
-		} else if !entry.isPtr {
-			// Call Validate() if implemented by the value (rare, but handled)
-			if v, ok := val.Elem().Interface().(validator); ok {
-				if err := v.Validate(); err != nil {
-					return nil, fmt.Errorf("%w for type %q: validation failed: %w", ErrInvalidConfig, typeName, err)
-				}
 			}
 		}
 

@@ -95,6 +95,81 @@ type validator interface {
 	Validate() error
 }
 
+// decodeAndValidateConfig handles the struct marshaling, unmarshaling, trailing data,
+// and validation of a given config based on the schema in registryEntry.
+func (r *Registry) decodeAndValidateConfig(entry registryEntry, config map[string]any) (any, error) {
+	if config == nil {
+		config = make(map[string]any)
+	}
+
+	if entry.schema == nil {
+		m := deepCopyMap(config)
+		if m == nil {
+			m = make(map[string]any)
+		}
+		return m, nil
+	}
+
+	// Marshal the config map to JSON
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config map: %w", err)
+	}
+
+	// Create a new instance of the schema type
+	val := reflect.New(entry.schema)
+
+	decoder := json.NewDecoder(bytes.NewReader(configBytes))
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(val.Interface()); err != nil {
+		return nil, fmt.Errorf("failed to decode config: %w", err)
+	}
+
+	// Check for trailing data
+	if decoder.More() {
+		return nil, fmt.Errorf("unexpected trailing data in config")
+	}
+
+	decodedVal := val.Interface() // *Struct
+
+	// Call Validate(). decodedVal is a pointer, so this correctly triggers Validate()
+	// whether it's implemented with a pointer receiver or value receiver.
+	if v, ok := decodedVal.(validator); ok {
+		if err := v.Validate(); err != nil {
+			return nil, fmt.Errorf("validation failed: %w", err)
+		}
+	}
+
+	if entry.isPtr {
+		return decodedVal, nil
+	}
+	return val.Elem().Interface(), nil
+}
+
+// ValidateConfig validates the provided config for the given typeName without calling the node factory.
+// Returns ErrUnknownType if the type is not registered, or an error wrapping ErrInvalidConfig if the config is invalid.
+func (r *Registry) ValidateConfig(typeName string, config map[string]any) error {
+	r.mu.RLock()
+	entry, ok := r.entries[typeName]
+	r.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("%w: %q", ErrUnknownType, typeName)
+	}
+
+	_, err := r.decodeAndValidateConfig(entry, config)
+	if err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			return fmt.Errorf("%w: failed to decode config: field %q: unexpected %s value", ErrInvalidConfig, typeErr.Field, typeErr.Value)
+		}
+		return fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+	}
+
+	return nil
+}
+
 // Instantiate creates a new NodeInterface instance for the given typeName using the provided config.
 func (r *Registry) Instantiate(typeName string, config map[string]any) (NodeInterface, error) {
 	r.mu.RLock()
@@ -105,55 +180,9 @@ func (r *Registry) Instantiate(typeName string, config map[string]any) (NodeInte
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, typeName)
 	}
 
-	if config == nil {
-		config = make(map[string]any)
-	}
-
-	var decodedConfig any
-
-	if entry.schema == nil {
-		m := deepCopyMap(config)
-		if m == nil {
-			m = make(map[string]any)
-		}
-		decodedConfig = m
-	} else {
-		// Marshal the config map to JSON
-		configBytes, err := json.Marshal(config)
-		if err != nil {
-			return nil, fmt.Errorf("%w for type %q: failed to marshal config map: %w", ErrInvalidConfig, typeName, err)
-		}
-
-		// Create a new instance of the schema type
-		val := reflect.New(entry.schema)
-
-		decoder := json.NewDecoder(bytes.NewReader(configBytes))
-		decoder.DisallowUnknownFields()
-
-		if err := decoder.Decode(val.Interface()); err != nil {
-			return nil, fmt.Errorf("%w for type %q: failed to decode config: %w", ErrInvalidConfig, typeName, err)
-		}
-
-		// Check for trailing data
-		if decoder.More() {
-			return nil, fmt.Errorf("%w for type %q: unexpected trailing data in config", ErrInvalidConfig, typeName)
-		}
-
-		decodedVal := val.Interface() // *Struct
-
-		// Call Validate(). decodedVal is a pointer, so this correctly triggers Validate()
-		// whether it's implemented with a pointer receiver or value receiver.
-		if v, ok := decodedVal.(validator); ok {
-			if err := v.Validate(); err != nil {
-				return nil, fmt.Errorf("%w for type %q: validation failed: %w", ErrInvalidConfig, typeName, err)
-			}
-		}
-
-		if entry.isPtr {
-			decodedConfig = decodedVal
-		} else {
-			decodedConfig = val.Elem().Interface()
-		}
+	decodedConfig, err := r.decodeAndValidateConfig(entry, config)
+	if err != nil {
+		return nil, fmt.Errorf("%w for type %q: %w", ErrInvalidConfig, typeName, err)
 	}
 
 	// Call the factory OUTSIDE the lock

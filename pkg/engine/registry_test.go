@@ -560,3 +560,109 @@ func TestRegistry_Concurrency(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestRegistry_ValidateConfig(t *testing.T) {
+	r := NewRegistry()
+
+	// Create a factory that panics to prove ValidateConfig doesn't call it.
+	panickingFactory := func(_ any) (NodeInterface, error) {
+		panic("factory called!")
+	}
+
+	_ = r.Register("valid_struct", panickingFactory, structSchema{})
+	_ = r.Register("valid_ptr", panickingFactory, &structSchema{})
+
+	tests := []struct {
+		name         string
+		registerType string
+		configMap    map[string]any
+		wantErr      error
+		errSubstring string
+	}{
+		{
+			name:         "valid struct config",
+			registerType: "valid_struct",
+			configMap: map[string]any{
+				"name": "Alice",
+				"age":  30,
+			},
+			wantErr: nil,
+		},
+		{
+			name:         "valid ptr config",
+			registerType: "valid_ptr",
+			configMap: map[string]any{
+				"name": "Bob",
+				"age":  25,
+			},
+			wantErr: nil,
+		},
+		{
+			name:         "unknown field",
+			registerType: "valid_struct",
+			configMap: map[string]any{
+				"name":  "Charlie",
+				"extra": "bad",
+			},
+			wantErr: ErrInvalidConfig,
+		},
+		{
+			name:         "wrong type array instead of string",
+			registerType: "valid_struct",
+			configMap: map[string]any{
+				"name": []any{"bad"},
+			},
+			wantErr:      ErrInvalidConfig,
+			errSubstring: `field "name": unexpected array value`,
+		},
+		{
+			name:         "unknown type",
+			registerType: "does_not_exist",
+			configMap:    nil,
+			wantErr:      ErrUnknownType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := r.ValidateConfig(tt.registerType, tt.configMap)
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Fatalf("expected error containing %v, got nil", tt.wantErr)
+				}
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("expected error %v, got %v", tt.wantErr, err)
+				}
+				if tt.errSubstring != "" && !strings.Contains(err.Error(), tt.errSubstring) {
+					t.Errorf("expected error to contain %q, got %q", tt.errSubstring, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestRegistry_InstantiateTypeErrorMessageUntouched(t *testing.T) {
+	r := NewRegistry()
+	_ = r.Register("test_type", newDummyFactory(), structSchema{})
+
+	_, err := r.Instantiate("test_type", map[string]any{
+		"name": []any{"bad"},
+	})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Errorf("expected ErrInvalidConfig, got %v", err)
+	}
+
+	expectedErrString := `invalid node config for type "test_type": failed to decode config: json: cannot unmarshal array into Go struct field structSchema.name of type string`
+	if err.Error() != expectedErrString {
+		t.Errorf("expected error string %q, got %q", expectedErrString, err.Error())
+	}
+}

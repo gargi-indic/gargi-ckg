@@ -1,0 +1,39 @@
+{
+  "errors": [
+    {
+      "path": "$.edges[0].to",
+      "code": "missing_required",
+      "message": "missing required field 'to'"
+    },
+    {
+      "path": "$.nodes[0].unknown_node_field",
+      "code": "unknown_field",
+      "message": "unknown field 'unknown_node_field'"
+    },
+    {
+      "path": "$.nodes[0].id",
+      "code": "missing_required",
+      "message": "missing required field 'id'"
+    },
+    {
+      "path": "$.nodes[0].type",
+      "code": "missing_required",
+      "message": "missing required field 'type'"
+    },
+    {
+      "path": "$.unknown",
+      "code": "unknown_field",
+      "message": "unknown field 'unknown'"
+    },
+    {
+      "path": "$.apiVersion",
+      "code": "missing_required",
+      "message": "missing required field 'apiVersion'"
+    },
+    {
+      "path": "$.id",
+      "code": "missing_required",
+      "message": "missing required field 'id'"
+    }
+  ]
+}

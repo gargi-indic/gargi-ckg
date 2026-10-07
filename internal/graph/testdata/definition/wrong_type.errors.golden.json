@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.nodes",
+      "code": "invalid_type",
+      "message": "expected array, got string"
+    }
+  ]
+}

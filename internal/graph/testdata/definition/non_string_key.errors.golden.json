@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.nodes[0].config",
+      "code": "invalid_type",
+      "message": "YAML object keys must be strings"
+    }
+  ]
+}

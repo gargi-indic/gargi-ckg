@@ -1,0 +1,17 @@
+{
+	"apiVersion": "graph/v1",
+	"id": "test",
+	"nodes": [
+		{
+			"id": "n1",
+			"type": "t1",
+			"config": {"a": 1}
+		}
+	],
+	"nodes": [
+		{
+			"id": "n2",
+			"type": "t2"
+		}
+	]
+}

@@ -153,15 +153,19 @@ func TestValidateSemantics(t *testing.T) {
 					"c3": {
 						Type: "", // skipped
 					},
+					"c.weird-key\"": {
+						Type: "unknown_type",
+					},
 				},
 			},
 			reg: reg,
 			wantIssues: map[string]engine.ErrorCode{
-				"$.nodes[0].type":           engine.CodeUnknownNodeType,
-				"$.nodes[1].config":         engine.CodeInvalidNodeConfig,
-				"$.nodes[2].config":         engine.CodeInvalidNodeConfig,
-				"$.compensations.c1.type":   engine.CodeUnknownNodeType,
-				"$.compensations.c2.config": engine.CodeInvalidNodeConfig,
+				"$.nodes[0].type":                       engine.CodeUnknownNodeType,
+				"$.nodes[1].config":                     engine.CodeInvalidNodeConfig,
+				"$.nodes[2].config":                     engine.CodeInvalidNodeConfig,
+				"$.compensations.c1.type":               engine.CodeUnknownNodeType,
+				"$.compensations.c2.config":             engine.CodeInvalidNodeConfig,
+				"$.compensations['c.weird-key\"'].type": engine.CodeUnknownNodeType,
 			},
 		},
 		{
@@ -280,12 +284,24 @@ func TestValidateSemantics(t *testing.T) {
 					if iss.Code != wantCode {
 						t.Errorf("Path %q: got code %q, want %q", iss.Path, iss.Code, wantCode)
 					}
-					// ensure the message is trimmed if it's InvalidNodeConfig
+
+					// Message checks
 					if iss.Code == engine.CodeInvalidNodeConfig {
 						if strings.HasPrefix(iss.Message, engine.ErrInvalidConfig.Error()+": ") {
 							t.Errorf("Path %q: error message was not trimmed, got %q", iss.Path, iss.Message)
 						}
 					}
+					if iss.Code == engine.CodeUnknownNodeType {
+						if !strings.HasPrefix(iss.Message, "unknown node type \"") {
+							t.Errorf("Path %q: error message should include type, got %q", iss.Path, iss.Message)
+						}
+					}
+					if iss.Code == engine.CodeUnresolvedReference {
+						if !strings.Contains(iss.Message, "is not defined in ") {
+							t.Errorf("Path %q: error message should specify which map, got %q", iss.Path, iss.Message)
+						}
+					}
+
 					found[iss.Path] = true
 				} else {
 					t.Errorf("Unexpected issue: %v", iss)

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -27,31 +28,18 @@ func ValidateSemantics(def *engine.GraphDefinition, reg *engine.Registry) *engin
 		nodePath := engine.PathRoot.Field("nodes").Index(i)
 
 		// type validation
-		if node.Type != "" {
-			if !reg.Has(node.Type) {
-				errs.Add(nodePath.Field("type").String(), engine.CodeUnknownNodeType, "unknown node type")
-			} else {
-				if err := reg.ValidateConfig(node.Type, node.Config); err != nil {
-					// Extract concise message by stripping the "invalid node config: " prefix.
-					// We only strip the exact prefix to avoid accidentally losing context.
-					msg := err.Error()
-					prefix := engine.ErrInvalidConfig.Error() + ": "
-					msg = strings.TrimPrefix(msg, prefix)
-					errs.Add(nodePath.Field("config").String(), engine.CodeInvalidNodeConfig, msg)
-				}
-			}
-		}
+		validateNodeConfig(reg, nodePath, node.Type, node.Config, errs)
 
 		// unresolved references
 		if node.RetryPolicy != "" {
 			if _, ok := def.RetryPolicies[node.RetryPolicy]; !ok {
-				errs.Add(nodePath.Field("retryPolicy").String(), engine.CodeUnresolvedReference, "unresolved reference")
+				errs.Add(nodePath.Field("retryPolicy").String(), engine.CodeUnresolvedReference, fmt.Sprintf("retry policy %q is not defined in retryPolicies", node.RetryPolicy))
 			}
 		}
 
 		if node.Compensation != "" {
 			if _, ok := def.Compensations[node.Compensation]; !ok {
-				errs.Add(nodePath.Field("compensation").String(), engine.CodeUnresolvedReference, "unresolved reference")
+				errs.Add(nodePath.Field("compensation").String(), engine.CodeUnresolvedReference, fmt.Sprintf("compensation %q is not defined in compensations", node.Compensation))
 			}
 		}
 	}
@@ -66,23 +54,32 @@ func ValidateSemantics(def *engine.GraphDefinition, reg *engine.Registry) *engin
 		for _, k := range cKeys {
 			cPath := engine.PathRoot.Field("compensations").Field(k)
 			comp := def.Compensations[k]
-
-			if comp.Type != "" {
-				if !reg.Has(comp.Type) {
-					errs.Add(cPath.Field("type").String(), engine.CodeUnknownNodeType, "unknown node type")
-				} else {
-					if err := reg.ValidateConfig(comp.Type, comp.Config); err != nil {
-						msg := err.Error()
-						prefix := engine.ErrInvalidConfig.Error() + ": "
-						msg = strings.TrimPrefix(msg, prefix)
-						errs.Add(cPath.Field("config").String(), engine.CodeInvalidNodeConfig, msg)
-					}
-				}
-			}
+			validateNodeConfig(reg, cPath, comp.Type, comp.Config, errs)
 		}
 	}
 
-	// Sort the issues deterministically like ValidateStructure
+	return sortValidationErrors(errs)
+}
+
+func validateNodeConfig(reg *engine.Registry, path engine.Path, typeName string, config map[string]any, errs *engine.ValidationErrors) {
+	if typeName == "" {
+		return
+	}
+	if !reg.Has(typeName) {
+		errs.Add(path.Field("type").String(), engine.CodeUnknownNodeType, fmt.Sprintf("unknown node type %q", typeName))
+	} else {
+		if err := reg.ValidateConfig(typeName, config); err != nil {
+			// Extract concise message by stripping the "invalid node config: " prefix.
+			// We only strip the exact prefix to avoid accidentally losing context.
+			msg := err.Error()
+			prefix := engine.ErrInvalidConfig.Error() + ": "
+			msg = strings.TrimPrefix(msg, prefix)
+			errs.Add(path.Field("config").String(), engine.CodeInvalidNodeConfig, msg)
+		}
+	}
+}
+
+func sortValidationErrors(errs *engine.ValidationErrors) *engine.ValidationErrors {
 	issues := errs.Issues()
 	sort.Slice(issues, func(i, j int) bool {
 		if issues[i].Path != issues[j].Path {

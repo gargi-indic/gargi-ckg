@@ -666,3 +666,101 @@ func TestRegistry_InstantiateTypeErrorMessageUntouched(t *testing.T) {
 		t.Errorf("expected error string %q, got %q", expectedErrString, err.Error())
 	}
 }
+
+func TestRegistry_ValidateConfigVsInstantiate(t *testing.T) {
+	r := NewRegistry()
+
+	factory := func(_ any) (NodeInterface, error) {
+		return &dummyNode{BaseNode: &BaseNode{}}, nil
+	}
+
+	_ = r.Register("valid_type", factory, structSchema{})
+	_ = r.Register("nil_schema_type", factory, nil)
+	_ = r.Register("val_hook_fail", factory, validatableSchema{})
+
+	tests := []struct {
+		name         string
+		registerType string
+		configMap    map[string]any
+		wantErr      bool
+	}{
+		{
+			name:         "valid struct config",
+			registerType: "valid_type",
+			configMap: map[string]any{
+				"name": "Alice",
+				"age":  30,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "invalid struct config: wrong type",
+			registerType: "valid_type",
+			configMap: map[string]any{
+				"name": []any{"Alice"},
+			},
+			wantErr: true,
+		},
+		{
+			name:         "invalid struct config: extra fields",
+			registerType: "valid_type",
+			configMap: map[string]any{
+				"extra": "bad",
+			},
+			wantErr: true,
+		},
+		{
+			name:         "nil schema passthrough",
+			registerType: "nil_schema_type",
+			configMap: map[string]any{
+				"anything": "goes",
+			},
+			wantErr: false,
+		},
+		{
+			name:         "validate hook failure",
+			registerType: "val_hook_fail",
+			configMap: map[string]any{
+				"count": -1,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err1 := r.ValidateConfig(tt.registerType, tt.configMap)
+			_, err2 := r.Instantiate(tt.registerType, tt.configMap)
+
+			if tt.wantErr {
+				if !errors.Is(err1, ErrInvalidConfig) {
+					t.Errorf("ValidateConfig expected ErrInvalidConfig, got %v", err1)
+				}
+				if !errors.Is(err2, ErrInvalidConfig) {
+					t.Errorf("Instantiate expected ErrInvalidConfig, got %v", err2)
+				}
+			} else {
+				if err1 != nil {
+					t.Errorf("ValidateConfig expected no error, got %v", err1)
+				}
+				if err2 != nil {
+					t.Errorf("Instantiate expected no error, got %v", err2)
+				}
+			}
+		})
+	}
+}
+
+func TestRegistry_ValidateConfig_ZeroValue(t *testing.T) {
+	var r Registry
+	err := r.ValidateConfig("anything", nil)
+	if !errors.Is(err, ErrUnknownType) {
+		t.Errorf("expected ErrUnknownType, got %v", err)
+	}
+
+	r2 := NewRegistry()
+	err = r2.ValidateConfig("anything", nil)
+	if !errors.Is(err, ErrUnknownType) {
+		t.Errorf("expected ErrUnknownType, got %v", err)
+	}
+}

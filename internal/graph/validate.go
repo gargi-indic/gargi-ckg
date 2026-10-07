@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 )
@@ -16,105 +17,130 @@ var (
 
 // ValidateStructure checks the semantic structure and schema values of a GraphDefinition.
 // It returns a non-nil *engine.ValidationErrors. If there are no errors, it will be empty.
+
+// ValidateStructure checks the semantic structure and schema values of a GraphDefinition.
+// It returns a non-nil *engine.ValidationErrors. If there are no errors, it will be empty.
 func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 	errs := &engine.ValidationErrors{}
 
 	if def == nil {
-		errs.Add("$", engine.CodeInvalidType, "definition is nil")
+		errs.Add(engine.PathRoot.String(), engine.CodeInvalidType, "definition is nil")
 		return errs
 	}
 
 	// 1. nodes non-empty
 	if len(def.Nodes) == 0 {
-		errs.Add("$.nodes", engine.CodeMissingRequired, "nodes must contain at least one node")
+		errs.Add(engine.PathRoot.Field("nodes").String(), engine.CodeMissingRequired, "nodes must contain at least one node")
 	}
 
 	// 2. Value patterns
 	if !identifierRegex.MatchString(def.ID) {
-		errs.Add("$.id", engine.CodeInvalidValue, "invalid identifier pattern")
+		errs.Add(engine.PathRoot.Field("id").String(), engine.CodeInvalidValue, "invalid identifier pattern")
 	}
 
 	nodeIDs := make(map[string]int)
 	duplicateNodeIDs := false
 	danglingEdge := false
 	selfLoop := false
+	badIDs := false
 
 	// Check Nodes
 	for i, node := range def.Nodes {
-		nodePath := fmt.Sprintf("$.nodes[%d]", i)
+		nodePath := engine.PathRoot.Field("nodes").Index(i)
+
 		if !identifierRegex.MatchString(string(node.ID)) {
-			errs.Add(fmt.Sprintf("%s.id", nodePath), engine.CodeInvalidValue, "invalid identifier pattern")
+			errs.Add(nodePath.Field("id").String(), engine.CodeInvalidValue, "invalid identifier pattern")
+			badIDs = true
 		} else {
 			if firstIdx, exists := nodeIDs[string(node.ID)]; exists {
-				errs.Add(fmt.Sprintf("%s.id", nodePath), engine.CodeDuplicateID, fmt.Sprintf("duplicate of node at index %d", firstIdx))
+				errs.Add(nodePath.Field("id").String(), engine.CodeDuplicateID, fmt.Sprintf("duplicate of node at index %d", firstIdx))
 				duplicateNodeIDs = true
 			} else {
 				nodeIDs[string(node.ID)] = i
 			}
 		}
+
 		if !typeNameRegex.MatchString(node.Type) {
-			errs.Add(fmt.Sprintf("%s.type", nodePath), engine.CodeInvalidValue, "invalid type name pattern")
+			errs.Add(nodePath.Field("type").String(), engine.CodeInvalidValue, "invalid type name pattern")
 		}
+
 		if node.RetryPolicy != "" && !identifierRegex.MatchString(node.RetryPolicy) {
-			errs.Add(fmt.Sprintf("%s.retryPolicy", nodePath), engine.CodeInvalidValue, "invalid identifier pattern")
+			errs.Add(nodePath.Field("retryPolicy").String(), engine.CodeInvalidValue, "invalid identifier pattern")
 		}
+
 		if node.Compensation != "" && !identifierRegex.MatchString(node.Compensation) {
-			errs.Add(fmt.Sprintf("%s.compensation", nodePath), engine.CodeInvalidValue, "invalid identifier pattern")
+			errs.Add(nodePath.Field("compensation").String(), engine.CodeInvalidValue, "invalid identifier pattern")
 		}
 	}
 
 	// Check Edges
-	seenEdges := make(map[string]int)
+	type edgeKey struct {
+		from engine.NodeID
+		to   engine.NodeID
+	}
+	seenEdges := make(map[edgeKey]int)
+
 	for i, edge := range def.Edges {
-		edgePath := fmt.Sprintf("$.edges[%d]", i)
+		edgePath := engine.PathRoot.Field("edges").Index(i)
 
 		if !identifierRegex.MatchString(string(edge.From)) {
-			errs.Add(fmt.Sprintf("%s.from", edgePath), engine.CodeInvalidValue, "invalid identifier pattern")
-		}
-		if !identifierRegex.MatchString(string(edge.To)) {
-			errs.Add(fmt.Sprintf("%s.to", edgePath), engine.CodeInvalidValue, "invalid identifier pattern")
+			errs.Add(edgePath.Field("from").String(), engine.CodeInvalidValue, "invalid identifier pattern")
+			badIDs = true
 		}
 
-		if _, exists := nodeIDs[string(edge.From)]; !exists && edge.From != "" {
-			errs.Add(fmt.Sprintf("%s.from", edgePath), engine.CodeDanglingEdge, "references non-existent node")
-			danglingEdge = true
+		if !identifierRegex.MatchString(string(edge.To)) {
+			errs.Add(edgePath.Field("to").String(), engine.CodeInvalidValue, "invalid identifier pattern")
+			badIDs = true
 		}
-		if _, exists := nodeIDs[string(edge.To)]; !exists && edge.To != "" {
-			errs.Add(fmt.Sprintf("%s.to", edgePath), engine.CodeDanglingEdge, "references non-existent node")
-			danglingEdge = true
+
+		if identifierRegex.MatchString(string(edge.From)) {
+			if _, exists := nodeIDs[string(edge.From)]; !exists && edge.From != "" {
+				errs.Add(edgePath.Field("from").String(), engine.CodeDanglingEdge, "references non-existent node")
+				danglingEdge = true
+			}
+		}
+
+		if identifierRegex.MatchString(string(edge.To)) {
+			if _, exists := nodeIDs[string(edge.To)]; !exists && edge.To != "" {
+				errs.Add(edgePath.Field("to").String(), engine.CodeDanglingEdge, "references non-existent node")
+				danglingEdge = true
+			}
 		}
 
 		if edge.From == edge.To && edge.From != "" {
-			errs.Add(edgePath, engine.CodeSelfLoop, "edge from and to must not be identical")
+			errs.Add(edgePath.String(), engine.CodeSelfLoop, "edge from and to must not be identical")
 			selfLoop = true
 		}
 
-		edgeKey := fmt.Sprintf("%s->%s", edge.From, edge.To)
-		if firstIdx, exists := seenEdges[edgeKey]; exists {
-			errs.Add(edgePath, engine.CodeInvalidValue, fmt.Sprintf("duplicate edge of index %d", firstIdx))
+		ek := edgeKey{from: edge.From, to: edge.To}
+		if firstIdx, exists := seenEdges[ek]; exists {
+			errs.Add(edgePath.String(), engine.CodeInvalidValue, fmt.Sprintf("duplicate edge of index %d", firstIdx))
 		} else {
-			seenEdges[edgeKey] = i
+			seenEdges[ek] = i
 		}
 
 		if edge.Condition != "" {
-			if len(edge.Condition) < 1 || len(edge.Condition) > 4096 {
-				errs.Add(fmt.Sprintf("%s.condition", edgePath), engine.CodeInvalidCondition, "condition length must be 1..4096")
+			if utf8.RuneCountInString(edge.Condition) > 4096 {
+				errs.Add(edgePath.Field("condition").String(), engine.CodeInvalidCondition, "condition length must be 1..4096 runes")
 			}
 		}
 
 		if edge.DataMapping != nil {
-			var keys []string
+			keys := make([]string, 0, len(edge.DataMapping))
 			for k := range edge.DataMapping {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
+
 			for _, k := range keys {
 				v := edge.DataMapping[k]
+				mapPath := edgePath.Field("dataMapping").Field(k).String()
+
 				if k == "" {
-					errs.Add(fmt.Sprintf("%s.dataMapping.%s", edgePath, k), engine.CodeInvalidValue, "empty key in data mapping")
+					errs.Add(mapPath, engine.CodeInvalidValue, "empty key in data mapping")
 				}
 				if v == "" {
-					errs.Add(fmt.Sprintf("%s.dataMapping.%s", edgePath, k), engine.CodeInvalidValue, "empty value in data mapping")
+					errs.Add(mapPath, engine.CodeInvalidValue, "empty value in data mapping")
 				}
 			}
 		}
@@ -122,47 +148,49 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 
 	// Check retryPolicies
 	if def.RetryPolicies != nil {
-		var rKeys []string
+		rKeys := make([]string, 0, len(def.RetryPolicies))
 		for k := range def.RetryPolicies {
 			rKeys = append(rKeys, k)
 		}
 		sort.Strings(rKeys)
 		for _, k := range rKeys {
+			pPath := engine.PathRoot.Field("retryPolicies").Field(k)
 			if !identifierRegex.MatchString(k) {
-				errs.Add(fmt.Sprintf("$.retryPolicies.%s", k), engine.CodeInvalidValue, "invalid identifier pattern for map key")
+				errs.Add(pPath.String(), engine.CodeInvalidValue, "invalid identifier pattern for map key")
 			}
+
 			policy := def.RetryPolicies[k]
-			pPath := fmt.Sprintf("$.retryPolicies.%s", k)
 			if policy.MaxAttempts != nil && *policy.MaxAttempts < 1 {
-				errs.Add(fmt.Sprintf("%s.maxAttempts", pPath), engine.CodeInvalidValue, "must be >= 1")
+				errs.Add(pPath.Field("maxAttempts").String(), engine.CodeInvalidValue, "must be >= 1")
 			}
 			if policy.InitialIntervalMs != nil && *policy.InitialIntervalMs < 1 {
-				errs.Add(fmt.Sprintf("%s.initialIntervalMs", pPath), engine.CodeInvalidValue, "must be >= 1")
+				errs.Add(pPath.Field("initialIntervalMs").String(), engine.CodeInvalidValue, "must be >= 1")
 			}
 			if policy.BackoffCoefficient != nil && *policy.BackoffCoefficient < 1 {
-				errs.Add(fmt.Sprintf("%s.backoffCoefficient", pPath), engine.CodeInvalidValue, "must be >= 1")
+				errs.Add(pPath.Field("backoffCoefficient").String(), engine.CodeInvalidValue, "must be >= 1")
 			}
 			if policy.MaxIntervalMs != nil && *policy.MaxIntervalMs < 1 {
-				errs.Add(fmt.Sprintf("%s.maxIntervalMs", pPath), engine.CodeInvalidValue, "must be >= 1")
+				errs.Add(pPath.Field("maxIntervalMs").String(), engine.CodeInvalidValue, "must be >= 1")
 			}
 		}
 	}
 
 	// Check compensations
 	if def.Compensations != nil {
-		var cKeys []string
+		cKeys := make([]string, 0, len(def.Compensations))
 		for k := range def.Compensations {
 			cKeys = append(cKeys, k)
 		}
 		sort.Strings(cKeys)
 		for _, k := range cKeys {
+			cPath := engine.PathRoot.Field("compensations").Field(k)
 			if !identifierRegex.MatchString(k) {
-				errs.Add(fmt.Sprintf("$.compensations.%s", k), engine.CodeInvalidValue, "invalid identifier pattern for map key")
+				errs.Add(cPath.String(), engine.CodeInvalidValue, "invalid identifier pattern for map key")
 			}
+
 			comp := def.Compensations[k]
-			cPath := fmt.Sprintf("$.compensations.%s", k)
 			if !typeNameRegex.MatchString(comp.Type) {
-				errs.Add(fmt.Sprintf("%s.type", cPath), engine.CodeInvalidValue, "invalid type name pattern")
+				errs.Add(cPath.Field("type").String(), engine.CodeInvalidValue, "invalid type name pattern")
 			}
 		}
 	}
@@ -174,7 +202,7 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 			case "fail_graph", "continue":
 				// valid
 			default:
-				errs.Add("$.failurePolicy.onNodeFailure", engine.CodeInvalidValue, "must be fail_graph or continue")
+				errs.Add(engine.PathRoot.Field("failurePolicy").Field("onNodeFailure").String(), engine.CodeInvalidValue, "must be fail_graph or continue")
 			}
 		}
 		if def.FailurePolicy.OnCriticalFailure != "" {
@@ -182,35 +210,36 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 			case "compensate", "fail_graph":
 				// valid
 			default:
-				errs.Add("$.failurePolicy.onCriticalFailure", engine.CodeInvalidValue, "must be compensate or fail_graph")
+				errs.Add(engine.PathRoot.Field("failurePolicy").Field("onCriticalFailure").String(), engine.CodeInvalidValue, "must be compensate or fail_graph")
 			}
 		}
 	}
 
 	// Graph structural checks only if there are no ID, Dangling Edge, or Self Loop errors and nodes exist.
-	if !duplicateNodeIDs && !danglingEdge && !selfLoop && len(def.Nodes) > 0 {
+	if !badIDs && !duplicateNodeIDs && !danglingEdge && !selfLoop && len(def.Nodes) > 0 {
 		g, err := def.ToGraph()
 		if err != nil {
-			errs.Add("$", engine.CodeInvalidValue, err.Error())
+			errs.Add(engine.PathRoot.String(), engine.CodeInvalidValue, err.Error())
 		} else {
 			if cycle := FindCycle(g); cycle != nil {
 				cycleStrs := make([]string, len(cycle))
 				for i, id := range cycle {
 					cycleStrs[i] = string(id)
 				}
-				errs.Add("$.edges", engine.CodeCycle, fmt.Sprintf("cycle detected: %s", strings.Join(cycleStrs, " -> ")))
+				errs.Add(engine.PathRoot.Field("edges").String(), engine.CodeCycle, fmt.Sprintf("cycle detected: %s", strings.Join(cycleStrs, " -> ")))
 			} else {
 				if len(Roots(g)) == 0 {
-					errs.Add("$.nodes", engine.CodeNoRoot, "graph has no root nodes")
+					errs.Add(engine.PathRoot.Field("nodes").String(), engine.CodeNoRoot, "graph has no root nodes")
 				}
 				if len(Leaves(g)) == 0 {
-					errs.Add("$.nodes", engine.CodeNoLeaf, "graph has no leaf nodes")
+					errs.Add(engine.PathRoot.Field("nodes").String(), engine.CodeNoLeaf, "graph has no leaf nodes")
 				}
 			}
 		}
 	}
 
 	// Sort the issues deterministically
+	// Issues returns a fresh copy, which is safe to mutate.
 	issues := errs.Issues()
 	sort.Slice(issues, func(i, j int) bool {
 		if issues[i].Path != issues[j].Path {

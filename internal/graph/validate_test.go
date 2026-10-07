@@ -86,22 +86,22 @@ func TestValidateStructure(t *testing.T) {
 					{ID: "n2", Type: "t2"},
 				},
 				Edges: []engine.EdgeDefinition{
-					{From: "n1", To: "nx"}, // nx dangling
-					{From: "n1", To: "n1"}, // self loop
-					{From: "n1", To: "n2"}, // valid
-					{From: "n1", To: "n2"}, // duplicate edge
-					{From: "n2", To: "n1", Condition: "", DataMapping: map[string]string{"": "v", "k": ""}}, // valid condition (empty string means not set basically, but struct has ""), invalid data map
-					{From: "n2", To: "n1", Condition: strings.Repeat("a", 4097)},                            // condition too long
+					{From: "n1", To: "nx"},
+					{From: "n1", To: "n1"},
+					{From: "n1", To: "n2"},
+					{From: "n1", To: "n2"},
+					{From: "n2", To: "n1", Condition: "", DataMapping: map[string]string{"": "v", "k": ""}},
+					{From: "n2", To: "n1", Condition: strings.Repeat("é", 4097)},
 				},
 			},
 			wantIssues: map[string]engine.ErrorCode{
-				"$.edges[0].to":            engine.CodeDanglingEdge,
-				"$.edges[1]":               engine.CodeSelfLoop,
-				"$.edges[3]":               engine.CodeInvalidValue,
-				"$.edges[4].dataMapping.":  engine.CodeInvalidValue,
-				"$.edges[4].dataMapping.k": engine.CodeInvalidValue,
-				"$.edges[5].condition":     engine.CodeInvalidCondition,
-				"$.edges[5]":               engine.CodeInvalidValue,
+				"$.edges[0].to":              engine.CodeDanglingEdge,
+				"$.edges[1]":                 engine.CodeSelfLoop,
+				"$.edges[3]":                 engine.CodeInvalidValue,
+				"$.edges[4].dataMapping['']": engine.CodeInvalidValue,
+				"$.edges[4].dataMapping.k":   engine.CodeInvalidValue,
+				"$.edges[5].condition":       engine.CodeInvalidCondition,
+				"$.edges[5]":                 engine.CodeInvalidValue,
 			},
 		},
 		{
@@ -112,17 +112,17 @@ func TestValidateStructure(t *testing.T) {
 					{ID: "n1", Type: "t1"},
 				},
 				RetryPolicies: map[string]engine.RetryPolicy{
-					"rp_!": {}, // invalid key
+					"a.b\"c": {}, // test escaping
 					"rp1": {
 						MaxAttempts:        ptr(0),
 						InitialIntervalMs:  ptr(0),
-						BackoffCoefficient: ptr(0.5),
+						BackoffCoefficient: ptr(0.99),
 						MaxIntervalMs:      ptr(0),
 					},
 				},
 				Compensations: map[string]engine.CompensationDefinition{
 					"c_!": {Type: "t1"},
-					"c1":  {Type: "1t"}, // invalid type
+					"c1":  {Type: "1t"},
 				},
 				FailurePolicy: &engine.FailurePolicy{
 					OnNodeFailure:     "invalid_enum",
@@ -130,12 +130,12 @@ func TestValidateStructure(t *testing.T) {
 				},
 			},
 			wantIssues: map[string]engine.ErrorCode{
-				"$.retryPolicies.rp_!":                   engine.CodeInvalidValue,
+				"$.retryPolicies['a.b\"c']":              engine.CodeInvalidValue,
 				"$.retryPolicies.rp1.maxAttempts":        engine.CodeInvalidValue,
 				"$.retryPolicies.rp1.initialIntervalMs":  engine.CodeInvalidValue,
 				"$.retryPolicies.rp1.backoffCoefficient": engine.CodeInvalidValue,
 				"$.retryPolicies.rp1.maxIntervalMs":      engine.CodeInvalidValue,
-				"$.compensations.c_!":                    engine.CodeInvalidValue,
+				"$.compensations['c_!']":                 engine.CodeInvalidValue,
 				"$.compensations.c1.type":                engine.CodeInvalidValue,
 				"$.failurePolicy.onNodeFailure":          engine.CodeInvalidValue,
 				"$.failurePolicy.onCriticalFailure":      engine.CodeInvalidValue,
@@ -248,6 +248,24 @@ func TestValidateStructure(t *testing.T) {
 				"$.nodes": engine.CodeMissingRequired,
 			},
 		},
+
+		{
+			name: "identifier bounds and sorting",
+			def: &engine.GraphDefinition{
+				ID: strings.Repeat("a", 128), // OK
+				Nodes: []engine.NodeDefinition{
+					{ID: engine.NodeID(strings.Repeat("b", 129)), Type: "t"}, // Invalid
+					{ID: "valid", Type: "t"},
+				},
+				Edges: []engine.EdgeDefinition{
+					{From: engine.NodeID(strings.Repeat("b", 129)), To: "valid"}, // 1 issue (invalid from), dangling should NOT be triggered and NO ToGraph error!
+				},
+			},
+			wantIssues: map[string]engine.ErrorCode{
+				"$.nodes[0].id":   engine.CodeInvalidValue,
+				"$.edges[0].from": engine.CodeInvalidValue,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -262,6 +280,18 @@ func TestValidateStructure(t *testing.T) {
 			}
 
 			issues := errs.Issues()
+
+			// Sort check
+			prevPath := ""
+			for i, iss := range issues {
+				if i > 0 {
+					if iss.Path < prevPath {
+						t.Errorf("Issues not sorted by path: %q came before %q", prevPath, iss.Path)
+					}
+				}
+				prevPath = iss.Path
+			}
+
 			found := make(map[string]bool)
 			for _, iss := range issues {
 				if wantCode, ok := tt.wantIssues[iss.Path]; ok {

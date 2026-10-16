@@ -48,6 +48,7 @@ type NodeDefinition struct {
 	ID           NodeID         `json:"id"`
 	Type         string         `json:"type"`
 	Config       map[string]any `json:"config,omitempty"`
+	JoinMode     JoinMode       `json:"joinMode,omitempty"`
 	RetryPolicy  string         `json:"retryPolicy,omitempty"`
 	Compensation string         `json:"compensation,omitempty"`
 }
@@ -99,7 +100,7 @@ func (d *GraphDefinition) ToGraph() (*Graph, error) {
 
 	nodes := make([]*Node, 0, len(d.Nodes))
 	for _, nDef := range d.Nodes {
-		n, err := NewNode(nDef.ID, nDef.Type, nDef.Config)
+		n, err := NewNodeWithJoinMode(nDef.ID, nDef.Type, nDef.Config, nDef.JoinMode)
 		if err != nil {
 			return nil, err
 		}

@@ -95,6 +95,15 @@
           "type": "object",
           "description": "Free-form configuration specific to the node's type. Checked at runtime by the specific node implementation."
         },
+        "joinMode": {
+          "type": "string",
+          "enum": [
+            "all_of",
+            "any_of"
+          ],
+          "default": "all_of",
+          "description": "Fan-in join mode for incoming edges. Default is all_of."
+        },
         "retryPolicy": {
           "$ref": "#/$defs/Identifier",
           "description": "Reference to a retry policy defined in retryPolicies."

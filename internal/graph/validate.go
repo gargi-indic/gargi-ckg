@@ -64,6 +64,10 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 			errs.Add(nodePath.Field("type").String(), engine.CodeInvalidValue, "invalid type name pattern")
 		}
 
+		if node.JoinMode != "" && !node.JoinMode.Valid() {
+			errs.Add(nodePath.Field("joinMode").String(), engine.CodeInvalidValue, "joinMode must be all_of or any_of")
+		}
+
 		if node.RetryPolicy != "" && !identifierRegex.MatchString(node.RetryPolicy) {
 			errs.Add(nodePath.Field("retryPolicy").String(), engine.CodeInvalidValue, "invalid identifier pattern")
 		}

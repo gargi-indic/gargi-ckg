@@ -11,12 +11,18 @@ import (
 type EventType string
 
 const (
-	EventTypeNodeStateChanged       EventType = "node_state_changed"
-	EventTypeNodeCompleted          EventType = "node_completed"
-	EventTypeNodeFailed             EventType = "node_failed"
+	// EventTypeNodeStateChanged indicates a node status transition.
+	EventTypeNodeStateChanged EventType = "node_state_changed"
+	// EventTypeNodeCompleted indicates a node has finished successfully.
+	EventTypeNodeCompleted EventType = "node_completed"
+	// EventTypeNodeFailed indicates a node has failed.
+	EventTypeNodeFailed EventType = "node_failed"
+	// EventTypeExternalSignalReceived indicates an external signal was received.
 	EventTypeExternalSignalReceived EventType = "external_signal_received"
-	EventTypeGraphCompleted         EventType = "graph_completed"
-	EventTypeGraphFailed            EventType = "graph_failed"
+	// EventTypeGraphCompleted indicates the graph has finished successfully.
+	EventTypeGraphCompleted EventType = "graph_completed"
+	// EventTypeGraphFailed indicates the graph execution has failed.
+	EventTypeGraphFailed EventType = "graph_failed"
 )
 
 // Valid reports whether t is a known EventType constant.
@@ -32,6 +38,7 @@ func (t EventType) Valid() bool {
 
 // Standard Typed Payloads:
 
+// NodeStateChangedPayload contains details about a node state change.
 type NodeStateChangedPayload struct {
 	OldStatus    Status         `json:"oldStatus"`
 	NewStatus    Status         `json:"newStatus"`
@@ -40,12 +47,14 @@ type NodeStateChangedPayload struct {
 	Version      uint64         `json:"version"`
 }
 
+// NodeCompletedPayload contains details about a node completion.
 type NodeCompletedPayload struct {
 	Status  Status         `json:"status"`
 	Output  map[string]any `json:"output,omitempty"`
 	Version uint64         `json:"version"`
 }
 
+// NodeFailedPayload contains details about a node failure.
 type NodeFailedPayload struct {
 	Status       Status     `json:"status"`
 	ErrorClass   ErrorClass `json:"errorClass"`
@@ -53,16 +62,19 @@ type NodeFailedPayload struct {
 	Version      uint64     `json:"version"`
 }
 
+// ExternalSignalReceivedPayload contains details about a received signal.
 type ExternalSignalReceivedPayload struct {
 	SignalName string `json:"signalName"`
 	Payload    any    `json:"payload,omitempty"`
 }
 
+// GraphCompletedPayload contains details about a graph completion.
 type GraphCompletedPayload struct {
 	FinalStatus Status `json:"finalStatus"`
 	Version     uint64 `json:"version"`
 }
 
+// GraphFailedPayload contains details about a graph failure.
 type GraphFailedPayload struct {
 	ErrorMessage string `json:"errorMessage"`
 	Version      uint64 `json:"version"`
@@ -205,6 +217,7 @@ func NewEvent(
 	return e, nil
 }
 
+// ExecutionID returns the execution identifier.
 func (e *Event) ExecutionID() ExecutionID {
 	if e == nil {
 		return ""
@@ -212,6 +225,7 @@ func (e *Event) ExecutionID() ExecutionID {
 	return e.executionID
 }
 
+// Sequence returns the per-execution sequence number.
 func (e *Event) Sequence() uint64 {
 	if e == nil {
 		return 0
@@ -219,6 +233,7 @@ func (e *Event) Sequence() uint64 {
 	return e.sequence
 }
 
+// Timestamp returns the UTC timestamp of the event.
 func (e *Event) Timestamp() time.Time {
 	if e == nil {
 		return time.Time{}
@@ -226,6 +241,7 @@ func (e *Event) Timestamp() time.Time {
 	return e.timestamp
 }
 
+// Type returns the event type classification.
 func (e *Event) Type() EventType {
 	if e == nil {
 		return ""
@@ -233,6 +249,7 @@ func (e *Event) Type() EventType {
 	return e.eventType
 }
 
+// NodeID returns the identifier of the node emitting the event, if applicable.
 func (e *Event) NodeID() NodeID {
 	if e == nil {
 		return ""
@@ -240,6 +257,7 @@ func (e *Event) NodeID() NodeID {
 	return e.nodeID
 }
 
+// Payload returns a defensive copy of the event payload.
 func (e *Event) Payload() any {
 	if e == nil {
 		return nil
@@ -278,6 +296,7 @@ type eventJSON struct {
 	Payload     json.RawMessage `json:"payload,omitempty"`
 }
 
+// MarshalJSON implements custom JSON marshaling for Event.
 func (e Event) MarshalJSON() ([]byte, error) {
 	var payloadBytes json.RawMessage
 	if e.payload != nil {
@@ -298,6 +317,7 @@ func (e Event) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for Event.
 func (e *Event) UnmarshalJSON(data []byte) error {
 	var raw eventJSON
 	if err := json.Unmarshal(data, &raw); err != nil {

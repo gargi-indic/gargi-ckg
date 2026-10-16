@@ -50,7 +50,11 @@ func TestNewEvent_Validation(t *testing.T) {
 		{"zero timestamp", "exec-1", 1, time.Time{}, EventTypeNodeCompleted, "node-1", nil, true},
 		{"invalid event type", "exec-1", 1, now, EventType("bad"), "node-1", nil, true},
 		{"missing nodeID for node event", "exec-1", 1, now, EventTypeNodeCompleted, "", nil, true},
+		{"missing nodeID for node state changed", "exec-1", 1, now, EventTypeNodeStateChanged, "", nil, true},
+		{"missing nodeID for node failed", "exec-1", 1, now, EventTypeNodeFailed, "", nil, true},
+		{"missing nodeID for external signal", "exec-1", 1, now, EventTypeExternalSignalReceived, "", nil, true},
 		{"unexpected nodeID for graph event", "exec-1", 1, now, EventTypeGraphCompleted, "node-1", nil, true},
+		{"unexpected nodeID for graph failed", "exec-1", 1, now, EventTypeGraphFailed, "node-1", nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -298,5 +302,95 @@ func TestEvent_JSONUnmarshal_Invalid(t *testing.T) {
 		if err := json.Unmarshal([]byte(j), &e); err == nil {
 			t.Errorf("expected error unmarshaling invalid json[%d]: %s", i, j)
 		}
+	}
+}
+
+func TestEvent_Accessors_NilReceiver(t *testing.T) {
+	var e *Event // nil
+
+	if got := e.ExecutionID(); got != "" {
+		t.Errorf("ExecutionID() on nil = %v, want empty", got)
+	}
+	if got := e.Sequence(); got != 0 {
+		t.Errorf("Sequence() on nil = %v, want 0", got)
+	}
+	if got := e.Timestamp(); !got.IsZero() {
+		t.Errorf("Timestamp() on nil = %v, want zero time", got)
+	}
+	if got := e.Type(); got != "" {
+		t.Errorf("Type() on nil = %v, want empty", got)
+	}
+	if got := e.NodeID(); got != "" {
+		t.Errorf("NodeID() on nil = %v, want empty", got)
+	}
+	if got := e.Payload(); got != nil {
+		t.Errorf("Payload() on nil = %v, want nil", got)
+	}
+}
+
+func TestNewEvent_PointerPayloadsDereferenced(t *testing.T) {
+	tests := []struct {
+		name      string
+		eventType EventType
+		nodeID    NodeID
+		payload   any
+		wantType  reflect.Type
+	}{
+		{
+			name:      "NodeStateChanged pointer",
+			eventType: EventTypeNodeStateChanged,
+			nodeID:    "node-1",
+			payload:   &NodeStateChangedPayload{},
+			wantType:  reflect.TypeOf(NodeStateChangedPayload{}),
+		},
+		{
+			name:      "NodeCompleted pointer",
+			eventType: EventTypeNodeCompleted,
+			nodeID:    "node-1",
+			payload:   &NodeCompletedPayload{},
+			wantType:  reflect.TypeOf(NodeCompletedPayload{}),
+		},
+		{
+			name:      "NodeFailed pointer",
+			eventType: EventTypeNodeFailed,
+			nodeID:    "node-1",
+			payload:   &NodeFailedPayload{},
+			wantType:  reflect.TypeOf(NodeFailedPayload{}),
+		},
+		{
+			name:      "ExternalSignalReceived pointer",
+			eventType: EventTypeExternalSignalReceived,
+			nodeID:    "node-1",
+			payload:   &ExternalSignalReceivedPayload{},
+			wantType:  reflect.TypeOf(ExternalSignalReceivedPayload{}),
+		},
+		{
+			name:      "GraphCompleted pointer",
+			eventType: EventTypeGraphCompleted,
+			nodeID:    "",
+			payload:   &GraphCompletedPayload{},
+			wantType:  reflect.TypeOf(GraphCompletedPayload{}),
+		},
+		{
+			name:      "GraphFailed pointer",
+			eventType: EventTypeGraphFailed,
+			nodeID:    "",
+			payload:   &GraphFailedPayload{},
+			wantType:  reflect.TypeOf(GraphFailedPayload{}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e, err := NewEvent("exec-1", 1, time.Now(), tt.eventType, tt.nodeID, tt.payload)
+			if err != nil {
+				t.Fatalf("NewEvent failed: %v", err)
+			}
+
+			gotType := reflect.TypeOf(e.Payload())
+			if gotType != tt.wantType {
+				t.Errorf("Expected payload type %v, got %v", tt.wantType, gotType)
+			}
+		})
 	}
 }

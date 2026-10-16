@@ -73,6 +73,14 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 		}
 	}
 
+	validNodeIDs := make([]string, 0, len(def.Nodes))
+	for _, n := range def.Nodes {
+		if n.ID != "" && identifierRegex.MatchString(string(n.ID)) {
+			validNodeIDs = append(validNodeIDs, string(n.ID))
+		}
+	}
+	sort.Strings(validNodeIDs)
+
 	// Check Edges
 	type edgeKey struct {
 		from engine.NodeID
@@ -122,6 +130,10 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 		if edge.Condition != "" {
 			if utf8.RuneCountInString(edge.Condition) > 4096 {
 				errs.Add(edgePath.Field("condition").String(), engine.CodeInvalidCondition, "condition length must be 1..4096 runes")
+			} else {
+				if err := ValidateCondition(edge.Condition, validNodeIDs...); err != nil {
+					errs.Add(edgePath.Field("condition").String(), engine.CodeInvalidCondition, err.Error())
+				}
 			}
 		}
 

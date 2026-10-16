@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -26,10 +27,26 @@ func TestValidateStructure(t *testing.T) {
 					{ID: "n2", Type: "t2"},
 				},
 				Edges: []engine.EdgeDefinition{
-					{From: "n1", To: "n2"},
+					{From: "n1", To: "n2", Condition: "n1.status == 'ok' && upstream.output.score > 0.8"},
 				},
 			},
 			wantIssues: nil, // empty validation errors
+		},
+		{
+			name: "undeclared node identifier in condition",
+			def: &engine.GraphDefinition{
+				ID: "g1",
+				Nodes: []engine.NodeDefinition{
+					{ID: "n1", Type: "t1"},
+					{ID: "n2", Type: "t2"},
+				},
+				Edges: []engine.EdgeDefinition{
+					{From: "n1", To: "n2", Condition: "unknown_node.status == 'ok'"},
+				},
+			},
+			wantIssues: map[string]engine.ErrorCode{
+				"$.edges[0].condition": engine.CodeInvalidCondition,
+			},
 		},
 		{
 			name: "nil definition",
@@ -92,6 +109,7 @@ func TestValidateStructure(t *testing.T) {
 					{From: "n1", To: "n2"},
 					{From: "n2", To: "n1", Condition: "", DataMapping: map[string]string{"": "v", "k": ""}},
 					{From: "n2", To: "n1", Condition: strings.Repeat("é", 4097)},
+					{From: "n2", To: "n1", Condition: "1 + 2"}, // invalid CEL bool
 				},
 			},
 			wantIssues: map[string]engine.ErrorCode{
@@ -102,6 +120,8 @@ func TestValidateStructure(t *testing.T) {
 				"$.edges[4].dataMapping.k":   engine.CodeInvalidValue,
 				"$.edges[5].condition":       engine.CodeInvalidCondition,
 				"$.edges[5]":                 engine.CodeInvalidValue,
+				"$.edges[6].condition":       engine.CodeInvalidCondition,
+				"$.edges[6]":                 engine.CodeInvalidValue,
 			},
 		},
 		{
@@ -308,6 +328,38 @@ func TestValidateStructure(t *testing.T) {
 				if !found[wantPath] {
 					t.Errorf("Missing expected issue at path %q", wantPath)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateStructure_SchemaExamples(t *testing.T) {
+	parser := NewParser()
+	files := []string{
+		"../../schemas/graph/v1/example.json",
+		"../../schemas/graph/v1/example.yaml",
+	}
+
+	for _, file := range files {
+		t.Run(file, func(t *testing.T) {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatalf("failed to read file %s: %v", file, err)
+			}
+			var format engine.Format
+			if strings.HasSuffix(file, ".json") {
+				format = engine.FormatJSON
+			} else {
+				format = engine.FormatYAML
+			}
+			def, err := parser.Parse(data, format)
+			if err != nil {
+				t.Fatalf("Parse failed: %v", err)
+			}
+
+			errs := ValidateStructure(def)
+			if errs.Len() != 0 {
+				t.Fatalf("ValidateStructure failed: %v", errs.Error())
 			}
 		})
 	}

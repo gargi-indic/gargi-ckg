@@ -275,7 +275,9 @@ func (d *TerminalDetector) AssessState(
 					return nil, err
 				}
 				if d.emitter.sink != nil {
-					_ = d.emitter.sink.Emit(ctx, ev)
+					if err := d.emitter.sink.Emit(ctx, ev); err != nil {
+						return nil, err
+					}
 				}
 				events = append(events, ev)
 			}
@@ -357,7 +359,9 @@ func (d *TerminalDetector) AssessState(
 				return nil, err
 			}
 			if d.emitter.sink != nil {
-				_ = d.emitter.sink.Emit(ctx, ev)
+				if err := d.emitter.sink.Emit(ctx, ev); err != nil {
+					return nil, err
+				}
 			}
 			events = append(events, ev)
 		}
@@ -392,6 +396,9 @@ func canPendingNodeProgress(nodeID engine.NodeID, g *engine.Graph, state *engine
 			if st == engine.StatusFailed || st == engine.StatusSkipped || st == engine.StatusCompensating || st == engine.StatusCompensated {
 				return false
 			}
+			if st == engine.StatusPending && !canPendingNodeProgress(e.From(), g, state) {
+				return false
+			}
 		}
 		return true
 	}
@@ -408,7 +415,12 @@ func canPendingNodeProgress(nodeID engine.NodeID, g *engine.Graph, state *engine
 				return true
 			}
 			if st == engine.StatusPending || st == engine.StatusReady || st == engine.StatusRunning {
-				if canPendingNodeProgress(e.From(), g, state) {
+				// Prevent infinite recursion on cycles if any, though DAGs shouldn't have them
+				if st == engine.StatusPending {
+					if canPendingNodeProgress(e.From(), g, state) {
+						return true
+					}
+				} else {
 					return true
 				}
 			}

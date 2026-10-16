@@ -155,6 +155,15 @@ func bindNodeDefinition(m map[string]any, path engine.Path, errs *engine.Validat
 			if obj, ok := bindObject(v, p, errs); ok {
 				n.Config = obj
 			}
+		case "joinMode":
+			if s, ok := bindString(v, p, errs); ok {
+				jm, err := engine.ParseJoinMode(s)
+				if err != nil {
+					errs.Add(string(p), engine.CodeInvalidValue, "joinMode must be all_of or any_of")
+				} else {
+					n.JoinMode = jm
+				}
+			}
 		case "retryPolicy":
 			if s, ok := bindString(v, p, errs); ok {
 				n.RetryPolicy = s

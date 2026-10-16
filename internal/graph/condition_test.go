@@ -163,11 +163,23 @@ func TestEvaluateCondition(t *testing.T) {
 			want:    true,
 		},
 		{
-			name: "cost limit enforcement",
-			// A condition that does some repetitive work to exceed cost.
-			// CEL cost limits are quite strict, but just checking if basic operations work.
-			expr: "state.val == true",
-			vars: map[string]any{"state": map[string]any{"val": true}},
+			name: "cost limit enforcement (exceeds)",
+			expr: "state.items.all(x, state.items.all(y, x != y || true))",
+			vars: map[string]any{"state": map[string]any{
+				"items": func() []int {
+					items := make([]int, 200)
+					for i := range items {
+						items[i] = i
+					}
+					return items
+				}(),
+			}},
+			wantErr: true,
+		},
+		{
+			name: "nil vars handling",
+			expr: "true",
+			vars: nil,
 			want: true,
 		},
 	}
@@ -236,5 +248,13 @@ func TestCompiledCondition_Determinism(t *testing.T) {
 		if !res {
 			t.Errorf("expected true on iteration %d, got false", i)
 		}
+	}
+}
+
+func TestCompiledCondition_NilReceiver(t *testing.T) {
+	var c *graph.CompiledCondition
+	_, err := c.Evaluate(nil)
+	if err == nil || !strings.Contains(err.Error(), "nil compiled condition") {
+		t.Errorf("expected error containing 'nil compiled condition', got %v", err)
 	}
 }

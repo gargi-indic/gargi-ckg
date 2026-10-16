@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -386,4 +387,9 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 
 	*e = *parsedEvent
 	return nil
+}
+
+// EventSink receives events emitted during graph execution.
+type EventSink interface {
+	Emit(ctx context.Context, event *Event) error
 }

@@ -92,6 +92,7 @@ func TestValidateStructure(t *testing.T) {
 					{From: "n1", To: "n2"},
 					{From: "n2", To: "n1", Condition: "", DataMapping: map[string]string{"": "v", "k": ""}},
 					{From: "n2", To: "n1", Condition: strings.Repeat("é", 4097)},
+					{From: "n2", To: "n1", Condition: "1 + 2"}, // invalid CEL bool
 				},
 			},
 			wantIssues: map[string]engine.ErrorCode{
@@ -102,6 +103,8 @@ func TestValidateStructure(t *testing.T) {
 				"$.edges[4].dataMapping.k":   engine.CodeInvalidValue,
 				"$.edges[5].condition":       engine.CodeInvalidCondition,
 				"$.edges[5]":                 engine.CodeInvalidValue,
+				"$.edges[6].condition":       engine.CodeInvalidCondition,
+				"$.edges[6]":                 engine.CodeInvalidValue,
 			},
 		},
 		{

@@ -8,9 +8,12 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// Query types for the graph workflow execution state.
 const (
+	// QueryTypeGraphState is the query type to get the entire graph state.
 	QueryTypeGraphState = "graph_state"
-	QueryTypeNodeState  = "node_state"
+	// QueryTypeNodeState is the query type to get the state of a specific node.
+	QueryTypeNodeState = "node_state"
 )
 
 // NodeStateQueryArgs holds the arguments for a node_state query.

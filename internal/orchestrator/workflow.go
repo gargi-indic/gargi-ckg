@@ -88,12 +88,17 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 		execID = engine.ExecutionID(workflow.GetInfo(ctx).WorkflowExecution.ID)
 	}
 
+	var state *engine.GraphState
+	if err := RegisterWorkflowQueries(ctx, func() *engine.GraphState { return state }); err != nil {
+		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("failed to register queries: %v", err), "InternalError", err)
+	}
+
 	g, err := input.Definition.ToGraph()
 	if err != nil {
 		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("failed to parse graph definition: %v", err), "InvalidDefinition", err)
 	}
 
-	state, err := engine.NewGraphState(execID, g)
+	state, err = engine.NewGraphState(execID, g)
 	if err != nil {
 		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("failed to create graph state: %v", err), "InternalError", err)
 	}

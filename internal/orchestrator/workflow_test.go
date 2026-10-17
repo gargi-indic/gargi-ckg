@@ -48,6 +48,20 @@ func TestGraphExecutionWorkflow_Linear_Diamond(t *testing.T) {
 	runner := orchestrator.NewWorkflowRunner(reg)
 	env.RegisterWorkflow(runner.GraphExecutionWorkflow)
 
+	env.RegisterDelayedCallback(func() {
+		qv, err := env.QueryWorkflow(orchestrator.QueryTypeGraphState)
+		if err != nil {
+			t.Fatalf("Query graph_state mid-execution failed: %v", err)
+		}
+		var qState *engine.GraphState
+		if err := qv.Get(&qState); err != nil {
+			t.Fatalf("Failed to decode graph_state mid-execution query result: %v", err)
+		}
+		if qState == nil {
+			t.Errorf("Query graph_state mid-execution returned nil state")
+		}
+	}, 1) // wait for 1 millisecond into the workflow (just to catch it running)
+
 	env.ExecuteWorkflow(orchestrator.GraphExecutionWorkflowName, input)
 
 	if !env.IsWorkflowCompleted() {
@@ -78,6 +92,50 @@ func TestGraphExecutionWorkflow_Linear_Diamond(t *testing.T) {
 	}
 	if nodeDState.Status() != engine.StatusSucceeded {
 		t.Errorf("Expected Node D status Succeeded, got %s", nodeDState.Status())
+	}
+
+	// Test Graph State Query
+	qv, err := env.QueryWorkflow(orchestrator.QueryTypeGraphState)
+	if err != nil {
+		t.Fatalf("Query graph_state failed: %v", err)
+	}
+	var qState *engine.GraphState
+	if err := qv.Get(&qState); err != nil {
+		t.Fatalf("Failed to decode graph_state query result: %v", err)
+	}
+	if qState == nil || qState.Status() != engine.StatusSucceeded {
+		t.Errorf("Query graph_state returned unexpected state: %v", qState)
+	}
+
+	// Test Node State Query (with string arg)
+	qv, err = env.QueryWorkflow(orchestrator.QueryTypeNodeState, "D")
+	if err != nil {
+		t.Fatalf("Query node_state failed: %v", err)
+	}
+	var nState *engine.NodeState
+	if err := qv.Get(&nState); err != nil {
+		t.Fatalf("Failed to decode node_state query result: %v", err)
+	}
+	if nState == nil || nState.Status() != engine.StatusSucceeded {
+		t.Errorf("Query node_state (string arg) returned unexpected state: %v", nState)
+	}
+
+	// Test Node State Query (with struct arg)
+	qv, err = env.QueryWorkflow(orchestrator.QueryTypeNodeState, orchestrator.NodeStateQueryArgs{NodeID: "D"})
+	if err != nil {
+		t.Fatalf("Query node_state failed: %v", err)
+	}
+	if err := qv.Get(&nState); err != nil {
+		t.Fatalf("Failed to decode node_state query result: %v", err)
+	}
+	if nState == nil || nState.Status() != engine.StatusSucceeded {
+		t.Errorf("Query node_state (struct arg) returned unexpected state: %v", nState)
+	}
+
+	// Test Node State Query (unknown node)
+	_, err = env.QueryWorkflow(orchestrator.QueryTypeNodeState, "UnknownNode")
+	if err == nil {
+		t.Fatalf("Query node_state for unknown node should have failed")
 	}
 }
 

@@ -164,6 +164,14 @@ func bindNodeDefinition(m map[string]any, path engine.Path, errs *engine.Validat
 					n.JoinMode = jm
 				}
 			}
+		case "startToCloseTimeoutMs":
+			if val, ok := bindInt(v, p, errs); ok {
+				n.StartToCloseTimeoutMs = &val
+			}
+		case "scheduleToCloseTimeoutMs":
+			if val, ok := bindInt(v, p, errs); ok {
+				n.ScheduleToCloseTimeoutMs = &val
+			}
 		case "retryPolicy":
 			if s, ok := bindString(v, p, errs); ok {
 				n.RetryPolicy = s

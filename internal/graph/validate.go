@@ -64,6 +64,14 @@ func ValidateStructure(def *engine.GraphDefinition) *engine.ValidationErrors {
 			errs.Add(nodePath.Field("type").String(), engine.CodeInvalidValue, "invalid type name pattern")
 		}
 
+		if node.StartToCloseTimeoutMs != nil && *node.StartToCloseTimeoutMs < 1 {
+			errs.Add(nodePath.Field("startToCloseTimeoutMs").String(), engine.CodeInvalidValue, "must be >= 1")
+		}
+
+		if node.ScheduleToCloseTimeoutMs != nil && *node.ScheduleToCloseTimeoutMs < 1 {
+			errs.Add(nodePath.Field("scheduleToCloseTimeoutMs").String(), engine.CodeInvalidValue, "must be >= 1")
+		}
+
 		if node.JoinMode != "" && !node.JoinMode.Valid() {
 			errs.Add(nodePath.Field("joinMode").String(), engine.CodeInvalidValue, "joinMode must be all_of or any_of")
 		}

@@ -108,6 +108,16 @@
           "$ref": "#/$defs/Identifier",
           "description": "Reference to a retry policy defined in retryPolicies."
         },
+        "startToCloseTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional per-node StartToClose timeout in milliseconds."
+        },
+        "scheduleToCloseTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional per-node ScheduleToClose timeout in milliseconds."
+        },
         "compensation": {
           "$ref": "#/$defs/Identifier",
           "description": "Reference to a compensation defined in compensations."

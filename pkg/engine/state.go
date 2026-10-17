@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -232,4 +233,75 @@ func (g *GraphState) WithStatus(expectedVersion uint64, to Status) (*GraphState,
 		nodeStates:  newNodeStates,
 		version:     g.version + 1,
 	}, nil
+}
+
+// MarshalJSON implements the json.Marshaler interface for NodeState.
+func (n NodeState) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"nodeId":       n.nodeID,
+		"status":       n.status,
+		"output":       n.output,
+		"errorMessage": n.errorMessage,
+		"version":      n.version,
+	})
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for NodeState.
+func (n *NodeState) UnmarshalJSON(data []byte) error {
+	var m struct {
+		NodeID       NodeID         `json:"nodeId"`
+		Status       Status         `json:"status"`
+		Output       map[string]any `json:"output,omitempty"`
+		ErrorMessage string         `json:"errorMessage,omitempty"`
+		Version      uint64         `json:"version"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	n.nodeID = m.NodeID
+	n.status = m.Status
+	n.output = m.Output
+	if n.output == nil {
+		n.output = make(map[string]any)
+	}
+	n.errorMessage = m.ErrorMessage
+	n.version = m.Version
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface for GraphState.
+func (g GraphState) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"executionId": g.executionID,
+		"graphId":     g.graphID,
+		"status":      g.status,
+		"nodes":       g.nodes,
+		"nodeStates":  g.nodeStates,
+		"version":     g.version,
+	})
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for GraphState.
+func (g *GraphState) UnmarshalJSON(data []byte) error {
+	var m struct {
+		ExecutionID ExecutionID           `json:"executionId"`
+		GraphID     string                `json:"graphId"`
+		Status      Status                `json:"status"`
+		Nodes       []NodeID              `json:"nodes"`
+		NodeStates  map[NodeID]*NodeState `json:"nodeStates"`
+		Version     uint64                `json:"version"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	g.executionID = m.ExecutionID
+	g.graphID = m.GraphID
+	g.status = m.Status
+	g.nodes = m.Nodes
+	g.nodeStates = m.NodeStates
+	if g.nodeStates == nil {
+		g.nodeStates = make(map[NodeID]*NodeState)
+	}
+	g.version = m.Version
+	return nil
 }

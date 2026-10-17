@@ -487,5 +487,4 @@ func TestGraphExecutionWorkflow_RejectedSignal(t *testing.T) {
 	require.Equal(t, engine.StatusSucceeded, result.Status)
 
 	require.Equal(t, "unknown target node \"Unknown\"", result.RejectedSignals[0].Reason)
-
 }

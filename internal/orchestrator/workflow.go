@@ -31,10 +31,11 @@ type GraphWorkflowInput struct {
 
 // GraphWorkflowResult is the output returned when GraphExecutionWorkflow finishes.
 type GraphWorkflowResult struct {
-	ExecutionID engine.ExecutionID `json:"executionId"`
-	FinalState  *engine.GraphState `json:"finalState"`
-	Status      engine.Status      `json:"status"`
-	Error       string             `json:"error,omitempty"`
+	ExecutionID     engine.ExecutionID `json:"executionId"`
+	FinalState      *engine.GraphState `json:"finalState"`
+	Status          engine.Status      `json:"status"`
+	Error           string             `json:"error,omitempty"`
+	RejectedSignals []RejectedSignal   `json:"rejectedSignals,omitempty"`
 }
 
 // WorkflowRunner binds an optional custom engine.Registry to GraphExecutionWorkflow.
@@ -72,6 +73,11 @@ type activityOutcome struct {
 	err    error
 }
 
+type waitingSignalEntry struct {
+	signalName  string
+	cancelTimer workflow.CancelFunc
+}
+
 // GraphExecutionWorkflow executes a reactive graph workflow using r's registry.
 func (r *WorkflowRunner) GraphExecutionWorkflow(
 	ctx workflow.Context,
@@ -88,9 +94,15 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 		execID = engine.ExecutionID(workflow.GetInfo(ctx).WorkflowExecution.ID)
 	}
 
+	signalRouter := NewSignalRouter()
 	var state *engine.GraphState
 	if err := RegisterWorkflowQueries(ctx, func() *engine.GraphState { return state }); err != nil {
 		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("failed to register queries: %v", err), "InternalError", err)
+	}
+	if err := workflow.SetQueryHandler(ctx, QueryTypeRejectedSignals, func() ([]RejectedSignal, error) {
+		return signalRouter.RejectedSignals(), nil
+	}); err != nil {
+		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("failed to register rejected signals query: %v", err), "InternalError", err)
 	}
 
 	g, err := input.Definition.ToGraph()
@@ -145,7 +157,62 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 	inFlightCount := 0
 	var completedOutcomes []activityOutcome
 
+	waitingSignals := make(map[engine.NodeID]*waitingSignalEntry)
+
+	handleIncomingSignal := func(sig ExternalSignalPayload) {
+		if g.Node(sig.TargetNodeID) == nil {
+			signalRouter.RecordRejected(sig, fmt.Sprintf("unknown target node %q", sig.TargetNodeID))
+			workflow.GetLogger(ctx).Warn("rejected signal for unknown node", "nodeId", sig.TargetNodeID, "signalName", sig.SignalName)
+			return
+		}
+
+		ns := state.NodeState(sig.TargetNodeID)
+		if ns != nil && ns.Status().IsTerminal() {
+			signalRouter.RecordRejected(sig, fmt.Sprintf("node %q is already in terminal status %s", sig.TargetNodeID, ns.Status()))
+			workflow.GetLogger(ctx).Warn("rejected signal for terminal node", "nodeId", sig.TargetNodeID, "status", ns.Status())
+			return
+		}
+
+		signalRouter.RouteSignal(sig)
+
+		if entry, waiting := waitingSignals[sig.TargetNodeID]; waiting {
+			if entry.signalName == "" || entry.signalName == sig.SignalName {
+				payload, _ := signalRouter.ReceiveNamedSignal(sig.TargetNodeID, entry.signalName)
+				if entry.cancelTimer != nil {
+					entry.cancelTimer()
+				}
+				delete(waitingSignals, sig.TargetNodeID)
+				inFlightCount--
+
+				mut := engine.NewStateMutation(sig.TargetNodeID, 0, nil, map[string]any{
+					"signal":  entry.signalName,
+					"payload": payload,
+				}, nil, nil)
+				completedOutcomes = append(completedOutcomes, activityOutcome{
+					nodeID: sig.TargetNodeID,
+					result: &NodeActivityResult{NodeID: sig.TargetNodeID, Mutation: &mut},
+				})
+			}
+		}
+	}
+
+	signalCh := workflow.GetSignalChannel(ctx, SignalChannelName)
+	selector.AddReceive(signalCh, func(c workflow.ReceiveChannel, _ bool) {
+		var sig ExternalSignalPayload
+		c.Receive(ctx, &sig)
+		handleIncomingSignal(sig)
+	})
+
 	for {
+		// Drain any buffered signals before evaluation
+		for {
+			var sig ExternalSignalPayload
+			if !signalCh.ReceiveAsync(&sig) {
+				break
+			}
+			handleIncomingSignal(sig)
+		}
+
 		plan, nextState, err := scheduler.EvaluateStep(stdCtx, state)
 		if err != nil {
 			return &GraphWorkflowResult{ExecutionID: execID, FinalState: state, Status: engine.StatusFailed, Error: err.Error()}, temporal.NewNonRetryableApplicationError(fmt.Sprintf("scheduler evaluation failed: %v", err), "InternalError", err)
@@ -179,31 +246,93 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 			}
 
 			nodeDef := nodeDefs[nodeID]
-			actOpts := BuildNodeActivityOptions(workflow.ActivityOptions{}, &nodeDef)
-			actOpts.RetryPolicy = ResolveNodeRetryPolicy(&nodeDef, input.Definition.RetryPolicies)
-			actCtx := workflow.WithActivityOptions(ctx, actOpts)
 
-			actInput := NodeActivityInput{
-				ExecutionID: execID,
-				NodeID:      nodeID,
-				NodeType:    nodeDef.Type,
-				Config:      nodeDef.Config,
-				Inputs:      inputs,
-				GraphState:  state,
-				Attempt:     1,
-				MaxAttempts: int(actOpts.RetryPolicy.MaximumAttempts),
+			if nodeDef.Type == "wait_for_signal" {
+				sigName, _ := nodeDef.Config["signal"].(string)
+				var timeoutSeconds float64
+				if ts, ok := nodeDef.Config["timeout_seconds"]; ok {
+					switch v := ts.(type) {
+					case int:
+						timeoutSeconds = float64(v)
+					case float64:
+						timeoutSeconds = v
+					}
+				}
+
+				if sigName == "" {
+					completedOutcomes = append(completedOutcomes, activityOutcome{
+						nodeID: nodeID,
+						err:    engine.NewNonRetryableError(fmt.Errorf("signal is required")),
+					})
+				} else if payload, ok := signalRouter.ReceiveNamedSignal(nodeID, sigName); ok {
+					mut := engine.NewStateMutation(nodeID, 0, nil, map[string]any{
+						"signal":  sigName,
+						"payload": payload,
+					}, nil, nil)
+					completedOutcomes = append(completedOutcomes, activityOutcome{
+						nodeID: nodeID,
+						result: &NodeActivityResult{NodeID: nodeID, Mutation: &mut},
+					})
+				} else {
+					inFlightCount++
+					entry := &waitingSignalEntry{signalName: sigName}
+					waitingSignals[nodeID] = entry
+
+					if timeoutSeconds > 0 {
+						timerCtx, cancelTimer := workflow.WithCancel(ctx)
+						entry.cancelTimer = cancelTimer
+						timerFut := workflow.NewTimer(timerCtx, time.Duration(timeoutSeconds)*time.Second)
+
+						nID := nodeID
+						selector.AddFuture(timerFut, func(f workflow.Future) {
+							if err := f.Get(ctx, nil); err != nil {
+								return // timer was cancelled because signal arrived
+							}
+							if _, stillWaiting := waitingSignals[nID]; stillWaiting {
+								delete(waitingSignals, nID)
+								inFlightCount--
+								completedOutcomes = append(completedOutcomes, activityOutcome{
+									nodeID: nID,
+									err:    engine.NewNonRetryableError(fmt.Errorf("wait_for_signal timeout exceeded")),
+								})
+							}
+						})
+					}
+				}
+			} else {
+				actOpts := BuildNodeActivityOptions(workflow.ActivityOptions{}, &nodeDef)
+				actOpts.RetryPolicy = ResolveNodeRetryPolicy(&nodeDef, input.Definition.RetryPolicies)
+				actCtx := workflow.WithActivityOptions(ctx, actOpts)
+
+				actInput := NodeActivityInput{
+					ExecutionID: execID,
+					NodeID:      nodeID,
+					NodeType:    nodeDef.Type,
+					Config:      nodeDef.Config,
+					Inputs:      inputs,
+					GraphState:  state,
+					Attempt:     1,
+					MaxAttempts: int(actOpts.RetryPolicy.MaximumAttempts),
+				}
+
+				inFlightCount++
+				fut := workflow.ExecuteActivity(actCtx, ExecuteNodeActivityName, actInput)
+
+				nID := nodeID
+				selector.AddFuture(fut, func(f workflow.Future) {
+					inFlightCount--
+					var res NodeActivityResult
+					err := f.Get(ctx, &res)
+					completedOutcomes = append(completedOutcomes, activityOutcome{nodeID: nID, result: &res, err: err})
+					for {
+						var sig ExternalSignalPayload
+						if !signalCh.ReceiveAsync(&sig) {
+							break
+						}
+						handleIncomingSignal(sig)
+					}
+				})
 			}
-
-			inFlightCount++
-			fut := workflow.ExecuteActivity(actCtx, ExecuteNodeActivityName, actInput)
-
-			nID := nodeID
-			selector.AddFuture(fut, func(f workflow.Future) {
-				inFlightCount--
-				var res NodeActivityResult
-				err := f.Get(ctx, &res)
-				completedOutcomes = append(completedOutcomes, activityOutcome{nodeID: nID, result: &res, err: err})
-			})
 		}
 
 		if inFlightCount == 0 && len(completedOutcomes) == 0 {
@@ -287,9 +416,10 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 	}
 
 	return &GraphWorkflowResult{
-		ExecutionID: execID,
-		FinalState:  state,
-		Status:      state.Status(),
-		Error:       errStr,
+		ExecutionID:     execID,
+		FinalState:      state,
+		Status:          state.Status(),
+		Error:           errStr,
+		RejectedSignals: signalRouter.RejectedSignals(),
 	}, nil
 }

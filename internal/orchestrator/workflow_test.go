@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
@@ -17,7 +20,7 @@ func TestGraphExecutionWorkflow_Linear_Diamond(t *testing.T) {
 	env := suite.NewTestWorkflowEnvironment()
 
 	reg := engine.NewRegistry()
-	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
 
 	na := orchestrator.NewNodeActivities(reg)
 	env.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{Name: orchestrator.ExecuteNodeActivityName})
@@ -49,6 +52,9 @@ func TestGraphExecutionWorkflow_Linear_Diamond(t *testing.T) {
 	env.RegisterWorkflow(runner.GraphExecutionWorkflow)
 
 	env.RegisterDelayedCallback(func() {
+		// Force yield so the workflow has time to process sigA and finish node A
+		time.Sleep(10 * time.Millisecond)
+
 		qv, err := env.QueryWorkflow(orchestrator.QueryTypeGraphState)
 		if err != nil {
 			t.Fatalf("Query graph_state mid-execution failed: %v", err)
@@ -144,7 +150,7 @@ func TestGraphExecutionWorkflow_Conditional_Branch(t *testing.T) {
 	env := suite.NewTestWorkflowEnvironment()
 
 	reg := engine.NewRegistry()
-	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
 
 	na := orchestrator.NewNodeActivities(reg)
 	env.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{Name: orchestrator.ExecuteNodeActivityName})
@@ -196,7 +202,7 @@ func TestGraphExecutionWorkflow_InitialState(t *testing.T) {
 	env := suite.NewTestWorkflowEnvironment()
 
 	reg := engine.NewRegistry()
-	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
 
 	na := orchestrator.NewNodeActivities(reg)
 	env.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{Name: orchestrator.ExecuteNodeActivityName})
@@ -235,7 +241,7 @@ func TestGraphExecutionWorkflow_FailurePolicy_Compensate(t *testing.T) {
 	env := suite.NewTestWorkflowEnvironment()
 
 	reg := engine.NewRegistry()
-	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
 
 	_ = reg.Register("critical_fail_node", func(_ any) (engine.NodeInterface, error) {
 		return &mockCriticalFailNode{}, nil
@@ -318,4 +324,168 @@ func (m *mockCompNode) OnSuccess(_ context.Context, _ engine.NodeContext, _ *eng
 
 func (m *mockCompNode) OnFailure(_ context.Context, _ engine.NodeContext, _ error) error {
 	return nil
+}
+
+func TestGraphExecutionWorkflow_Signal(t *testing.T) {
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+
+	reg := engine.NewRegistry()
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
+
+	na := orchestrator.NewNodeActivities(reg)
+	env.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{Name: orchestrator.ExecuteNodeActivityName})
+
+	def := &engine.GraphDefinition{
+		ID:         "signal_test",
+		APIVersion: "v1",
+		Nodes: []engine.NodeDefinition{
+			{ID: "A", Type: "wait_for_signal", Config: map[string]any{"signal": "sigA"}},
+			{ID: "B", Type: "transform", Config: map[string]any{"mapping": map[string]any{"mappedPayload": "inPayload"}}},
+		},
+		Edges: []engine.EdgeDefinition{
+			{From: "A", To: "B", DataMapping: map[string]string{"inPayload": "payload"}},
+		},
+	}
+
+	runner := orchestrator.NewWorkflowRunner(reg)
+	env.RegisterWorkflow(runner.GraphExecutionWorkflow)
+
+	env.RegisterDelayedCallback(func() {
+		// Force yield so the workflow has time to process sigA and finish node A
+		time.Sleep(10 * time.Millisecond)
+
+		env.SignalWorkflow(orchestrator.SignalChannelName, orchestrator.ExternalSignalPayload{
+			TargetNodeID: "A",
+			SignalName:   "sigA",
+			Payload:      map[string]any{"value": "hello_signal"},
+		})
+	}, time.Millisecond)
+
+	env.ExecuteWorkflow(runner.GraphExecutionWorkflow, orchestrator.GraphWorkflowInput{
+		ExecutionID: "exec-signal",
+		Definition:  def,
+	})
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	var result orchestrator.GraphWorkflowResult
+	require.NoError(t, env.GetWorkflowResult(&result))
+
+	require.Equal(t, engine.StatusSucceeded, result.Status)
+	nsB := result.FinalState.NodeState("B")
+	require.Equal(t, engine.StatusSucceeded, nsB.Status())
+	require.Equal(t, map[string]any{"value": "hello_signal"}, nsB.Output()["mappedPayload"])
+}
+
+func TestGraphExecutionWorkflow_SignalTimeout(t *testing.T) {
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+
+	reg := engine.NewRegistry()
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
+
+	na := orchestrator.NewNodeActivities(reg)
+	env.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{Name: orchestrator.ExecuteNodeActivityName})
+
+	def := &engine.GraphDefinition{
+		ID:         "signal_timeout_test",
+		APIVersion: "v1",
+		Nodes: []engine.NodeDefinition{
+			{ID: "A", Type: "wait_for_signal", Config: map[string]any{"signal": "sigA", "timeout_seconds": 1}},
+		},
+	}
+
+	runner := orchestrator.NewWorkflowRunner(reg)
+	env.RegisterWorkflow(runner.GraphExecutionWorkflow)
+
+	env.ExecuteWorkflow(runner.GraphExecutionWorkflow, orchestrator.GraphWorkflowInput{
+		ExecutionID: "exec-signal-timeout",
+		Definition:  def,
+	})
+
+	require.True(t, env.IsWorkflowCompleted())
+
+	var result orchestrator.GraphWorkflowResult
+	require.NoError(t, env.GetWorkflowResult(&result))
+
+	require.Equal(t, engine.StatusFailed, result.Status)
+	nsA := result.FinalState.NodeState("A")
+	require.Equal(t, engine.StatusFailed, nsA.Status())
+	require.Contains(t, nsA.ErrorMessage(), "wait_for_signal timeout exceeded")
+}
+
+func TestGraphExecutionWorkflow_RejectedSignal(t *testing.T) {
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+
+	reg := engine.NewRegistry()
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{Signals: orchestrator.NewTemporalSignalSource()})
+
+	na := orchestrator.NewNodeActivities(reg)
+	env.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{Name: orchestrator.ExecuteNodeActivityName})
+
+	def := &engine.GraphDefinition{
+		ID:         "signal_rejected_test",
+		APIVersion: "v1",
+		Nodes: []engine.NodeDefinition{
+			{ID: "A", Type: "wait_for_signal", Config: map[string]any{"signal": "sigA"}},
+			{ID: "B", Type: "wait_for_signal", Config: map[string]any{"signal": "sigB"}},
+		},
+		Edges: []engine.EdgeDefinition{
+			{From: "A", To: "B"},
+		},
+	}
+
+	runner := orchestrator.NewWorkflowRunner(reg)
+	env.RegisterWorkflow(runner.GraphExecutionWorkflow)
+
+	env.RegisterDelayedCallback(func() {
+		// Force yield so the workflow has time to process sigA and finish node A
+		// actually testsuite callback uses a timer, so it waits anyway, but we sleep to be sure
+		time.Sleep(10 * time.Millisecond)
+
+		// Signal to unknown node
+		env.SignalWorkflow(orchestrator.SignalChannelName, orchestrator.ExternalSignalPayload{
+			TargetNodeID: "Unknown",
+			SignalName:   "sigU",
+		})
+		// Signal to complete the actual node
+		env.SignalWorkflow(orchestrator.SignalChannelName, orchestrator.ExternalSignalPayload{
+			TargetNodeID: "A",
+			SignalName:   "sigA",
+		})
+	}, time.Millisecond)
+
+	env.RegisterDelayedCallback(func() {
+		time.Sleep(10 * time.Millisecond)
+
+		// Signal to already completed node
+		env.SignalWorkflow(orchestrator.SignalChannelName, orchestrator.ExternalSignalPayload{
+			TargetNodeID: "A",
+			SignalName:   "sigLate",
+		})
+		// Signal to complete B
+		env.SignalWorkflow(orchestrator.SignalChannelName, orchestrator.ExternalSignalPayload{
+			TargetNodeID: "B",
+			SignalName:   "sigB",
+		})
+	}, 10*time.Millisecond)
+
+	env.ExecuteWorkflow(runner.GraphExecutionWorkflow, orchestrator.GraphWorkflowInput{
+		ExecutionID: "exec-signal-rejected",
+		Definition:  def,
+	})
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	var result orchestrator.GraphWorkflowResult
+	require.NoError(t, env.GetWorkflowResult(&result))
+
+	require.Equal(t, engine.StatusSucceeded, result.Status)
+
+	require.Equal(t, "unknown target node \"Unknown\"", result.RejectedSignals[0].Reason)
+
 }

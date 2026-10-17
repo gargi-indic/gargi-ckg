@@ -307,11 +307,10 @@ func TestTemporalConfigEffectiveQueues(t *testing.T) {
 }
 
 func TestApplyEnvOverridesTLS(t *testing.T) {
-	os.Setenv("GARGI_TEMPORAL_TLS_ENABLED", "true")
-	os.Setenv("GARGI_TEMPORAL_TLS_CERT_FILE", "cert.pem")
-	os.Setenv("GARGI_TEMPORAL_TLS_KEY_FILE", "key.pem")
-	os.Setenv("GARGI_TEMPORAL_TLS_CA_FILE", "ca.pem")
-	defer os.Clearenv()
+	t.Setenv("GARGI_TEMPORAL_TLS_ENABLED", "true")
+	t.Setenv("GARGI_TEMPORAL_TLS_CERT_FILE", "cert.pem")
+	t.Setenv("GARGI_TEMPORAL_TLS_KEY_FILE", "key.pem")
+	t.Setenv("GARGI_TEMPORAL_TLS_CA_FILE", "ca.pem")
 
 	cfg := Default()
 	applyEnvOverrides(cfg)

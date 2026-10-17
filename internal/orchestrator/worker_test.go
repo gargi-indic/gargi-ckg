@@ -78,31 +78,31 @@ func generateTestCerts(t *testing.T, dir string) (string, string, string) {
 	certPath := filepath.Join(dir, "cert.pem")
 	certOut, err := os.Create(certPath)
 	require.NoError(t, err)
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	certOut.Close()
+	require.NoError(t, pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}))
+	require.NoError(t, certOut.Close())
 
 	keyPath := filepath.Join(dir, "key.pem")
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	require.NoError(t, err)
 	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
 	require.NoError(t, err)
-	pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-	keyOut.Close()
+	require.NoError(t, pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
+	require.NoError(t, keyOut.Close())
 
 	caPath := filepath.Join(dir, "ca.pem")
 	caOut, err := os.Create(caPath)
 	require.NoError(t, err)
-	pem.Encode(caOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	caOut.Close()
+	require.NoError(t, pem.Encode(caOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}))
+	require.NoError(t, caOut.Close())
 
 	return certPath, keyPath, caPath
 }
 
-func testWorkflow(ctx workflow.Context) error {
+func testWorkflow(_ workflow.Context) error {
 	return nil
 }
 
-func testActivity(ctx context.Context) error {
+func testActivity(_ context.Context) error {
 	return nil
 }
 

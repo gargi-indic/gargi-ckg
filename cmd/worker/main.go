@@ -8,18 +8,24 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 )
 
 func main() {
-	if err := run(context.Background(), os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := run(ctx, os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "worker failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(_ context.Context, args []string, getenv func(string) (string, bool), stdout io.Writer, _ io.Writer) error {
+func run(ctx context.Context, args []string, getenv func(string) (string, bool), stdout io.Writer, _ io.Writer) error {
 	fs := flag.NewFlagSet("worker", flag.ContinueOnError)
 	configPath := fs.String("config", "", "Path to configuration file")
 
@@ -51,7 +57,13 @@ func run(_ context.Context, args []string, getenv func(string) (string, bool), s
 	// TODO(Issue #40): Instantiate the correct store adapter based on cfg.Store.Driver
 	// e.g., switch cfg.Store.Driver { case "memory": ... case "redis": ... }
 
-	// TODO(API Epic): Instantiate and start the Temporal Worker using cfg.Temporal
+	temporalClient, err := orchestrator.NewClient(cfg.Temporal, logger)
+	if err != nil {
+		return fmt.Errorf("creating temporal client: %w", err)
+	}
+	defer temporalClient.Close()
 
-	return nil
+	wm := orchestrator.NewWorkerManager(temporalClient, cfg.Temporal, logger)
+
+	return wm.Run(ctx)
 }

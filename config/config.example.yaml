@@ -14,6 +14,13 @@ temporal:
   host_port: "localhost:7233"
   namespace: "default"
   task_queue: "gargi_tasks"
+  # workflow_task_queue: "gargi_workflows"
+  # activity_task_queue: "gargi_activities"
+  # tls:
+  #   enabled: false
+  #   cert_file: "/path/to/cert.pem"
+  #   key_file: "/path/to/key.pem"
+  #   ca_file: "/path/to/ca.pem"
 
 server:
   http_address: ":8080"

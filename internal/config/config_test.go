@@ -281,3 +281,65 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestTemporalConfigEffectiveQueues(t *testing.T) {
+	tc := TemporalConfig{TaskQueue: "fallback"}
+
+	if tc.EffectiveWorkflowTaskQueue() != "fallback" {
+		t.Errorf("expected fallback")
+	}
+	if tc.EffectiveActivityTaskQueue() != "fallback" {
+		t.Errorf("expected fallback")
+	}
+
+	tc.WorkflowTaskQueue = "wf-queue"
+	if tc.EffectiveWorkflowTaskQueue() != "wf-queue" {
+		t.Errorf("expected wf-queue")
+	}
+	if tc.EffectiveActivityTaskQueue() != "fallback" {
+		t.Errorf("expected fallback")
+	}
+
+	tc.ActivityTaskQueue = "act-queue"
+	if tc.EffectiveActivityTaskQueue() != "act-queue" {
+		t.Errorf("expected act-queue")
+	}
+}
+
+func TestApplyEnvOverridesTLS(t *testing.T) {
+	t.Setenv("GARGI_TEMPORAL_TLS_ENABLED", "true")
+	t.Setenv("GARGI_TEMPORAL_TLS_CERT_FILE", "cert.pem")
+	t.Setenv("GARGI_TEMPORAL_TLS_KEY_FILE", "key.pem")
+	t.Setenv("GARGI_TEMPORAL_TLS_CA_FILE", "ca.pem")
+
+	cfg := Default()
+	applyEnvOverrides(cfg)
+
+	if !cfg.Temporal.TLS.Enabled {
+		t.Errorf("expected TLS enabled")
+	}
+	if cfg.Temporal.TLS.CertFile != "cert.pem" {
+		t.Errorf("expected cert.pem")
+	}
+	if cfg.Temporal.TLS.KeyFile != "key.pem" {
+		t.Errorf("expected key.pem")
+	}
+	if cfg.Temporal.TLS.CAFile != "ca.pem" {
+		t.Errorf("expected ca.pem")
+	}
+}
+
+func TestValidateTLS(t *testing.T) {
+	cfg := Default()
+	cfg.Temporal.TLS = &TLSConfig{Enabled: true, CertFile: "cert.pem"}
+	err := cfg.Validate()
+	if err == nil || err.Error() != "temporal tls requires both cert_file and key_file when client certificate is configured" {
+		t.Errorf("expected error, got: %v", err)
+	}
+
+	cfg.Temporal.TLS.KeyFile = "key.pem"
+	err = cfg.Validate()
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}

@@ -36,11 +36,38 @@ type Neo4jConfig struct {
 	Password string `yaml:"password"`
 }
 
+// TLSConfig holds optional TLS settings for the Temporal client connection.
+type TLSConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	CertFile string `yaml:"cert_file,omitempty"`
+	KeyFile  string `yaml:"key_file,omitempty"`
+	CAFile   string `yaml:"ca_file,omitempty"`
+}
+
 // TemporalConfig holds the configuration for the Temporal connection.
 type TemporalConfig struct {
-	HostPort  string `yaml:"host_port"`
-	Namespace string `yaml:"namespace"`
-	TaskQueue string `yaml:"task_queue"`
+	HostPort          string     `yaml:"host_port"`
+	Namespace         string     `yaml:"namespace"`
+	TaskQueue         string     `yaml:"task_queue"`
+	WorkflowTaskQueue string     `yaml:"workflow_task_queue,omitempty"`
+	ActivityTaskQueue string     `yaml:"activity_task_queue,omitempty"`
+	TLS               *TLSConfig `yaml:"tls,omitempty"`
+}
+
+// EffectiveWorkflowTaskQueue returns WorkflowTaskQueue if non-empty, otherwise TaskQueue.
+func (t TemporalConfig) EffectiveWorkflowTaskQueue() string {
+	if t.WorkflowTaskQueue != "" {
+		return t.WorkflowTaskQueue
+	}
+	return t.TaskQueue
+}
+
+// EffectiveActivityTaskQueue returns ActivityTaskQueue if non-empty, otherwise TaskQueue.
+func (t TemporalConfig) EffectiveActivityTaskQueue() string {
+	if t.ActivityTaskQueue != "" {
+		return t.ActivityTaskQueue
+	}
+	return t.TaskQueue
 }
 
 // ServerConfig holds the configuration for the API server.
@@ -143,6 +170,36 @@ func applyEnvOverrides(cfg *Config) {
 	if val, ok := os.LookupEnv("GARGI_TEMPORAL_TASK_QUEUE"); ok {
 		cfg.Temporal.TaskQueue = val
 	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_WORKFLOW_TASK_QUEUE"); ok {
+		cfg.Temporal.WorkflowTaskQueue = val
+	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_ACTIVITY_TASK_QUEUE"); ok {
+		cfg.Temporal.ActivityTaskQueue = val
+	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_TLS_ENABLED"); ok {
+		if cfg.Temporal.TLS == nil {
+			cfg.Temporal.TLS = &TLSConfig{}
+		}
+		cfg.Temporal.TLS.Enabled = val == "true" || val == "1"
+	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_TLS_CERT_FILE"); ok {
+		if cfg.Temporal.TLS == nil {
+			cfg.Temporal.TLS = &TLSConfig{}
+		}
+		cfg.Temporal.TLS.CertFile = val
+	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_TLS_KEY_FILE"); ok {
+		if cfg.Temporal.TLS == nil {
+			cfg.Temporal.TLS = &TLSConfig{}
+		}
+		cfg.Temporal.TLS.KeyFile = val
+	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_TLS_CA_FILE"); ok {
+		if cfg.Temporal.TLS == nil {
+			cfg.Temporal.TLS = &TLSConfig{}
+		}
+		cfg.Temporal.TLS.CAFile = val
+	}
 
 	if val, ok := os.LookupEnv("GARGI_SERVER_HTTP_ADDRESS"); ok {
 		cfg.Server.HTTPAddress = val
@@ -181,8 +238,14 @@ func (c *Config) Validate() error {
 	if c.Temporal.Namespace == "" {
 		return errors.New("temporal namespace is required")
 	}
-	if c.Temporal.TaskQueue == "" {
-		return errors.New("temporal task_queue is required")
+	if c.Temporal.EffectiveWorkflowTaskQueue() == "" || c.Temporal.EffectiveActivityTaskQueue() == "" {
+		return errors.New("temporal task_queue (or both workflow_task_queue and activity_task_queue) is required")
+	}
+
+	if c.Temporal.TLS != nil && c.Temporal.TLS.Enabled {
+		if (c.Temporal.TLS.CertFile == "") != (c.Temporal.TLS.KeyFile == "") {
+			return errors.New("temporal tls requires both cert_file and key_file when client certificate is configured")
+		}
 	}
 
 	if c.Server.HTTPAddress == "" {

@@ -248,7 +248,54 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 
 			nodeDef := nodeDefs[nodeID]
 
-			if nodeDef.Type == "wait_for_signal" {
+			if nodeDef.Type == SubGraphNodeType {
+				cfg, err := DecodeSubGraphConfig(nodeDef.Config)
+				if err != nil {
+					completedOutcomes = append(completedOutcomes, activityOutcome{
+						nodeID: nodeID,
+						err:    engine.NewNonRetryableError(fmt.Errorf("invalid sub_graph config: %w", err)),
+					})
+					continue
+				}
+
+				fut, err := StartSubGraphChildWorkflow(ctx, execID, nodeID, cfg, inputs)
+				if err != nil {
+					completedOutcomes = append(completedOutcomes, activityOutcome{
+						nodeID: nodeID,
+						err:    engine.NewNonRetryableError(fmt.Errorf("failed to start sub_graph: %w", err)),
+					})
+					continue
+				}
+
+				inFlightCount++
+				nID := nodeID
+				selector.AddFuture(fut, func(f workflow.Future) {
+					inFlightCount--
+					var childRes GraphWorkflowResult
+					err := f.Get(ctx, &childRes)
+					if err != nil {
+						completedOutcomes = append(completedOutcomes, activityOutcome{
+							nodeID: nID,
+							err:    err,
+						})
+					} else {
+						res, mergeErr := MergeChildWorkflowResult(nID, &childRes)
+						completedOutcomes = append(completedOutcomes, activityOutcome{
+							nodeID: nID,
+							result: res,
+							err:    mergeErr,
+						})
+					}
+
+					for {
+						var sig ExternalSignalPayload
+						if !signalCh.ReceiveAsync(&sig) {
+							break
+						}
+						handleIncomingSignal(sig)
+					}
+				})
+			} else if nodeDef.Type == "wait_for_signal" {
 				sigName, _ := nodeDef.Config["signal"].(string)
 				var timeoutSeconds float64
 				if ts, ok := nodeDef.Config["timeout_seconds"]; ok {

@@ -283,8 +283,8 @@ func TestGraphExecutionWorkflow_FailurePolicy_Compensate(t *testing.T) {
 		t.Fatalf("Workflow failed unexpectedly: %v", err)
 	}
 
-	if result.Status != engine.StatusCompensating {
-		t.Errorf("Expected status Compensating, got %s", result.Status)
+	if result.Status != engine.StatusCompensated {
+		t.Errorf("Expected status Compensated, got %s", result.Status)
 	}
 }
 

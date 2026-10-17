@@ -150,6 +150,7 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 	resolver := reactive.NewPreconditionResolver(nil)
 	scheduler := reactive.NewScheduler(g, reg, resolver, emitter)
 	detector := reactive.NewTerminalDetector(g, input.Definition.FailurePolicy, emitter)
+	saga := NewSagaCoordinator()
 
 	stdCtx := context.Background()
 
@@ -342,6 +343,19 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 			}
 			if assessment.Phase != reactive.PhaseRunning {
 				state = assessment.FinalGraphState
+				if assessment.Phase == reactive.PhaseCompensating {
+					compState, compErr := saga.ExecuteCompensation(ctx, input.Definition, state)
+					state = compState
+					if compErr != nil {
+						return &GraphWorkflowResult{
+							ExecutionID:     execID,
+							FinalState:      state,
+							Status:          state.Status(),
+							Error:           compErr.Error(),
+							RejectedSignals: signalRouter.RejectedSignals(),
+						}, nil
+					}
+				}
 				break
 			}
 			if len(plan.ReadyNodes) == 0 && len(plan.SkippedNodes) == 0 {
@@ -355,6 +369,7 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 			for _, outcome := range completedOutcomes {
 				oldNS := state.NodeState(outcome.nodeID)
 				if outcome.err == nil {
+					saga.RecordCompletion(outcome.nodeID, nodeDefs[outcome.nodeID].Compensation)
 					statusSucceeded := engine.StatusSucceeded
 					mut := engine.StateMutation{
 						NodeID:          outcome.nodeID,
@@ -403,6 +418,19 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 			}
 			if assessment.Phase != reactive.PhaseRunning {
 				state = assessment.FinalGraphState
+				if assessment.Phase == reactive.PhaseCompensating {
+					compState, compErr := saga.ExecuteCompensation(ctx, input.Definition, state)
+					state = compState
+					if compErr != nil {
+						return &GraphWorkflowResult{
+							ExecutionID:     execID,
+							FinalState:      state,
+							Status:          state.Status(),
+							Error:           compErr.Error(),
+							RejectedSignals: signalRouter.RejectedSignals(),
+						}, nil
+					}
+				}
 				break
 			}
 		}

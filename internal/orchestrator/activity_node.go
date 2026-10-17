@@ -166,7 +166,7 @@ func (a *NodeActivities) ExecuteNodeActivity(
 		if engine.ClassOf(err) != engine.ClassRetryable || input.MaxAttempts <= 1 || attempt >= input.MaxAttempts {
 			_ = instance.OnFailure(ctx, nodeCtx, err)
 		}
-		return nil, err
+		return nil, WrapTemporalError(err)
 	}
 
 	mutation, err := instance.Execute(ctx, nodeCtx)
@@ -174,13 +174,13 @@ func (a *NodeActivities) ExecuteNodeActivity(
 		if engine.ClassOf(err) != engine.ClassRetryable || input.MaxAttempts <= 1 || attempt >= input.MaxAttempts {
 			_ = instance.OnFailure(ctx, nodeCtx, err)
 		}
-		return nil, err
+		return nil, WrapTemporalError(err)
 	}
 
 	if mutation != nil && mutation.Status != nil {
 		mutErr := engine.NewNonRetryableError(fmt.Errorf("%w: node %q may not set Status directly", engine.ErrInvalidMutation, input.NodeID))
 		_ = instance.OnFailure(ctx, nodeCtx, mutErr)
-		return nil, mutErr
+		return nil, WrapTemporalError(mutErr)
 	}
 
 	_ = instance.OnSuccess(ctx, nodeCtx, mutation)

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -235,5 +236,62 @@ func TestGraphState_WithStatus(t *testing.T) {
 	_, err = newState.WithStatus(1, StatusCompensated)
 	if !errors.Is(err, ErrInvalidTransition) {
 		t.Errorf("expected ErrInvalidTransition, got %v", err)
+	}
+}
+
+func TestStateJSONRoundTrip(t *testing.T) {
+	node1 := &NodeState{
+		nodeID:       "n1",
+		status:       StatusSucceeded,
+		output:       map[string]any{"key": "value"},
+		errorMessage: "",
+		version:      1,
+	}
+
+	nodeData, err := json.Marshal(node1)
+	if err != nil {
+		t.Fatalf("failed to marshal NodeState: %v", err)
+	}
+
+	var node2 NodeState
+	if err := json.Unmarshal(nodeData, &node2); err != nil {
+		t.Fatalf("failed to unmarshal NodeState: %v", err)
+	}
+
+	if node1.nodeID != node2.nodeID || node1.status != node2.status || node1.version != node2.version || node1.errorMessage != node2.errorMessage {
+		t.Errorf("NodeState mismatch. expected %+v, got %+v", node1, node2)
+	}
+	if node1.output["key"] != node2.output["key"] {
+		t.Errorf("NodeState output mismatch.")
+	}
+
+	graph1 := &GraphState{
+		executionID: "exec-1",
+		graphID:     "graph-1",
+		status:      StatusRunning,
+		nodes:       []NodeID{"n1"},
+		nodeStates:  map[NodeID]*NodeState{"n1": node1},
+		version:     2,
+	}
+
+	graphData, err := json.Marshal(graph1)
+	if err != nil {
+		t.Fatalf("failed to marshal GraphState: %v", err)
+	}
+
+	var graph2 GraphState
+	if err := json.Unmarshal(graphData, &graph2); err != nil {
+		t.Fatalf("failed to unmarshal GraphState: %v", err)
+	}
+
+	if graph1.executionID != graph2.executionID || graph1.graphID != graph2.graphID || graph1.status != graph2.status || graph1.version != graph2.version {
+		t.Errorf("GraphState mismatch. expected %+v, got %+v", graph1, graph2)
+	}
+	if len(graph2.nodes) != 1 || graph2.nodes[0] != "n1" {
+		t.Errorf("GraphState nodes mismatch")
+	}
+	n2 := graph2.nodeStates["n1"]
+	if n2.nodeID != "n1" || n2.status != StatusSucceeded {
+		t.Errorf("GraphState nodeStates mismatch")
 	}
 }

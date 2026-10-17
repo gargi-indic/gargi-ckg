@@ -45,12 +45,14 @@ type GraphDefinition struct {
 
 // NodeDefinition defines a node within the GraphDefinition.
 type NodeDefinition struct {
-	ID           NodeID         `json:"id"`
-	Type         string         `json:"type"`
-	Config       map[string]any `json:"config,omitempty"`
-	JoinMode     JoinMode       `json:"joinMode,omitempty"`
-	RetryPolicy  string         `json:"retryPolicy,omitempty"`
-	Compensation string         `json:"compensation,omitempty"`
+	ID                       NodeID         `json:"id"`
+	Type                     string         `json:"type"`
+	Config                   map[string]any `json:"config,omitempty"`
+	JoinMode                 JoinMode       `json:"joinMode,omitempty"`
+	RetryPolicy              string         `json:"retryPolicy,omitempty"`
+	Compensation             string         `json:"compensation,omitempty"`
+	StartToCloseTimeoutMs    *int           `json:"startToCloseTimeoutMs,omitempty"`
+	ScheduleToCloseTimeoutMs *int           `json:"scheduleToCloseTimeoutMs,omitempty"`
 }
 
 // EdgeDefinition defines a directional edge between two nodes.

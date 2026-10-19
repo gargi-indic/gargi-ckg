@@ -49,9 +49,11 @@ type TemporalConfig struct {
 	HostPort          string     `yaml:"host_port"`
 	Namespace         string     `yaml:"namespace"`
 	TaskQueue         string     `yaml:"task_queue"`
-	WorkflowTaskQueue string     `yaml:"workflow_task_queue,omitempty"`
-	ActivityTaskQueue string     `yaml:"activity_task_queue,omitempty"`
-	TLS               *TLSConfig `yaml:"tls,omitempty"`
+	WorkflowTaskQueue       string     `yaml:"workflow_task_queue,omitempty"`
+	ActivityTaskQueue       string     `yaml:"activity_task_queue,omitempty"`
+	TLS                     *TLSConfig `yaml:"tls,omitempty"`
+	BuildID                 string     `yaml:"build_id,omitempty"`
+	UseBuildIDForVersioning bool       `yaml:"use_build_id_for_versioning,omitempty"`
 }
 
 // EffectiveWorkflowTaskQueue returns WorkflowTaskQueue if non-empty, otherwise TaskQueue.
@@ -200,6 +202,12 @@ func applyEnvOverrides(cfg *Config) {
 		}
 		cfg.Temporal.TLS.CAFile = val
 	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_BUILD_ID"); ok {
+		cfg.Temporal.BuildID = val
+	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_USE_BUILD_ID_FOR_VERSIONING"); ok {
+		cfg.Temporal.UseBuildIDForVersioning = val == "true" || val == "1"
+	}
 
 	if val, ok := os.LookupEnv("GARGI_SERVER_HTTP_ADDRESS"); ok {
 		cfg.Server.HTTPAddress = val
@@ -246,6 +254,10 @@ func (c *Config) Validate() error {
 		if (c.Temporal.TLS.CertFile == "") != (c.Temporal.TLS.KeyFile == "") {
 			return errors.New("temporal tls requires both cert_file and key_file when client certificate is configured")
 		}
+	}
+
+	if c.Temporal.UseBuildIDForVersioning && c.Temporal.BuildID == "" {
+		return errors.New("temporal build_id is required when use_build_id_for_versioning is enabled")
 	}
 
 	if c.Server.HTTPAddress == "" {

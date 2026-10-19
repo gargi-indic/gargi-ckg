@@ -1,0 +1,196 @@
+{
+  "events": [
+    {
+      "eventId": "1",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
+      "workflowExecutionStartedEventAttributes": {
+        "workflowType": {
+          "name": "GraphExecutionWorkflow"
+        },
+        "taskQueue": {
+          "name": "gargi_tasks"
+        },
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJleGVjdXRpb25JZCI6ImV4ZWMtcmVwbGF5LXRlc3QiLCJkZWZpbml0aW9uIjp7ImFwaVZlcnNpb24iOiJ2MSIsImlkIjoic2FtcGxlX2dyYXBoIiwibm9kZXMiOlt7ImlkIjoibm9kZTEiLCJ0eXBlIjoicGFzc3Rocm91Z2gifV19fQ=="
+            }
+          ]
+        },
+        "workflowRunTimeout": "60s",
+        "workflowTaskTimeout": "60s",
+        "originalExecutionRunId": "test-run-v1"
+      }
+    },
+    {
+      "eventId": "2",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "gargi_tasks"
+        },
+        "startToCloseTimeout": "60s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "3",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "2",
+        "identity": "test-worker"
+      }
+    },
+    {
+      "eventId": "4",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "2",
+        "startedEventId": "3",
+        "identity": "test-worker"
+      }
+    },
+    {
+      "eventId": "5",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_MARKER_RECORDED",
+      "markerRecordedEventAttributes": {
+        "markerName": "Version",
+        "details": {
+          "change-id": {
+            "payloads": [
+              {
+                "metadata": {
+                  "encoding": "anNvbi9wbGFpbg=="
+                },
+                "data": "ImdhcmdpLWdyYXBoLXdvcmtmbG93LXZlcnNpb24i"
+              }
+            ]
+          },
+          "version": {
+            "payloads": [
+              {
+                "metadata": {
+                  "encoding": "anNvbi9wbGFpbg=="
+                },
+                "data": "MQ=="
+              }
+            ]
+          }
+        },
+        "workflowTaskCompletedEventId": "4"
+      }
+    },
+    {
+      "eventId": "6",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES",
+      "upsertWorkflowSearchAttributesEventAttributes": {
+        "workflowTaskCompletedEventId": "4",
+        "searchAttributes": {
+          "indexedFields": {
+            "TemporalChangeVersion": {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "WyJnYXJnaS1ncmFwaC13b3JrZmxvdy12ZXJzaW9uLTEiXQ=="
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "7",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "7",
+        "activityType": {
+          "name": "ExecuteNodeActivity"
+        },
+        "taskQueue": {
+          "name": "gargi_tasks"
+        },
+        "scheduleToCloseTimeout": "600s",
+        "startToCloseTimeout": "600s",
+        "heartbeatTimeout": "30s",
+        "workflowTaskCompletedEventId": "4"
+      }
+    },
+    {
+      "eventId": "8",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "7",
+        "identity": "test-worker"
+      }
+    },
+    {
+      "eventId": "9",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJub2RlSWQiOiJub2RlMSIsIm11dGF0aW9uIjp7Ik5vZGVJRCI6Im5vZGUxIiwiRXhwZWN0ZWRWZXJzaW9uIjowLCJTdGF0dXMiOiJTdWNjZWVkZWQiLCJTZXQiOm51bGwsIlVuc2V0IjpudWxsLCJFcnJvck1lc3NhZ2UiOm51bGx9fQ=="
+            }
+          ]
+        },
+        "scheduledEventId": "7",
+        "startedEventId": "8",
+        "identity": "test-worker"
+      }
+    },
+    {
+      "eventId": "10",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "gargi_tasks"
+        },
+        "startToCloseTimeout": "60s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "11",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "10",
+        "identity": "test-worker"
+      }
+    },
+    {
+      "eventId": "12",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "10",
+        "startedEventId": "11",
+        "identity": "test-worker"
+      }
+    },
+    {
+      "eventId": "13",
+      "eventTime": "2026-10-18T12:00:00Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED",
+      "workflowExecutionCompletedEventAttributes": {
+        "workflowTaskCompletedEventId": "12"
+      }
+    }
+  ]
+}

@@ -343,3 +343,34 @@ func TestValidateTLS(t *testing.T) {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
+
+func TestTemporalConfigBuildID(t *testing.T) {
+	t.Setenv("GARGI_TEMPORAL_BUILD_ID", "v1.2.3")
+	t.Setenv("GARGI_TEMPORAL_USE_BUILD_ID_FOR_VERSIONING", "true")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Temporal.BuildID != "v1.2.3" {
+		t.Errorf("expected build_id 'v1.2.3', got '%s'", cfg.Temporal.BuildID)
+	}
+	if !cfg.Temporal.UseBuildIDForVersioning {
+		t.Errorf("expected use_build_id_for_versioning to be true")
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected config with build_id to validate: %v", err)
+	}
+}
+
+func TestValidateBuildID(t *testing.T) {
+	cfg := Default()
+	cfg.Temporal.UseBuildIDForVersioning = true
+	cfg.Temporal.BuildID = ""
+
+	err := cfg.Validate()
+	if err == nil || err.Error() != "temporal build_id is required when use_build_id_for_versioning is enabled" {
+		t.Errorf("expected missing build_id error, got: %v", err)
+	}
+}

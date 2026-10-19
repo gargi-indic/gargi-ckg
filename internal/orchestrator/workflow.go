@@ -87,7 +87,10 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 		return nil, temporal.NewNonRetryableApplicationError("GraphDefinition cannot be nil", "InvalidInput", nil)
 	}
 
-	checkPayloadSize(ctx, "input_definition", input.Definition)
+	wfVersion := GetWorkflowVersion(ctx, ChangeIDGraphWorkflowVersion, VersionInitial, VersionV1)
+	if wfVersion >= VersionV1 {
+		checkPayloadSize(ctx, "input_definition", input.Definition)
+	}
 
 	execID := input.ExecutionID
 	if execID == "" {
@@ -483,7 +486,9 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 		}
 	}
 
-	checkPayloadSize(ctx, "final_state", state)
+	if wfVersion >= VersionV1 {
+		checkPayloadSize(ctx, "final_state", state)
+	}
 
 	var errStr string
 	if state.Status() == engine.StatusFailed {

@@ -35,14 +35,19 @@ func NewWorkerManager(
 		logger: logger,
 	}
 
+	workerOpts := worker.Options{
+		BuildID:                 cfg.BuildID,
+		UseBuildIDForVersioning: cfg.UseBuildIDForVersioning,
+	}
+
 	if wfQueue == actQueue {
-		w := worker.New(c, wfQueue, worker.Options{})
+		w := worker.New(c, wfQueue, workerOpts)
 		wm.workflowWorker = w
 		wm.activityWorker = w
 		wm.sharedWorker = true
 	} else {
-		wm.workflowWorker = worker.New(c, wfQueue, worker.Options{})
-		wm.activityWorker = worker.New(c, actQueue, worker.Options{})
+		wm.workflowWorker = worker.New(c, wfQueue, workerOpts)
+		wm.activityWorker = worker.New(c, actQueue, workerOpts)
 		wm.sharedWorker = false
 	}
 

@@ -140,3 +140,18 @@ func TestNewWorkerManager(t *testing.T) {
 
 	<-errCh
 }
+
+func TestNewWorkerManager_BuildID(t *testing.T) {
+	c, err := client.NewLazyClient(client.Options{})
+	require.NoError(t, err)
+	defer c.Close()
+
+	cfg := config.TemporalConfig{
+		TaskQueue:               "versioned-queue",
+		BuildID:                 "build-1.0.0",
+		UseBuildIDForVersioning: true,
+	}
+	wm := NewWorkerManager(c, cfg, nil)
+	assert.Equal(t, "versioned-queue", wm.WorkflowTaskQueue())
+	assert.True(t, wm.sharedWorker)
+}

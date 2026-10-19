@@ -59,7 +59,7 @@ func New(cfg Config) *slog.Logger {
 	return slog.New(NewCorrelationHandler(baseHandler))
 }
 
-// WithCorrelation creates a sub-logger enriched with execution, node, and workflow correlation IDs.
+// WithCorrelationLogger creates a sub-logger enriched with execution, node, and workflow correlation IDs.
 func WithCorrelationLogger(l *slog.Logger, executionID, nodeID, workflowID, runID string) *slog.Logger {
 	if l == nil {
 		l = slog.Default()

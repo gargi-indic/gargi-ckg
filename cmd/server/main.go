@@ -75,7 +75,7 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	if err != nil {
 		return fmt.Errorf("initializing state store: %w", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	var temporalClient client.Client
 	if tc, err := orchestrator.NewClient(cfg.Temporal, logger); err == nil {
@@ -95,13 +95,13 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	if err != nil {
 		return fmt.Errorf("listening on gRPC address %s: %w", cfg.Server.GRPCAddress, err)
 	}
-	defer grpcLis.Close()
+	defer func() { _ = grpcLis.Close() }()
 
 	httpLis, err := net.Listen("tcp", cfg.Server.HTTPAddress)
 	if err != nil {
 		return fmt.Errorf("listening on HTTP address %s: %w", cfg.Server.HTTPAddress, err)
 	}
-	defer httpLis.Close()
+	defer func() { _ = httpLis.Close() }()
 
 	errCh := make(chan error, 2)
 	go func() {

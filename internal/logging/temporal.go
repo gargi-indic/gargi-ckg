@@ -23,18 +23,22 @@ func NewTemporalLoggerAdapter(l *slog.Logger) *TemporalLoggerAdapter {
 	return &TemporalLoggerAdapter{logger: l}
 }
 
+// Debug logs at debug level with key-value pairs.
 func (a *TemporalLoggerAdapter) Debug(msg string, keyvals ...any) {
 	a.logger.Debug(msg, toSlogArgs(keyvals)...)
 }
 
+// Info logs at info level with key-value pairs.
 func (a *TemporalLoggerAdapter) Info(msg string, keyvals ...any) {
 	a.logger.Info(msg, toSlogArgs(keyvals)...)
 }
 
+// Warn logs at warn level with key-value pairs.
 func (a *TemporalLoggerAdapter) Warn(msg string, keyvals ...any) {
 	a.logger.Warn(msg, toSlogArgs(keyvals)...)
 }
 
+// Error logs at error level with key-value pairs.
 func (a *TemporalLoggerAdapter) Error(msg string, keyvals ...any) {
 	a.logger.Error(msg, toSlogArgs(keyvals)...)
 }

@@ -83,7 +83,7 @@ func TestWebSocket_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to dial websocket: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Should receive initial subscribed message
 		var subAck api.WSServerMessage
@@ -117,7 +117,7 @@ func TestWebSocket_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to dial /v1/ws: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Subscribe to exec-ws-1
 		subReq1 := api.WSClientMessage{
@@ -195,7 +195,7 @@ func TestWebSocket_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to dial /v1/ws: %v", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		pingReceived := make(chan struct{}, 1)
 		conn.SetPingHandler(func(appData string) error {
@@ -268,7 +268,7 @@ func TestWebSocket_SlowConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial /v1/ws: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Subscribe
 	subReq := api.WSClientMessage{

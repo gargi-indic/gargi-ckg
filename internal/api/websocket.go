@@ -35,7 +35,7 @@ func DefaultWebSocketOptions() WebSocketOptions {
 		PongWait:       pongWait,
 		PingPeriod:     (pongWait * 9) / 10,
 		SendBufferSize: 256,
-		CheckOrigin: func(r *http.Request) bool {
+		CheckOrigin: func(_ *http.Request) bool {
 			return true
 		},
 	}
@@ -50,17 +50,17 @@ type WSClientMessage struct {
 
 // WSServerMessage represents an outgoing message to a WebSocket client.
 type WSServerMessage struct {
-	Event        string                                  `json:"event"`                  // "update", "subscribed", "unsubscribed", "error"
-	ExecutionID  string                                  `json:"execution_id"`           // Target execution ID
-	Sequence     uint64                                  `json:"sequence,omitempty"`     // Sequence number of the update
-	Timestamp    string                                  `json:"timestamp,omitempty"`    // RFC3339 event timestamp
-	EventType    string                                  `json:"event_type,omitempty"`   // Type of execution event
-	NodeID       string                                  `json:"node_id,omitempty"`      // Node ID if node-level update
-	FromStatus   string                                  `json:"from_status,omitempty"`  // Previous status
-	ToStatus     string                                  `json:"to_status,omitempty"`    // New status
-	ErrorMessage string                                  `json:"error_message,omitempty"`// Error message if failed
-	Error        string                                  `json:"error,omitempty"`        // Operational error message
-	Payload      *gargiv1.StreamExecutionUpdatesResponse `json:"payload,omitempty"`      // Full protobuf payload
+	Event        string                                  `json:"event"`                   // "update", "subscribed", "unsubscribed", "error"
+	ExecutionID  string                                  `json:"execution_id"`            // Target execution ID
+	Sequence     uint64                                  `json:"sequence,omitempty"`      // Sequence number of the update
+	Timestamp    string                                  `json:"timestamp,omitempty"`     // RFC3339 event timestamp
+	EventType    string                                  `json:"event_type,omitempty"`    // Type of execution event
+	NodeID       string                                  `json:"node_id,omitempty"`       // Node ID if node-level update
+	FromStatus   string                                  `json:"from_status,omitempty"`   // Previous status
+	ToStatus     string                                  `json:"to_status,omitempty"`     // New status
+	ErrorMessage string                                  `json:"error_message,omitempty"` // Error message if failed
+	Error        string                                  `json:"error,omitempty"`         // Operational error message
+	Payload      *gargiv1.StreamExecutionUpdatesResponse `json:"payload,omitempty"`       // Full protobuf payload
 }
 
 // WebSocketHandler manages WebSocket connections for streaming execution updates.
@@ -135,8 +135,8 @@ func (a *wsStreamAdapter) SetHeader(metadata.MD) error  { return nil }
 func (a *wsStreamAdapter) SendHeader(metadata.MD) error { return nil }
 func (a *wsStreamAdapter) SetTrailer(metadata.MD)       {}
 func (a *wsStreamAdapter) Context() context.Context     { return a.ctx }
-func (a *wsStreamAdapter) SendMsg(m any) error          { return nil }
-func (a *wsStreamAdapter) RecvMsg(m any) error          { return nil }
+func (a *wsStreamAdapter) SendMsg(_ any) error          { return nil }
+func (a *wsStreamAdapter) RecvMsg(_ any) error          { return nil }
 
 func (c *wsConnection) subscribe(execID string, fromSeq uint64) {
 	if execID == "" {

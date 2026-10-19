@@ -28,7 +28,7 @@ func newMockStateStore() *mockStateStore {
 	}
 }
 
-func (m *mockStateStore) GetState(ctx context.Context, executionID engine.ExecutionID) (*engine.GraphState, error) {
+func (m *mockStateStore) GetState(_ context.Context, executionID engine.ExecutionID) (*engine.GraphState, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -47,7 +47,7 @@ func (m *mockStateStore) GetState(ctx context.Context, executionID engine.Execut
 	return st, nil
 }
 
-func (m *mockStateStore) SetState(ctx context.Context, executionID engine.ExecutionID, state *engine.GraphState, expectedVersion uint64) error {
+func (m *mockStateStore) SetState(_ context.Context, executionID engine.ExecutionID, state *engine.GraphState, expectedVersion uint64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -82,7 +82,7 @@ func (m *mockStateStore) SetState(ctx context.Context, executionID engine.Execut
 	return nil
 }
 
-func (m *mockStateStore) PatchState(ctx context.Context, executionID engine.ExecutionID, mutation *engine.StateMutation, expectedVersion uint64) (*engine.GraphState, error) {
+func (m *mockStateStore) PatchState(_ context.Context, executionID engine.ExecutionID, mutation *engine.StateMutation, expectedVersion uint64) (*engine.GraphState, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

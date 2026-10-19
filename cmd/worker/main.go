@@ -75,7 +75,7 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	if err != nil {
 		return fmt.Errorf("initializing state store: %w", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	temporalClient, err := orchestrator.NewClient(cfg.Temporal, logger)
 	if err != nil {

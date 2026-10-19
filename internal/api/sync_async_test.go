@@ -32,6 +32,7 @@ func setupTestGRPCServer(t *testing.T, store engine.StateStore) (gargiv1.GargiSe
 		_ = grpcServer.Serve(lis)
 	}()
 
+	//nolint:staticcheck // DialContext used with bufnet for in-memory testing
 	conn, err := grpc.DialContext(
 		context.Background(),
 		"bufnet",

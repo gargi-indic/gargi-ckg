@@ -18,12 +18,14 @@ import (
 func versionEvolutionWorkflow(ctx workflow.Context) (string, error) {
 	v := orchestrator.GetWorkflowVersion(ctx, "evolution-change", orchestrator.VersionInitial, orchestrator.VersionV2)
 
-	if v == orchestrator.VersionInitial {
+	switch v {
+	case orchestrator.VersionInitial:
 		return "legacy-path", nil
-	} else if v == orchestrator.VersionV1 {
+	case orchestrator.VersionV1:
 		return "v1-path", nil
+	default:
+		return "v2-path", nil
 	}
-	return "v2-path", nil
 }
 
 func TestVersion_Helpers(t *testing.T) {

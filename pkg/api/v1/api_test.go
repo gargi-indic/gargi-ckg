@@ -19,7 +19,7 @@ type mockGargiServer struct {
 	gargiv1.UnimplementedGargiServiceServer
 }
 
-func (s *mockGargiServer) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecutionRequest) (*gargiv1.SubmitExecutionResponse, error) {
+func (s *mockGargiServer) SubmitExecution(_ context.Context, req *gargiv1.SubmitExecutionRequest) (*gargiv1.SubmitExecutionResponse, error) {
 	return &gargiv1.SubmitExecutionResponse{
 		ExecutionId: req.GetExecutionId(),
 		Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_RUNNING,
@@ -27,7 +27,7 @@ func (s *mockGargiServer) SubmitExecution(ctx context.Context, req *gargiv1.Subm
 	}, nil
 }
 
-func (s *mockGargiServer) GetExecution(ctx context.Context, req *gargiv1.GetExecutionRequest) (*gargiv1.GetExecutionResponse, error) {
+func (s *mockGargiServer) GetExecution(_ context.Context, req *gargiv1.GetExecutionRequest) (*gargiv1.GetExecutionResponse, error) {
 	return &gargiv1.GetExecutionResponse{
 		ExecutionId: req.GetExecutionId(),
 		Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_RUNNING,
@@ -46,7 +46,7 @@ func (s *mockGargiServer) GetExecution(ctx context.Context, req *gargiv1.GetExec
 	}, nil
 }
 
-func (s *mockGargiServer) GetNodeState(ctx context.Context, req *gargiv1.GetNodeStateRequest) (*gargiv1.GetNodeStateResponse, error) {
+func (s *mockGargiServer) GetNodeState(_ context.Context, req *gargiv1.GetNodeStateRequest) (*gargiv1.GetNodeStateResponse, error) {
 	return &gargiv1.GetNodeStateResponse{
 		ExecutionId: req.GetExecutionId(),
 		NodeState: &gargiv1.NodeStateDetail{
@@ -57,7 +57,7 @@ func (s *mockGargiServer) GetNodeState(ctx context.Context, req *gargiv1.GetNode
 	}, nil
 }
 
-func (s *mockGargiServer) CancelExecution(ctx context.Context, req *gargiv1.CancelExecutionRequest) (*gargiv1.CancelExecutionResponse, error) {
+func (s *mockGargiServer) CancelExecution(_ context.Context, req *gargiv1.CancelExecutionRequest) (*gargiv1.CancelExecutionResponse, error) {
 	return &gargiv1.CancelExecutionResponse{
 		ExecutionId: req.GetExecutionId(),
 		Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
@@ -65,7 +65,7 @@ func (s *mockGargiServer) CancelExecution(ctx context.Context, req *gargiv1.Canc
 	}, nil
 }
 
-func (s *mockGargiServer) SignalNode(ctx context.Context, req *gargiv1.SignalNodeRequest) (*gargiv1.SignalNodeResponse, error) {
+func (s *mockGargiServer) SignalNode(_ context.Context, _ *gargiv1.SignalNodeRequest) (*gargiv1.SignalNodeResponse, error) {
 	return &gargiv1.SignalNodeResponse{
 		Accepted: true,
 		Message:  "signal received",
@@ -137,6 +137,7 @@ func TestProtobufGRPC_ClientServer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	//nolint:staticcheck // DialContext used with bufnet for in-memory testing
 	conn, err := grpc.DialContext(ctx, "bufnet",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return lis.Dial()
@@ -146,7 +147,7 @@ func TestProtobufGRPC_ClientServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial bufnet: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := gargiv1.NewGargiServiceClient(conn)
 

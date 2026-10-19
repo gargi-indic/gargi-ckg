@@ -37,7 +37,7 @@ func TestConformance(t *testing.T) {
 		NewStore: func(t *testing.T) engine.StateStore {
 			return createTestStore(t)
 		},
-		Teardown: func(t *testing.T, s engine.StateStore) {
+		Teardown: func(_ *testing.T, s engine.StateStore) {
 			if n, ok := s.(*neo4jstore.Store); ok {
 				_ = n.Close(context.Background())
 			}
@@ -48,7 +48,7 @@ func TestConformance(t *testing.T) {
 func TestExampleCypher_FailureBlastRadius(t *testing.T) {
 	ctx := context.Background()
 	store := createTestStore(t)
-	defer store.Close(ctx)
+	defer func() { _ = store.Close(ctx) }()
 
 	// Build a diamond graph:
 	//       n1 (Root)
@@ -138,7 +138,7 @@ func TestExampleCypher_FailureBlastRadius(t *testing.T) {
 func TestExampleCypher_CriticalPath(t *testing.T) {
 	ctx := context.Background()
 	store := createTestStore(t)
-	defer store.Close(ctx)
+	defer func() { _ = store.Close(ctx) }()
 
 	// Graph with two paths:
 	// Path 1 (length 4): a -> b -> c -> d
@@ -184,7 +184,7 @@ func TestExampleCypher_CriticalPath(t *testing.T) {
 func TestUpstreamDependencies(t *testing.T) {
 	ctx := context.Background()
 	store := createTestStore(t)
-	defer store.Close(ctx)
+	defer func() { _ = store.Close(ctx) }()
 
 	n1, _ := engine.NewNode("n1", "step", nil)
 	n2, _ := engine.NewNode("n2", "step", nil)
@@ -219,7 +219,7 @@ func TestUpstreamDependencies(t *testing.T) {
 func TestStore_ErrorClassifications(t *testing.T) {
 	ctx := context.Background()
 	store := createTestStore(t)
-	defer store.Close(ctx)
+	defer func() { _ = store.Close(ctx) }()
 
 	execID, _ := engine.NewExecutionID()
 
@@ -260,7 +260,7 @@ func TestStore_ErrorClassifications(t *testing.T) {
 func TestStore_ExecutionLog(t *testing.T) {
 	ctx := context.Background()
 	store := createTestStore(t)
-	defer store.Close(ctx)
+	defer func() { _ = store.Close(ctx) }()
 
 	execID, _ := engine.NewExecutionID()
 	n1, _ := engine.NewNode("n1", "step", nil)

@@ -321,14 +321,14 @@ func newFullMockStore() *fullMockStore {
 
 // TestConformanceSuite_AllCapabilities tests storetest.Run with a store that implements all capabilities.
 func TestConformanceSuite_AllCapabilities(t *testing.T) {
-	storetest.Run(t, func(t *testing.T) engine.StateStore {
+	storetest.Run(t, func(_ *testing.T) engine.StateStore {
 		return newFullMockStore()
 	})
 }
 
 // TestConformanceSuite_StoreFactoryType tests storetest.Run passing a typed StoreFactory.
 func TestConformanceSuite_StoreFactoryType(t *testing.T) {
-	var factory storetest.StoreFactory = func(t *testing.T) engine.StateStore {
+	var factory storetest.StoreFactory = func(_ *testing.T) engine.StateStore {
 		return newFullMockStore()
 	}
 	storetest.Run(t, factory)
@@ -337,7 +337,7 @@ func TestConformanceSuite_StoreFactoryType(t *testing.T) {
 // TestConformanceSuite_ConfigPointer tests storetest.Run passing *storetest.Config.
 func TestConformanceSuite_ConfigPointer(t *testing.T) {
 	cfg := &storetest.Config{
-		NewStore: func(t *testing.T) engine.StateStore {
+		NewStore: func(_ *testing.T) engine.StateStore {
 			return newFullMockStore()
 		},
 	}
@@ -347,7 +347,7 @@ func TestConformanceSuite_ConfigPointer(t *testing.T) {
 // TestConformanceSuite_RunSuite tests storetest.RunSuite.
 func TestConformanceSuite_RunSuite(t *testing.T) {
 	cfg := storetest.Config{
-		NewStore: func(t *testing.T) engine.StateStore {
+		NewStore: func(_ *testing.T) engine.StateStore {
 			return newFullMockStore()
 		},
 	}
@@ -356,14 +356,14 @@ func TestConformanceSuite_RunSuite(t *testing.T) {
 
 // TestConformanceSuite_RunFactory tests storetest.RunFactory.
 func TestConformanceSuite_RunFactory(t *testing.T) {
-	storetest.RunFactory(t, func(t *testing.T) engine.StateStore {
+	storetest.RunFactory(t, func(_ *testing.T) engine.StateStore {
 		return newFullMockStore()
 	})
 }
 
 // TestConformanceSuite_StoreOnly verifies that stores not implementing capability interfaces gracefully skip them.
 func TestConformanceSuite_StoreOnly(t *testing.T) {
-	storetest.Run(t, func(t *testing.T) engine.StateStore {
+	storetest.Run(t, func(_ *testing.T) engine.StateStore {
 		return newReferenceStateStore()
 	})
 }
@@ -371,16 +371,16 @@ func TestConformanceSuite_StoreOnly(t *testing.T) {
 // TestConformanceSuite_ExplicitCapabilityFactories tests providing separate capability factories in Config.
 func TestConformanceSuite_ExplicitCapabilityFactories(t *testing.T) {
 	cfg := storetest.Config{
-		NewStore: func(t *testing.T) engine.StateStore {
+		NewStore: func(_ *testing.T) engine.StateStore {
 			return newReferenceStateStore()
 		},
-		NewLockManager: func(t *testing.T) engine.LockManager {
+		NewLockManager: func(_ *testing.T) engine.LockManager {
 			return newReferenceLockManager()
 		},
-		NewEventPublisher: func(t *testing.T) engine.EventPublisher {
+		NewEventPublisher: func(_ *testing.T) engine.EventPublisher {
 			return newReferenceEventPublisher()
 		},
-		NewExecutionLog: func(t *testing.T) engine.ExecutionLog {
+		NewExecutionLog: func(_ *testing.T) engine.ExecutionLog {
 			return newReferenceExecutionLog()
 		},
 	}
@@ -391,7 +391,7 @@ func TestConformanceSuite_ExplicitCapabilityFactories(t *testing.T) {
 func TestConformanceSuite_TeardownCallback(t *testing.T) {
 	var teardownCount int32
 	cfg := storetest.Config{
-		NewStore: func(t *testing.T) engine.StateStore {
+		NewStore: func(_ *testing.T) engine.StateStore {
 			return newReferenceStateStore()
 		},
 		Teardown: func(t *testing.T, store engine.StateStore) {

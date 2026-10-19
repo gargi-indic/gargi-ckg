@@ -123,9 +123,9 @@ type TLSConfig struct {
 
 // TemporalConfig holds the configuration for the Temporal connection.
 type TemporalConfig struct {
-	HostPort          string     `yaml:"host_port"`
-	Namespace         string     `yaml:"namespace"`
-	TaskQueue         string     `yaml:"task_queue"`
+	HostPort                string     `yaml:"host_port"`
+	Namespace               string     `yaml:"namespace"`
+	TaskQueue               string     `yaml:"task_queue"`
 	WorkflowTaskQueue       string     `yaml:"workflow_task_queue,omitempty"`
 	ActivityTaskQueue       string     `yaml:"activity_task_queue,omitempty"`
 	TLS                     *TLSConfig `yaml:"tls,omitempty"`

@@ -164,7 +164,6 @@ func (s *Store) GetState(ctx context.Context, executionID engine.ExecutionID) (*
 		}
 		return nil, nil // not found
 	})
-
 	if err != nil {
 		return nil, s.wrapErr(err)
 	}
@@ -313,7 +312,6 @@ func (s *Store) SetState(ctx context.Context, executionID engine.ExecutionID, st
 
 		return nil, nil
 	})
-
 	if err != nil {
 		return s.wrapErr(err)
 	}
@@ -431,7 +429,6 @@ func (s *Store) PatchState(ctx context.Context, executionID engine.ExecutionID, 
 
 		return newState, nil
 	})
-
 	if err != nil {
 		return nil, s.wrapErr(err)
 	}
@@ -467,7 +464,6 @@ func (s *Store) PersistGraphStructure(ctx context.Context, executionID engine.Ex
 		}
 		return nil, nil
 	})
-
 	if err != nil {
 		return s.wrapErr(err)
 	}
@@ -509,7 +505,6 @@ func (s *Store) FailureBlastRadius(ctx context.Context, executionID engine.Execu
 		}
 		return impacted, nil
 	})
-
 	if err != nil {
 		return nil, s.wrapErr(err)
 	}
@@ -560,7 +555,6 @@ func (s *Store) CriticalPath(ctx context.Context, executionID engine.ExecutionID
 		}
 		return []string{}, nil
 	})
-
 	if err != nil {
 		return nil, s.wrapErr(err)
 	}
@@ -582,7 +576,7 @@ func (s *Store) UpstreamDependencies(ctx context.Context, executionID engine.Exe
 	res, err := s.exec.ExecuteRead(ctx, func(tx QueryRunner) (any, error) {
 		reader, err := tx.Run(ctx, CypherUpstreamDependencies, map[string]any{
 			"execution_id": string(executionID),
-			"node_id":       string(nodeID),
+			"node_id":      string(nodeID),
 		})
 		if err != nil {
 			return nil, err
@@ -603,7 +597,6 @@ func (s *Store) UpstreamDependencies(ctx context.Context, executionID engine.Exe
 		}
 		return deps, nil
 	})
-
 	if err != nil {
 		return nil, s.wrapErr(err)
 	}
@@ -643,7 +636,6 @@ func (s *Store) AppendLog(ctx context.Context, entry *engine.ExecutionLogEntry) 
 		})
 		return nil, err
 	})
-
 	if err != nil {
 		return s.wrapErr(err)
 	}
@@ -718,7 +710,6 @@ func (s *Store) GetLogs(ctx context.Context, executionID engine.ExecutionID, fro
 		}
 		return entries, nil
 	})
-
 	if err != nil {
 		return nil, s.wrapErr(err)
 	}

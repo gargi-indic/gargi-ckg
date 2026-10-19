@@ -190,7 +190,6 @@ func TestBuilder_DI(t *testing.T) {
 			return nil
 		}).
 		Build()
-
 	if err != nil {
 		t.Fatalf("builder failed: %v", err)
 	}

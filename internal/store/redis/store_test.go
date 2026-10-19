@@ -40,7 +40,7 @@ func TestConformance(t *testing.T) {
 			require.NoError(t, err)
 			return s
 		},
-		Teardown: func(t *testing.T, s engine.StateStore) {
+		Teardown: func(_ *testing.T, s engine.StateStore) {
 			if r, ok := s.(*redisstore.Store); ok {
 				_ = r.Close()
 			}
@@ -55,12 +55,12 @@ func TestStore_ConstructorAliases(t *testing.T) {
 	s1, err := redisstore.New(redisstore.Config{Addr: addr})
 	require.NoError(t, err)
 	require.NotNil(t, s1)
-	defer s1.Close()
+	defer func() { _ = s1.Close() }()
 
 	s2, err := redisstore.NewStore(redisstore.Config{Addr: addr})
 	require.NoError(t, err)
 	require.NotNil(t, s2)
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 
 	require.NotNil(t, s1.Client())
 }
@@ -71,7 +71,7 @@ func TestPubSub_MessagingAndFanout(t *testing.T) {
 
 	s, err := redisstore.New(redisstore.Config{Addr: addr})
 	require.NoError(t, err)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -152,7 +152,7 @@ func TestStore_LockExpiryAndSafeRelease(t *testing.T) {
 
 	s, err := redisstore.New(redisstore.Config{Addr: mr.Addr()})
 	require.NoError(t, err)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx := context.Background()
 
@@ -239,7 +239,7 @@ func TestStore_UnavailableOnNetworkFailure(t *testing.T) {
 	mr := miniredis.RunT(t)
 	s, err := redisstore.New(redisstore.Config{Addr: mr.Addr()})
 	require.NoError(t, err)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx := context.Background()
 	execID, _ := engine.NewExecutionID()
@@ -260,7 +260,7 @@ func TestStore_ExecutionLog_OffsetsAndLimits(t *testing.T) {
 
 	s, err := redisstore.New(redisstore.Config{Addr: addr})
 	require.NoError(t, err)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx := context.Background()
 	execID, err := engine.NewExecutionID()
@@ -301,7 +301,7 @@ func TestStore_Reset(t *testing.T) {
 
 	s, err := redisstore.New(redisstore.Config{Addr: addr})
 	require.NoError(t, err)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx := context.Background()
 	execID, _ := engine.NewExecutionID()
@@ -334,7 +334,7 @@ func TestStore_InputValidation(t *testing.T) {
 
 	s, err := redisstore.New(redisstore.Config{Addr: addr})
 	require.NoError(t, err)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx := context.Background()
 

@@ -57,7 +57,7 @@ func TestSetupTracer_Enabled_Stdout(t *testing.T) {
 	}()
 
 	tr := Tracer()
-	ctx, span := tr.Start(ctx, "test-op")
+	_, span := tr.Start(ctx, "test-op")
 	if !span.SpanContext().IsValid() {
 		t.Errorf("expected valid span context when tracing enabled")
 	}

@@ -39,6 +39,7 @@ func NewWorkerManager(
 		logger: logger,
 	}
 
+	//nolint:staticcheck // Temporal BuildID/UseBuildIDForVersioning is configured from Config
 	workerOpts := worker.Options{
 		BuildID:                 cfg.BuildID,
 		UseBuildIDForVersioning: cfg.UseBuildIDForVersioning,

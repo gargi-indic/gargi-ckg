@@ -20,6 +20,7 @@ import (
 	"go.temporal.io/sdk/interceptor"
 )
 
+// DefaultTracerName is the default instrumentation scope name for OpenTelemetry traces.
 const DefaultTracerName = "gargi-ckg"
 
 // Tracer returns a named or default OpenTelemetry tracer from the global TracerProvider.

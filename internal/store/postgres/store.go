@@ -74,11 +74,11 @@ type NodeStateRecord struct {
 // Store is a PostgreSQL-backed implementation of engine.StateStore,
 // engine.LockManager, engine.ExecutionLog, and engine.EventPublisher.
 type Store struct {
-	pool      *pgxpool.Pool
-	migrator  *Migrator
-	ownsPool  bool
-	schema    string
-	closed    atomic.Bool
+	pool     *pgxpool.Pool
+	migrator *Migrator
+	ownsPool bool
+	schema   string
+	closed   atomic.Bool
 }
 
 // New creates and initializes a new PostgreSQL Store.
@@ -810,7 +810,6 @@ WHERE 1=1
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argIdx)
 		args = append(args, filter.Offset)
-		argIdx++
 	}
 
 	rows, err := s.pool.Query(ctx, query, args...)
@@ -878,7 +877,6 @@ WHERE 1=1
 	if status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, string(status))
-		argIdx++
 	}
 
 	query += " ORDER BY execution_id, node_id"
@@ -954,7 +952,6 @@ WHERE execution_id = $1
 	if toTime != nil {
 		query += fmt.Sprintf(" AND timestamp <= $%d", argIdx)
 		args = append(args, *toTime)
-		argIdx++
 	}
 
 	query += " ORDER BY sequence ASC"

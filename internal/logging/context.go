@@ -1,3 +1,4 @@
+// Package logging provides structured logging and correlation context for the engine.
 package logging
 
 import (

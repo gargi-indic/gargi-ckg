@@ -14,7 +14,7 @@ import (
 )
 
 func TestConformance(t *testing.T) {
-	storetest.Run(t, func(t *testing.T) engine.StateStore {
+	storetest.Run(t, func(_ *testing.T) engine.StateStore {
 		return memory.New()
 	})
 }

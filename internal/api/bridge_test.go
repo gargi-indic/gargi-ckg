@@ -218,7 +218,7 @@ func TestFanoutBridge_BackpressureDisconnect(t *testing.T) {
 
 	stream := newMockStreamServer(ctx)
 	// Simulate slow consumer by blocking inside Send
-	stream.sendHook = func(resp *gargiv1.StreamExecutionUpdatesResponse) error {
+	stream.sendHook = func(_ *gargiv1.StreamExecutionUpdatesResponse) error {
 		time.Sleep(200 * time.Millisecond)
 		return nil
 	}
@@ -269,7 +269,7 @@ func TestFanoutBridge_BackpressureDropOldest(t *testing.T) {
 
 	stream := newMockStreamServer(ctx)
 	// Add delay to simulate slow reader
-	stream.sendHook = func(resp *gargiv1.StreamExecutionUpdatesResponse) error {
+	stream.sendHook = func(_ *gargiv1.StreamExecutionUpdatesResponse) error {
 		time.Sleep(50 * time.Millisecond)
 		return nil
 	}

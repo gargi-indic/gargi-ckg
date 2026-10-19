@@ -61,7 +61,7 @@ func (r *Registry) Register(typeName string, factory NodeFactory, configSchema a
 
 	if configSchema != nil {
 		t := reflect.TypeOf(configSchema)
-		if t.Kind() == reflect.Ptr {
+		if t.Kind() == reflect.Pointer {
 			isPtr = true
 			t = t.Elem()
 		}

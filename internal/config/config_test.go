@@ -584,5 +584,3 @@ func TestConfig_Tracing(t *testing.T) {
 		}
 	})
 }
-
-

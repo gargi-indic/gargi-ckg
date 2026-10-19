@@ -20,6 +20,8 @@ import (
 var openAPISpec []byte
 
 // APIError represents the consistent JSON error payload for REST API responses.
+//
+//nolint:revive // APIError is descriptive and distinct from standard library error
 type APIError struct {
 	Code    int      `json:"code"`
 	Status  string   `json:"status"`
@@ -29,11 +31,11 @@ type APIError struct {
 
 // CustomErrorHandler transforms gRPC and domain errors into consistent JSON APIError responses.
 func CustomErrorHandler(
-	ctx context.Context,
-	mux *runtime.ServeMux,
-	marshaler runtime.Marshaler,
+	_ context.Context,
+	_ *runtime.ServeMux,
+	_ runtime.Marshaler,
 	w http.ResponseWriter,
-	r *http.Request,
+	_ *http.Request,
 	err error,
 ) {
 	grpcErr := ToGRPCError(err)
@@ -85,7 +87,7 @@ func NewHTTPServer(
 	rootMux := http.NewServeMux()
 
 	// OpenAPI specifications
-	serveOpenAPI := func(w http.ResponseWriter, r *http.Request) {
+	serveOpenAPI := func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(openAPISpec)
 	}

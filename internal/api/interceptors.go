@@ -110,7 +110,7 @@ func DeadlineUnaryInterceptor(defaultTimeout time.Duration) grpc.UnaryServerInte
 	if defaultTimeout <= 0 {
 		defaultTimeout = DefaultTimeout
 	}
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, defaultTimeout)

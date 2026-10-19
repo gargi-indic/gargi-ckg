@@ -40,10 +40,10 @@ type compositeBase struct {
 	closed  atomic.Bool
 }
 
-func (b *compositeBase) State() engine.StateStore         { return b.state }
-func (b *compositeBase) Lock() engine.LockManager         { return b.lock }
-func (b *compositeBase) Events() engine.EventPublisher   { return b.events }
-func (b *compositeBase) Log() engine.ExecutionLog         { return b.log }
+func (b *compositeBase) State() engine.StateStore      { return b.state }
+func (b *compositeBase) Lock() engine.LockManager      { return b.lock }
+func (b *compositeBase) Events() engine.EventPublisher { return b.events }
+func (b *compositeBase) Log() engine.ExecutionLog      { return b.log }
 
 func (b *compositeBase) Close() error {
 	if !b.closed.CompareAndSwap(false, true) {

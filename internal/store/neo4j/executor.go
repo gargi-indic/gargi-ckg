@@ -66,7 +66,7 @@ func (d *driverExecutor) ExecuteRead(ctx context.Context, work func(tx QueryRunn
 		DatabaseName: d.database,
 		AccessMode:   neo4jdriver.AccessModeRead,
 	})
-	defer session.Close(ctx)
+	defer func() { _ = session.Close(ctx) }()
 
 	return session.ExecuteRead(ctx, func(tx neo4jdriver.ManagedTransaction) (any, error) {
 		runner := &neo4jTransactionRunner{tx: tx}
@@ -79,7 +79,7 @@ func (d *driverExecutor) ExecuteWrite(ctx context.Context, work func(tx QueryRun
 		DatabaseName: d.database,
 		AccessMode:   neo4jdriver.AccessModeWrite,
 	})
-	defer session.Close(ctx)
+	defer func() { _ = session.Close(ctx) }()
 
 	return session.ExecuteWrite(ctx, func(tx neo4jdriver.ManagedTransaction) (any, error) {
 		runner := &neo4jTransactionRunner{tx: tx}
@@ -182,7 +182,7 @@ func NewInMemoryGraphExecutor() CypherExecutor {
 	}
 }
 
-func (m *inMemoryGraphExecutor) VerifyConnectivity(ctx context.Context) error {
+func (m *inMemoryGraphExecutor) VerifyConnectivity(_ context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.closed {
@@ -191,14 +191,14 @@ func (m *inMemoryGraphExecutor) VerifyConnectivity(ctx context.Context) error {
 	return nil
 }
 
-func (m *inMemoryGraphExecutor) Close(ctx context.Context) error {
+func (m *inMemoryGraphExecutor) Close(_ context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.closed = true
 	return nil
 }
 
-func (m *inMemoryGraphExecutor) ExecuteRead(ctx context.Context, work func(tx QueryRunner) (any, error)) (any, error) {
+func (m *inMemoryGraphExecutor) ExecuteRead(_ context.Context, work func(tx QueryRunner) (any, error)) (any, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.closed {
@@ -208,7 +208,7 @@ func (m *inMemoryGraphExecutor) ExecuteRead(ctx context.Context, work func(tx Qu
 	return work(runner)
 }
 
-func (m *inMemoryGraphExecutor) ExecuteWrite(ctx context.Context, work func(tx QueryRunner) (any, error)) (any, error) {
+func (m *inMemoryGraphExecutor) ExecuteWrite(_ context.Context, work func(tx QueryRunner) (any, error)) (any, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -241,7 +241,7 @@ type sliceResultReader struct {
 	index   int
 }
 
-func (s *sliceResultReader) Next(ctx context.Context) bool {
+func (s *sliceResultReader) Next(_ context.Context) bool {
 	if s.index < len(s.records) {
 		s.index++
 		return true
@@ -260,9 +260,9 @@ func (s *sliceResultReader) Err() error {
 	return nil
 }
 
-func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[string]any) (ResultReader, error) {
-	switch {
-	case cypher == CypherGetState:
+func (r *memoryQueryRunner) Run(_ context.Context, cypher string, params map[string]any) (ResultReader, error) {
+	switch cypher {
+	case CypherGetState:
 		execID, _ := params["execution_id"].(string)
 		e, exists := r.m.executions[execID]
 		if !exists {
@@ -277,7 +277,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 			},
 		}, nil
 
-	case cypher == CypherGetVersion:
+	case CypherGetVersion:
 		execID, _ := params["execution_id"].(string)
 		e, exists := r.m.executions[execID]
 		if !exists {
@@ -291,7 +291,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 			},
 		}, nil
 
-	case cypher == CypherSetStateUpdate:
+	case CypherSetStateUpdate:
 		execID, _ := params["execution_id"].(string)
 		expectedVer, _ := params["expected_version"].(int64)
 		newVer, _ := params["new_version"].(int64)
@@ -310,7 +310,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 			},
 		}, nil
 
-	case cypher == CypherSetStateInsert:
+	case CypherSetStateInsert:
 		execID, _ := params["execution_id"].(string)
 		if _, exists := r.m.executions[execID]; exists {
 			return &sliceResultReader{}, nil
@@ -332,7 +332,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 			},
 		}, nil
 
-	case cypher == CypherUpsertNodeState:
+	case CypherUpsertNodeState:
 		execID, _ := params["execution_id"].(string)
 		nodeID, _ := params["node_id"].(string)
 		if r.m.nodeStates[execID] == nil {
@@ -350,7 +350,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 		}
 		return &sliceResultReader{}, nil
 
-	case cypher == CypherCreateDependency:
+	case CypherCreateDependency:
 		execID, _ := params["execution_id"].(string)
 		downstream, _ := params["downstream_id"].(string)
 		upstream, _ := params["upstream_id"].(string)
@@ -363,7 +363,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 		r.m.dependencies[execID][downstream][upstream] = true
 		return &sliceResultReader{}, nil
 
-	case cypher == CypherFailureBlastRadius:
+	case CypherFailureBlastRadius:
 		execID, _ := params["execution_id"].(string)
 		nodes := r.m.nodeStates[execID]
 		deps := r.m.dependencies[execID]
@@ -406,7 +406,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 		}
 		return &sliceResultReader{records: records}, nil
 
-	case cypher == CypherCriticalPath:
+	case CypherCriticalPath:
 		execID, _ := params["execution_id"].(string)
 		nodes := r.m.nodeStates[execID]
 		deps := r.m.dependencies[execID]
@@ -454,7 +454,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 			},
 		}, nil
 
-	case cypher == CypherUpstreamDependencies:
+	case CypherUpstreamDependencies:
 		execID, _ := params["execution_id"].(string)
 		nodeID, _ := params["node_id"].(string)
 		nodes := r.m.nodeStates[execID]
@@ -486,7 +486,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 		}
 		return &sliceResultReader{records: records}, nil
 
-	case cypher == CypherAppendLog:
+	case CypherAppendLog:
 		execID, _ := params["execution_id"].(string)
 		seq, _ := params["sequence"].(int64)
 		detailsRaw, _ := params["details_json"].(string)
@@ -506,7 +506,7 @@ func (r *memoryQueryRunner) Run(ctx context.Context, cypher string, params map[s
 		r.m.logs[execID] = append(r.m.logs[execID], entry)
 		return &sliceResultReader{}, nil
 
-	case cypher == CypherGetLogs:
+	case CypherGetLogs:
 		execID, _ := params["execution_id"].(string)
 		fromSeq, _ := params["from_sequence"].(int64)
 		limit, _ := params["limit"].(int)

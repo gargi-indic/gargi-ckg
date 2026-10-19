@@ -42,6 +42,7 @@ func setupTestServer(t *testing.T, st engine.StateStore) (gargiv1.GargiServiceCl
 		grpcServer.GracefulStop()
 	})
 
+	//nolint:staticcheck // DialContext used with bufnet for in-memory testing
 	conn, err := grpc.DialContext(
 		context.Background(),
 		"bufnet",
@@ -468,7 +469,7 @@ func TestInterceptors_PanicRecovery(t *testing.T) {
 	}
 
 	rec := api.RecoveryUnaryInterceptor(nil)
-	handler := func(ctx context.Context, req any) (any, error) {
+	handler := func(_ context.Context, _ any) (any, error) {
 		panic("simulated panic in handler")
 	}
 

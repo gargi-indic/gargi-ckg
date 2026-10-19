@@ -94,8 +94,8 @@ func (a *sseStreamAdapter) SetHeader(metadata.MD) error  { return nil }
 func (a *sseStreamAdapter) SendHeader(metadata.MD) error { return nil }
 func (a *sseStreamAdapter) SetTrailer(metadata.MD)       {}
 func (a *sseStreamAdapter) Context() context.Context     { return a.ctx }
-func (a *sseStreamAdapter) SendMsg(m any) error          { return nil }
-func (a *sseStreamAdapter) RecvMsg(m any) error          { return nil }
+func (a *sseStreamAdapter) SendMsg(_ any) error          { return nil }
+func (a *sseStreamAdapter) RecvMsg(_ any) error          { return nil }
 
 // ServeHTTP handles GET /v1/executions/{id}/events as text/event-stream.
 func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

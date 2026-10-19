@@ -41,6 +41,7 @@ func TestFullExecutionPipeline_SubmitStoreAndQuery(t *testing.T) {
 		grpcServer.GracefulStop()
 	})
 
+	//nolint:staticcheck // DialContext used with bufnet for in-memory testing
 	conn, err := grpc.DialContext(
 		ctx,
 		"bufnet",

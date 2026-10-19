@@ -28,10 +28,10 @@ var (
 
 // Default configurations
 const (
-	DefaultKeyPrefix               = "gargi"
-	DefaultSubscriptionBufferSize  = 64
-	DefaultMaxPatchRetries         = 5
-	DefaultExecutionLogLimit       = 1000
+	DefaultKeyPrefix              = "gargi"
+	DefaultSubscriptionBufferSize = 64
+	DefaultMaxPatchRetries        = 5
+	DefaultExecutionLogLimit      = 1000
 )
 
 // Lua scripts
@@ -173,15 +173,15 @@ func WithClient(client redis.UniversalClient) Option {
 // Store is a Redis-backed implementation of engine.StateStore, engine.LockManager,
 // engine.EventPublisher, and engine.ExecutionLog.
 type Store struct {
-	client         redis.UniversalClient
-	ownsClient     bool
-	keyPrefix      string
-	subBufferSize  int
-	maxPatchRetry  int
-	closed         atomic.Bool
+	client        redis.UniversalClient
+	ownsClient    bool
+	keyPrefix     string
+	subBufferSize int
+	maxPatchRetry int
+	closed        atomic.Bool
 
-	subMu          sync.Mutex
-	activeSubs     []*subscriber
+	subMu      sync.Mutex
+	activeSubs []*subscriber
 }
 
 type subscriber struct {

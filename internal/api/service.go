@@ -68,7 +68,7 @@ type HealthStatus struct {
 }
 
 // CheckLiveness performs a basic liveness check ensuring the process is running.
-func (s *Server) CheckLiveness(ctx context.Context) HealthStatus {
+func (s *Server) CheckLiveness(_ context.Context) HealthStatus {
 	return HealthStatus{
 		Status: "SERVING",
 		Checks: map[string]string{
@@ -523,4 +523,3 @@ func isTerminalExecutionStatus(s engine.Status) bool {
 		return false
 	}
 }
-

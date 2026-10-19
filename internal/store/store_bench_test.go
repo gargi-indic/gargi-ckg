@@ -17,7 +17,7 @@ func BenchmarkStore_Memory(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to create memory store: %v", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	n1, _ := engine.NewNode("node1", "test", nil)
 	g, _ := engine.NewGraph("bench_graph", []*engine.Node{n1}, nil)
@@ -81,7 +81,7 @@ func BenchmarkStore_Redis(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to create redis store: %v", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	n1, _ := engine.NewNode("node1", "test", nil)
 	g, _ := engine.NewGraph("bench_graph_redis", []*engine.Node{n1}, nil)

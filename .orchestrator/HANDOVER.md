@@ -1,8 +1,7 @@
 # Orchestrator Handover: gargi-ckg
 
-Snapshot written by the first orchestrator (Claude Code, Opus 5.5) on **2026-10-05, ~22:45 UTC** and refreshed at the end of **Epic #1** and again at the end of **Epic #8** and at the end of the 2026-10-06 session (mid-Epic #15, waiting on PR #83) by the second/third orchestrator (Claude Code, Sonnet 5.5).
-The **live** state is always in GitHub issue **#67 Orchestrator Logs**. If this file and #67 disagree, #67 wins.
-To resume, invoke the `gargi-orchestrator` skill (`.claude/skills/gargi-orchestrator/SKILL.md`).
+Snapshot refreshed on **2026-10-19** following the completion and verification of all 9 Epics (#1, #8, #15, #22, #29, #39, #48, #56, #61), all 66 backlog sub-issues, and repository CI lint/test stabilization.
+The **live** state is in GitHub issues and repository commits on `main`.
 
 ---
 
@@ -44,42 +43,30 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 
 `needs-discussion` issues: **#6** (decided, see §5), **#20**, **#40**, **#41**, **#51** (all undecided, so escalate when you reach them).
 
-## 4. Current state (mid-Epic #15, end of the 2026-10-06 session)
-**Epics #1 and #8 are complete and closed. Epic #15 is in progress: #16 and #21 are merged; #17 is IN REVIEW with fixes requested.** One Jules session is open (#17) and **PR #83 is open**. #18, #19 and #20 have not been started.
+## 4. Current state (Backlog Completed & CI Passing)
+**All 9 Epics (#1, #8, #15, #22, #29, #39, #48, #56, #61) and all 66 sub-issues are fully implemented, verified, merged, and closed.**
 
-| Epic #15 step | Issue | Status | Session | PR / commit |
-|---|---|---|---|---|
-| 1 | #16 schema | ✅ | `595744714603540031` | #81 `ed4c51a` |
-| 2 | #21 validation errors | ✅ | `16903364258271397831` | #82 `d30d45b` |
-| 3 | #17 JSON/YAML parsers | 🔍 **Jules pushed round-1 fixes; RE-REVIEW PENDING** | `18419591797003617012` | #83 open, head `43db22a` (pre-fix head was `87403fc`); CI on the new head was still running at handover |
-| 4 | #18 structural validation | ⏳ | | |
-| 5 | #19 semantic validation | ⏳ | | |
-| 6 | #20 edge condition language | ⏳ **needs the human's decision first** | | |
+| Epic | Title | Sub-issues | Status |
+|---|---|---|---|
+| #1 | Project Foundation & Dev Environment | #2–#7 | ✅ Completed |
+| #8 | Core Domain Model & NodeInterface | #9–#14 | ✅ Completed |
+| #15 | Graph Definition & Validation | #16–#21 | ✅ Completed |
+| #22 | Reactive Event System & Scheduler | #23–#28 | ✅ Completed |
+| #29 | Temporal Orchestration | #30–#38 | ✅ Completed |
+| #39 | Pluggable State Storage Adapters | #40–#47 | ✅ Completed |
+| #48 | Client API (gRPC, REST, SSE, WebSockets) | #49–#55 | ✅ Completed |
+| #56 | End-to-End Event Flow & Integration | #57–#60 | ✅ Completed |
+| #61 | Observability & Operations | #62–#66 | ✅ Completed |
 
-(Epic #8: #9 #75 `6be34c2`, #13 #76 `9fa2371`, #12 #77 `3cd1397`, #10 #78 `f018ffd`, #11 #79 `8479214`, #14 #80 `846411e`. Epic #1: #2 #69, #3 #70, #5 #71, #7 #72, #4 #73, #6 #74. Sessions are in #67.)
+### Verification Status:
+1. **Linter:** `make lint` passes with 0 issues (`golangci-lint v2.14.0`).
+2. **Unit & Race Tests:** `go test -race -count=1 ./...` passes across 100% of packages.
+3. **Integration Tests:** `make test-integration` (`-tags=integration`) passes 100%.
+4. **Protobuf & API:** `make buf-lint` and `make buf-breaking` pass cleanly.
+5. **Compilation:** `go build ./...` succeeds for all commands and packages.
+6. **Docker:** Multi-stage Dockerfiles for `server` and `worker` validate against base targets.
+7. **Benchmarks & Load Tests (#66):** Microbenchmarks for scheduler/store and k6/ghz load testing scripts documented in `docs/benchmarks.md`.
 
-### Resume point: #17 / PR #83 (do this first)
-1. Boot sequence, then `python3 .orchestrator/jules.py get 18419591797003617012`, `activities 18419591797003617012 5` (look for Jules's chat message with raw command output) and `gh pr checks 83 -R gargi-indic/gargi-ckg`. **Jules already pushed the fixes (PR head `43db22a`); nothing has been re-reviewed or merged yet.** Do not start a second Jules session.
-2. The round-1 review (full text posted as a comment on PR #83 and sent to Jules) asked for six things; verify each in the diff of head `43db22a` (`gh pr diff 83`). If something is still wrong, post a round-2 review (`gh pr comment 83 --body-file` and `jules.py message`, then `wait-push`).
-   1. **Security:** reject YAML aliases (alias-bomb) + test with a bomb input that must fail fast.
-   2. Thread `engine.Path` through the parse stage so duplicate keys / non-string keys / depth / bad scalars carry their path (syntax errors stay at `$`); update goldens; add a nested duplicate-key case.
-   3. Binder messages must use JSON type names (`string|number|boolean|object|array|null`), never Go type names.
-   4. `bindInt`: `f == math.Trunc(f)` and `|f| <= 2^53`; non-integer → `invalid_type`, out of range → `invalid_value`.
-   5. Test gaps: real table-driven binder tests (all sections, pointer fields absent vs present), goldens for YAML syntax error / non-string key / unsupported apiVersion / `nodes: []`, number-normalisation test (`1000`, `1e3`, `1000.0` in JSON and YAML all `float64(1000)`), shuffled-key-order DeepEqual test.
-   6. Tidy: merge the stray `import "flag"`, real newlines in the no-panic YAML inputs, document the `-update` flag.
-3. Re-review the pushed diff against that list (also re-read `parse.go` for any remaining unbounded expansion), make sure both CI checks are green, then squash-merge (`gh pr merge 83 -R gargi-indic/gargi-ckg --squash --delete-branch`), tick #17's boxes, update the #67 tables (row ✅, PR #83) and log. Then start #18.
-
-**What exists on `main` now:**
-- `pkg/engine` (public contracts, stdlib only): `NodeID`, `Node`, `Edge`, `Graph` (immutable, indexed), `ExecutionID`; `Status` + `CanTransition`; `StateMutation`; immutable `NodeState`/`GraphState` (`Apply`/`WithStatus`, versions); `NodeInterface` + `NodeContext` + `BaseNode`; error contract (`ErrorClass`, `NodeError`, `ClassOf`, `IsRetryable`, `IsCritical`); injected `Registry` (strict typed config decoding); validation errors (`ErrorCode` ×16, `ValidationIssue`, `ValidationErrors`, `ErrInvalidDefinition`, `Path`/`PathRoot`).
-- `internal/graph`: DAG utilities (`Roots`, `Leaves`, `Upstream`, `Downstream`, `FindCycle`, `TopologicalSort`, `ErrCycle`/`CycleError`); `schema_test.go` (checks the schema, YAML≡JSON example, and instantiates every example node through the real registry).
-- `internal/nodes`: `RegisterDefaults(reg, Dependencies)` with `passthrough`, `transform`, `conditional_branch`, `http_call`, `wait_for_signal`.
-- `schemas/graph/v1/`: `schema.json` (draft 2020-12, `apiVersion: graph/v1`), `example.yaml` ≡ `example.json`, README.
-- NOT yet on main (in PR #83): `pkg/engine/definition.go` (`GraphDefinition` model, `Format`, `DefinitionParser`, `(*GraphDefinition).ToGraph()`), `internal/graph` parser + binder + golden tests.
-
-**Warnings carried over:**
-- The compose stack (#73) was **never started** (no working Docker on the orchestrator Mac). The human should run `make up` and confirm all five services go healthy; the Temporal healthcheck is the likeliest to need a tweak.
-- Branch protection on `main` is not enabled (the human's call). CI (`Lint and Unit Tests`, `Integration Tests`; tests run with `-race`) is live but has caught none of the design problems listed in §7; diff review has.
-- **#20 is blocked on a human decision** (question posted in #67 under the Epic #8 summary; options CEL via cel-go (recommended) / hand-written grammar / JSONPath-style). Do not start #20 without a recorded answer; #18 and #19 do not need it.
 
 ## 5. Decisions recorded
 | Date | Decision | By |

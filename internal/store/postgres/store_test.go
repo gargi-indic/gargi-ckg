@@ -32,7 +32,7 @@ func getFreePort(t *testing.T) uint32 {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return uint32(l.Addr().(*net.TCPAddr).Port)
 }
 

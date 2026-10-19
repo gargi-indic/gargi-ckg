@@ -75,7 +75,7 @@ func TestSSE_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.Header.Get("Content-Type") != "text/event-stream" {
 			t.Errorf("expected Content-Type text/event-stream, got %s", resp.Header.Get("Content-Type"))
@@ -116,7 +116,7 @@ func TestSSE_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		reader := bufio.NewReader(resp.Body)
 		var receivedLines []string
@@ -151,7 +151,7 @@ func TestSSE_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		reader := bufio.NewReader(resp.Body)
 		var receivedLines []string
@@ -184,7 +184,7 @@ func TestSSE_Streaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		reader := bufio.NewReader(resp.Body)
 		foundHeartbeat := false

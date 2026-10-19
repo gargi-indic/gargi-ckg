@@ -621,7 +621,7 @@ func TestE2E_Redis(t *testing.T) {
 	if err != nil {
 		t.Skipf("Skipping Redis E2E tests: failed to connect to Redis at %s: %v", redisAddr, err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	t.Run("Scenario1_Linear", func(t *testing.T) {
 		runLinearScenario(t, st)
@@ -651,7 +651,7 @@ func TestE2E_Postgres(t *testing.T) {
 	if err != nil {
 		t.Skipf("Skipping Postgres E2E tests: failed to connect to Postgres at %s: %v", postgresDSN, err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	t.Run("Scenario1_Linear", func(t *testing.T) {
 		runLinearScenario(t, st)

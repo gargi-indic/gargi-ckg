@@ -8,3 +8,4 @@ This directory contains the Architecture Decision Records for the `gargi-ckg` pr
 - [0004 - Dependency Injection & Manual Wiring](0004-dependency-injection-manual-wiring.md)
 - [0005 - Edge Condition Expression Language](0005-edge-condition-expression-language.md)
 - [0006 - Workflow Versioning & Replay Safety](0006-workflow-versioning-and-replay-safety.md)
+- [0007 - Temporal and StateStore Consistency Model](0007-temporal-and-statestore-consistency-model.md)

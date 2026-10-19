@@ -1,10 +1,12 @@
 package orchestrator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -72,4 +74,39 @@ func RegisterWorkflowQueries(
 		return ns, nil
 	})
 	return err
+}
+
+// FetchStateWithFallback attempts to fetch the latest GraphState from the StateStore.
+// If the StateStore is nil, or if it returns StoreNotFoundError or StoreUnavailableError,
+// it falls back to querying the running Temporal workflow via temporalClient.QueryWorkflow(ctx, workflowID, runID, QueryTypeGraphState).
+func FetchStateWithFallback(
+	ctx context.Context,
+	store engine.StateStore,
+	temporalClient client.Client,
+	workflowID string,
+	runID string,
+) (*engine.GraphState, error) {
+	if store != nil {
+		st, err := store.GetState(ctx, engine.ExecutionID(workflowID))
+		if err == nil && st != nil {
+			return st, nil
+		}
+		if err != nil && !engine.IsStoreNotFound(err) && !engine.IsStoreUnavailable(err) && temporalClient == nil {
+			return nil, err
+		}
+	}
+
+	if temporalClient != nil {
+		qres, err := temporalClient.QueryWorkflow(ctx, workflowID, runID, QueryTypeGraphState)
+		if err != nil {
+			return nil, fmt.Errorf("fallback workflow query failed: %w", err)
+		}
+		var st engine.GraphState
+		if err := qres.Get(&st); err != nil {
+			return nil, fmt.Errorf("decoding workflow query state: %w", err)
+		}
+		return &st, nil
+	}
+
+	return nil, fmt.Errorf("state store unavailable and no temporal client provided for fallback")
 }

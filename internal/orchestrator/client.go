@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/log"
 )
 
 // NewClientOptions maps application TemporalConfig (host_port, namespace, TLS) to Temporal client.Options.
@@ -56,7 +56,7 @@ func NewClient(cfg config.TemporalConfig, logger *slog.Logger) (client.Client, e
 	}
 
 	if logger != nil {
-		opts.Logger = log.NewStructuredLogger(logger)
+		opts.Logger = logging.NewTemporalLoggerAdapter(logger)
 	}
 
 	c, err := client.Dial(opts)

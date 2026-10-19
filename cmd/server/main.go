@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/gargi-indic/gargi-ckg/internal/api"
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	"github.com/gargi-indic/gargi-ckg/internal/store"
 	"go.temporal.io/sdk/client"
@@ -55,7 +55,11 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		return fmt.Errorf("validating config: %w", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(stdout, nil))
+	logger := logging.New(logging.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+		Output: stdout,
+	})
 	logger.Info("Starting server", "store_driver", cfg.Store.Driver, "grpc_addr", cfg.Server.GRPCAddress, "http_addr", cfg.Server.HTTPAddress)
 
 	st, err := store.New(ctx, cfg.Store)

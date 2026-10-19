@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
 
@@ -83,6 +85,15 @@ func (a *StateActivities) PersistStateActivity(
 	ctx context.Context,
 	input PersistStateInput,
 ) (*PersistStateResult, error) {
+	wfID := ""
+	runID := ""
+	if activity.IsActivity(ctx) {
+		actInfo := activity.GetInfo(ctx)
+		wfID = actInfo.WorkflowExecution.ID
+		runID = actInfo.WorkflowExecution.RunID
+	}
+	ctx = logging.WithCorrelation(ctx, string(input.ExecutionID), string(input.NodeID), wfID, runID)
+
 	// Graceful degradation: If StateStore is nil (e.g., in-memory or Temporal-only mode without external store), succeed as a no-op.
 	if a == nil || a.store == nil {
 		version := input.Version

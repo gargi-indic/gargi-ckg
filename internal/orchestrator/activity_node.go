@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/workflow"
@@ -107,12 +108,18 @@ func (a *NodeActivities) ExecuteNodeActivity(
 		return nil, engine.NewNonRetryableError(fmt.Errorf("instantiating node: %w", err))
 	}
 
+	wfID := ""
+	runID := ""
 	attempt := input.Attempt
 	if activity.IsActivity(ctx) {
-		if actAttempt := int(activity.GetInfo(ctx).Attempt); actAttempt > attempt {
-			attempt = actAttempt
+		actInfo := activity.GetInfo(ctx)
+		if int(actInfo.Attempt) > attempt {
+			attempt = int(actInfo.Attempt)
 		}
+		wfID = actInfo.WorkflowExecution.ID
+		runID = actInfo.WorkflowExecution.RunID
 	}
+	ctx = logging.WithCorrelation(ctx, string(input.ExecutionID), string(input.NodeID), wfID, runID)
 	if attempt <= 0 {
 		attempt = 1
 	}

@@ -6,12 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	"github.com/gargi-indic/gargi-ckg/internal/store"
@@ -55,7 +55,11 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		return fmt.Errorf("validating config: %w", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(stdout, nil))
+	logger := logging.New(logging.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+		Output: stdout,
+	})
 	logger.Info("Starting worker", "store_driver", cfg.Store.Driver)
 
 	st, err := store.New(ctx, cfg.Store)

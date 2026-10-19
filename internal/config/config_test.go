@@ -509,3 +509,31 @@ func TestValidate_CapabilitiesFailFast(t *testing.T) {
 	})
 }
 
+func TestConfig_Logging(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		cfg := Default()
+		if cfg.Logging.Level != "info" {
+			t.Errorf("expected default log level 'info', got '%s'", cfg.Logging.Level)
+		}
+		if cfg.Logging.Format != "text" {
+			t.Errorf("expected default log format 'text', got '%s'", cfg.Logging.Format)
+		}
+	})
+
+	t.Run("env overrides", func(t *testing.T) {
+		t.Setenv("GARGI_LOG_LEVEL", "debug")
+		t.Setenv("GARGI_LOG_FORMAT", "json")
+
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.Logging.Level != "debug" {
+			t.Errorf("expected log level 'debug', got '%s'", cfg.Logging.Level)
+		}
+		if cfg.Logging.Format != "json" {
+			t.Errorf("expected log format 'json', got '%s'", cfg.Logging.Format)
+		}
+	})
+}
+

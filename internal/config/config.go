@@ -154,11 +154,18 @@ type ServerConfig struct {
 	GRPCAddress string `yaml:"grpc_address"`
 }
 
+// LoggingConfig holds configuration for application logging.
+type LoggingConfig struct {
+	Level  string `yaml:"level,omitempty"`
+	Format string `yaml:"format,omitempty"`
+}
+
 // Config represents the root configuration structure.
 type Config struct {
 	Store    StoreConfig    `yaml:"store"`
 	Temporal TemporalConfig `yaml:"temporal"`
 	Server   ServerConfig   `yaml:"server"`
+	Logging  LoggingConfig  `yaml:"logging,omitempty"`
 }
 
 // Default returns a new configuration instance with default values populated.
@@ -175,6 +182,10 @@ func Default() *Config {
 		Server: ServerConfig{
 			HTTPAddress: ":8080",
 			GRPCAddress: ":9090",
+		},
+		Logging: LoggingConfig{
+			Level:  "info",
+			Format: "text",
 		},
 	}
 }
@@ -311,6 +322,13 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if val, ok := os.LookupEnv("GARGI_SERVER_GRPC_ADDRESS"); ok {
 		cfg.Server.GRPCAddress = val
+	}
+
+	if val, ok := os.LookupEnv("GARGI_LOG_LEVEL"); ok {
+		cfg.Logging.Level = val
+	}
+	if val, ok := os.LookupEnv("GARGI_LOG_FORMAT"); ok {
+		cfg.Logging.Format = val
 	}
 }
 

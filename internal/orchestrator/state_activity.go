@@ -7,6 +7,10 @@ import (
 
 	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
@@ -84,7 +88,7 @@ func (a *StateActivities) Store() engine.StateStore {
 func (a *StateActivities) PersistStateActivity(
 	ctx context.Context,
 	input PersistStateInput,
-) (*PersistStateResult, error) {
+) (res *PersistStateResult, retErr error) {
 	wfID := ""
 	runID := ""
 	if activity.IsActivity(ctx) {
@@ -93,6 +97,27 @@ func (a *StateActivities) PersistStateActivity(
 		runID = actInfo.WorkflowExecution.RunID
 	}
 	ctx = logging.WithCorrelation(ctx, string(input.ExecutionID), string(input.NodeID), wfID, runID)
+
+	tr := otel.GetTracerProvider().Tracer("gargi-ckg")
+	ctx, span := tr.Start(ctx, "StateActivity:PersistState",
+		trace.WithAttributes(
+			attribute.String("gargi.execution_id", string(input.ExecutionID)),
+			attribute.String("gargi.node_id", string(input.NodeID)),
+			attribute.Int64("gargi.version", int64(input.Version)),
+			attribute.String("gargi.idempotency_key", input.EffectiveIdempotencyKey()),
+			attribute.String("temporal.workflow_id", wfID),
+			attribute.String("temporal.run_id", runID),
+		),
+	)
+	defer span.End()
+	defer func() {
+		if retErr != nil {
+			span.RecordError(retErr)
+			span.SetStatus(codes.Error, retErr.Error())
+		} else if res != nil {
+			span.SetStatus(codes.Ok, "success")
+		}
+	}()
 
 	// Graceful degradation: If StateStore is nil (e.g., in-memory or Temporal-only mode without external store), succeed as a no-op.
 	if a == nil || a.store == nil {

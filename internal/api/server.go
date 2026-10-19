@@ -9,6 +9,7 @@ import (
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -39,6 +40,7 @@ func NewGRPCServer(
 
 	// Chain standard interceptors for recovery, logging, and deadlines
 	defaultOpts := []grpc.ServerOption{
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.ChainUnaryInterceptor(
 			RecoveryUnaryInterceptor(logger),
 			LoggingUnaryInterceptor(logger),

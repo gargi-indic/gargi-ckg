@@ -7,6 +7,10 @@ import (
 
 	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/workflow"
 )
@@ -124,6 +128,19 @@ func (a *NodeActivities) ExecuteNodeActivity(
 		attempt = 1
 	}
 
+	tr := otel.GetTracerProvider().Tracer("gargi-ckg")
+	ctx, span := tr.Start(ctx, fmt.Sprintf("NodeActivity:%s", input.NodeType),
+		trace.WithAttributes(
+			attribute.String("gargi.execution_id", string(input.ExecutionID)),
+			attribute.String("gargi.node_id", string(input.NodeID)),
+			attribute.String("gargi.node_type", input.NodeType),
+			attribute.Int("gargi.attempt", attempt),
+			attribute.String("temporal.workflow_id", wfID),
+			attribute.String("temporal.run_id", runID),
+		),
+	)
+	defer span.End()
+
 	nodeCtx := &executeNodeContext{
 		execID:  input.ExecutionID,
 		nodeID:  input.NodeID,
@@ -168,29 +185,57 @@ func (a *NodeActivities) ExecuteNodeActivity(
 		}
 	}
 
-	err = instance.OnInit(ctx, nodeCtx)
+	initCtx, initSpan := tr.Start(ctx, fmt.Sprintf("NodeLifecycle:OnInit:%s", input.NodeID))
+	err = instance.OnInit(initCtx, nodeCtx)
 	if err != nil {
-		if engine.ClassOf(err) != engine.ClassRetryable || input.MaxAttempts <= 1 || attempt >= input.MaxAttempts {
-			_ = instance.OnFailure(ctx, nodeCtx, err)
-		}
-		return nil, WrapTemporalError(err)
-	}
+		initSpan.RecordError(err)
+		initSpan.SetStatus(codes.Error, err.Error())
+		initSpan.End()
 
-	mutation, err := instance.Execute(ctx, nodeCtx)
-	if err != nil {
 		if engine.ClassOf(err) != engine.ClassRetryable || input.MaxAttempts <= 1 || attempt >= input.MaxAttempts {
-			_ = instance.OnFailure(ctx, nodeCtx, err)
+			failCtx, failSpan := tr.Start(ctx, fmt.Sprintf("NodeLifecycle:OnFailure:%s", input.NodeID))
+			_ = instance.OnFailure(failCtx, nodeCtx, err)
+			failSpan.End()
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, WrapTemporalError(err)
 	}
+	initSpan.End()
+
+	execCtx, execSpan := tr.Start(ctx, fmt.Sprintf("NodeLifecycle:Execute:%s", input.NodeID))
+	mutation, err := instance.Execute(execCtx, nodeCtx)
+	if err != nil {
+		execSpan.RecordError(err)
+		execSpan.SetStatus(codes.Error, err.Error())
+		execSpan.End()
+
+		if engine.ClassOf(err) != engine.ClassRetryable || input.MaxAttempts <= 1 || attempt >= input.MaxAttempts {
+			failCtx, failSpan := tr.Start(ctx, fmt.Sprintf("NodeLifecycle:OnFailure:%s", input.NodeID))
+			_ = instance.OnFailure(failCtx, nodeCtx, err)
+			failSpan.End()
+		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, WrapTemporalError(err)
+	}
+	execSpan.End()
 
 	if mutation != nil && mutation.Status != nil {
 		mutErr := engine.NewNonRetryableError(fmt.Errorf("%w: node %q may not set Status directly", engine.ErrInvalidMutation, input.NodeID))
-		_ = instance.OnFailure(ctx, nodeCtx, mutErr)
+		failCtx, failSpan := tr.Start(ctx, fmt.Sprintf("NodeLifecycle:OnFailure:%s", input.NodeID))
+		_ = instance.OnFailure(failCtx, nodeCtx, mutErr)
+		failSpan.End()
+		span.RecordError(mutErr)
+		span.SetStatus(codes.Error, mutErr.Error())
 		return nil, WrapTemporalError(mutErr)
 	}
 
-	_ = instance.OnSuccess(ctx, nodeCtx, mutation)
+	successCtx, successSpan := tr.Start(ctx, fmt.Sprintf("NodeLifecycle:OnSuccess:%s", input.NodeID))
+	_ = instance.OnSuccess(successCtx, nodeCtx, mutation)
+	successSpan.End()
+
+	span.SetStatus(codes.Ok, "success")
 
 	return &NodeActivityResult{
 		NodeID:   input.NodeID,

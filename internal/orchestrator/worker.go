@@ -8,6 +8,8 @@ import (
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/contrib/opentelemetry"
+	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 )
@@ -40,6 +42,12 @@ func NewWorkerManager(
 	workerOpts := worker.Options{
 		BuildID:                 cfg.BuildID,
 		UseBuildIDForVersioning: cfg.UseBuildIDForVersioning,
+	}
+
+	if cfg.TracingEnabled {
+		if tracingInterceptor, err := opentelemetry.NewTracingInterceptor(opentelemetry.TracerOptions{}); err == nil {
+			workerOpts.Interceptors = append(workerOpts.Interceptors, tracingInterceptor.(interceptor.WorkerInterceptor))
+		}
 	}
 
 	if wfQueue == actQueue {

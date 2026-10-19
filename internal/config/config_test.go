@@ -537,3 +537,52 @@ func TestConfig_Logging(t *testing.T) {
 	})
 }
 
+func TestConfig_Tracing(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		cfg := Default()
+		if cfg.Tracing.Enabled {
+			t.Errorf("expected tracing disabled by default")
+		}
+		if cfg.Tracing.Insecure != true {
+			t.Errorf("expected insecure true by default")
+		}
+		if cfg.Tracing.SamplerRatio != 1.0 {
+			t.Errorf("expected default sampler ratio 1.0, got %f", cfg.Tracing.SamplerRatio)
+		}
+		if cfg.Temporal.TracingEnabled {
+			t.Errorf("expected temporal tracing disabled by default")
+		}
+	})
+
+	t.Run("env overrides", func(t *testing.T) {
+		t.Setenv("GARGI_TRACING_ENDPOINT", "otel-collector:4317")
+		t.Setenv("GARGI_TRACING_INSECURE", "false")
+		t.Setenv("GARGI_TRACING_SAMPLER_RATIO", "0.5")
+		t.Setenv("GARGI_TRACING_SERVICE_NAME", "custom-gargi")
+
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !cfg.Tracing.Enabled {
+			t.Errorf("expected tracing enabled when endpoint is set")
+		}
+		if cfg.Tracing.Endpoint != "otel-collector:4317" {
+			t.Errorf("expected endpoint otel-collector:4317, got %s", cfg.Tracing.Endpoint)
+		}
+		if cfg.Tracing.Insecure {
+			t.Errorf("expected insecure false")
+		}
+		if cfg.Tracing.SamplerRatio != 0.5 {
+			t.Errorf("expected sampler ratio 0.5, got %f", cfg.Tracing.SamplerRatio)
+		}
+		if cfg.Tracing.ServiceName != "custom-gargi" {
+			t.Errorf("expected service name custom-gargi, got %s", cfg.Tracing.ServiceName)
+		}
+		if !cfg.Temporal.TracingEnabled {
+			t.Errorf("expected temporal tracing enabled when tracing is enabled")
+		}
+	})
+}
+
+

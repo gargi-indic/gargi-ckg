@@ -10,6 +10,7 @@ import (
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/contrib/opentelemetry"
 )
 
 // NewClientOptions maps application TemporalConfig (host_port, namespace, TLS) to Temporal client.Options.
@@ -43,6 +44,14 @@ func NewClientOptions(cfg config.TemporalConfig) (client.Options, error) {
 		}
 
 		opts.ConnectionOptions = client.ConnectionOptions{TLS: tlsCfg}
+	}
+
+	if cfg.TracingEnabled {
+		tracingInterceptor, err := opentelemetry.NewTracingInterceptor(opentelemetry.TracerOptions{})
+		if err != nil {
+			return opts, fmt.Errorf("creating temporal tracing interceptor: %w", err)
+		}
+		opts.Interceptors = append(opts.Interceptors, tracingInterceptor)
 	}
 
 	return opts, nil

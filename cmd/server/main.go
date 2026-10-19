@@ -16,6 +16,7 @@ import (
 	"github.com/gargi-indic/gargi-ckg/internal/logging"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	"github.com/gargi-indic/gargi-ckg/internal/store"
+	"github.com/gargi-indic/gargi-ckg/internal/telemetry"
 	"go.temporal.io/sdk/client"
 )
 
@@ -61,6 +62,14 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		Output: stdout,
 	})
 	logger.Info("Starting server", "store_driver", cfg.Store.Driver, "grpc_addr", cfg.Server.GRPCAddress, "http_addr", cfg.Server.HTTPAddress)
+
+	shutdownTracer, err := telemetry.SetupTracer(ctx, cfg.Tracing)
+	if err != nil {
+		return fmt.Errorf("setting up tracer: %w", err)
+	}
+	defer func() {
+		_ = shutdownTracer(context.Background())
+	}()
 
 	st, err := store.New(ctx, cfg.Store)
 	if err != nil {

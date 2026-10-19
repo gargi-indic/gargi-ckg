@@ -15,6 +15,7 @@ import (
 	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	"github.com/gargi-indic/gargi-ckg/internal/store"
+	"github.com/gargi-indic/gargi-ckg/internal/telemetry"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 	"go.temporal.io/sdk/activity"
 )
@@ -61,6 +62,14 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		Output: stdout,
 	})
 	logger.Info("Starting worker", "store_driver", cfg.Store.Driver)
+
+	shutdownTracer, err := telemetry.SetupTracer(ctx, cfg.Tracing)
+	if err != nil {
+		return fmt.Errorf("setting up tracer: %w", err)
+	}
+	defer func() {
+		_ = shutdownTracer(context.Background())
+	}()
 
 	st, err := store.New(ctx, cfg.Store)
 	if err != nil {

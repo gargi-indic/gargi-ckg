@@ -54,6 +54,16 @@ func TestNewClientOptions(t *testing.T) {
 	cfg.TLS.CertFile = "nonexistent.pem"
 	_, err = NewClientOptions(cfg)
 	assert.Error(t, err)
+
+	// Tracing Enabled
+	tracingCfg := config.TemporalConfig{
+		HostPort:       "localhost:7233",
+		Namespace:      "default",
+		TracingEnabled: true,
+	}
+	tracingOpts, err := NewClientOptions(tracingCfg)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tracingOpts.Interceptors)
 }
 
 func generateTestCerts(t *testing.T, dir string) (string, string, string) {

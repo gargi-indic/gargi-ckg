@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -130,6 +131,7 @@ type TemporalConfig struct {
 	TLS                     *TLSConfig `yaml:"tls,omitempty"`
 	BuildID                 string     `yaml:"build_id,omitempty"`
 	UseBuildIDForVersioning bool       `yaml:"use_build_id_for_versioning,omitempty"`
+	TracingEnabled          bool       `yaml:"tracing_enabled,omitempty"`
 }
 
 // EffectiveWorkflowTaskQueue returns WorkflowTaskQueue if non-empty, otherwise TaskQueue.
@@ -160,12 +162,22 @@ type LoggingConfig struct {
 	Format string `yaml:"format,omitempty"`
 }
 
+// TracingConfig holds configuration for OpenTelemetry distributed tracing.
+type TracingConfig struct {
+	Enabled      bool    `yaml:"enabled"`
+	Endpoint     string  `yaml:"endpoint"`
+	Insecure     bool    `yaml:"insecure"`
+	SamplerRatio float64 `yaml:"sampler_ratio"`
+	ServiceName  string  `yaml:"service_name,omitempty"`
+}
+
 // Config represents the root configuration structure.
 type Config struct {
 	Store    StoreConfig    `yaml:"store"`
 	Temporal TemporalConfig `yaml:"temporal"`
 	Server   ServerConfig   `yaml:"server"`
 	Logging  LoggingConfig  `yaml:"logging,omitempty"`
+	Tracing  TracingConfig  `yaml:"tracing,omitempty"`
 }
 
 // Default returns a new configuration instance with default values populated.
@@ -186,6 +198,13 @@ func Default() *Config {
 		Logging: LoggingConfig{
 			Level:  "info",
 			Format: "text",
+		},
+		Tracing: TracingConfig{
+			Enabled:      false,
+			Endpoint:     "",
+			Insecure:     true,
+			SamplerRatio: 1.0,
+			ServiceName:  "gargi-ckg",
 		},
 	}
 }
@@ -316,6 +335,9 @@ func applyEnvOverrides(cfg *Config) {
 	if val, ok := os.LookupEnv("GARGI_TEMPORAL_USE_BUILD_ID_FOR_VERSIONING"); ok {
 		cfg.Temporal.UseBuildIDForVersioning = val == "true" || val == "1"
 	}
+	if val, ok := os.LookupEnv("GARGI_TEMPORAL_TRACING_ENABLED"); ok {
+		cfg.Temporal.TracingEnabled = val == "true" || val == "1"
+	}
 
 	if val, ok := os.LookupEnv("GARGI_SERVER_HTTP_ADDRESS"); ok {
 		cfg.Server.HTTPAddress = val
@@ -329,6 +351,32 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if val, ok := os.LookupEnv("GARGI_LOG_FORMAT"); ok {
 		cfg.Logging.Format = val
+	}
+
+	if val, ok := os.LookupEnv("GARGI_TRACING_ENABLED"); ok {
+		cfg.Tracing.Enabled = val == "true" || val == "1"
+	}
+	if val, ok := os.LookupEnv("GARGI_TRACING_ENDPOINT"); ok {
+		cfg.Tracing.Endpoint = val
+		if _, set := os.LookupEnv("GARGI_TRACING_ENABLED"); !set && val != "" {
+			cfg.Tracing.Enabled = true
+		}
+	}
+	if val, ok := os.LookupEnv("GARGI_TRACING_INSECURE"); ok {
+		cfg.Tracing.Insecure = val == "true" || val == "1"
+	}
+	if val, ok := os.LookupEnv("GARGI_TRACING_SAMPLER_RATIO"); ok {
+		if r, err := strconv.ParseFloat(val, 64); err == nil {
+			cfg.Tracing.SamplerRatio = r
+		}
+	}
+	if val, ok := os.LookupEnv("GARGI_TRACING_SERVICE_NAME"); ok {
+		cfg.Tracing.ServiceName = val
+	}
+	if cfg.Tracing.Enabled && !cfg.Temporal.TracingEnabled {
+		if _, set := os.LookupEnv("GARGI_TEMPORAL_TRACING_ENABLED"); !set {
+			cfg.Temporal.TracingEnabled = true
+		}
 	}
 }
 

@@ -47,7 +47,7 @@ temporal:
   namespace: default
   task_queue: gargi_tasks
 server:
-  http_address: :8080
+  http_address: 127.0.0.1:0
   grpc_address: 127.0.0.1:0
 `
 		_ = os.WriteFile(cfgFile, []byte(yamlContent), 0o644)

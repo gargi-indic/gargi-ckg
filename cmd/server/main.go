@@ -56,7 +56,7 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	}
 
 	logger := slog.New(slog.NewTextHandler(stdout, nil))
-	logger.Info("Starting server", "store_driver", cfg.Store.Driver, "grpc_addr", cfg.Server.GRPCAddress)
+	logger.Info("Starting server", "store_driver", cfg.Store.Driver, "grpc_addr", cfg.Server.GRPCAddress, "http_addr", cfg.Server.HTTPAddress)
 
 	st, err := store.New(ctx, cfg.Store)
 	if err != nil {
@@ -73,23 +73,39 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	}
 
 	grpcServer := api.NewGRPCServer(temporalClient, cfg.Temporal, st, logger)
+	httpServer, err := api.NewHTTPServer(ctx, grpcServer.Service(), cfg.Server.HTTPAddress, logger)
+	if err != nil {
+		return fmt.Errorf("initializing HTTP REST server: %w", err)
+	}
 
-	lis, err := net.Listen("tcp", cfg.Server.GRPCAddress)
+	grpcLis, err := net.Listen("tcp", cfg.Server.GRPCAddress)
 	if err != nil {
 		return fmt.Errorf("listening on gRPC address %s: %w", cfg.Server.GRPCAddress, err)
 	}
-	defer lis.Close()
+	defer grpcLis.Close()
 
-	errCh := make(chan error, 1)
+	httpLis, err := net.Listen("tcp", cfg.Server.HTTPAddress)
+	if err != nil {
+		return fmt.Errorf("listening on HTTP address %s: %w", cfg.Server.HTTPAddress, err)
+	}
+	defer httpLis.Close()
+
+	errCh := make(chan error, 2)
 	go func() {
-		errCh <- grpcServer.Serve(lis)
+		errCh <- grpcServer.Serve(grpcLis)
+	}()
+	go func() {
+		errCh <- httpServer.Serve(httpLis)
 	}()
 
 	select {
 	case <-ctx.Done():
 		grpcServer.GracefulStop()
+		_ = httpServer.Shutdown(context.Background())
 		return nil
 	case err := <-errCh:
+		grpcServer.GracefulStop()
+		_ = httpServer.Shutdown(context.Background())
 		return err
 	}
 }

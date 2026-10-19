@@ -1,0 +1,526 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "gargi/v1/api.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "GargiService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/executions": {
+      "post": {
+        "summary": "SubmitExecution submits a new graph definition for asynchronous execution.",
+        "operationId": "GargiService_SubmitExecution",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitExecutionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "SubmitExecutionRequest defines the payload for submitting a graph execution.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitExecutionRequest"
+            }
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      }
+    },
+    "/v1/executions/{executionId}": {
+      "get": {
+        "summary": "GetExecution queries the state of a graph execution.",
+        "operationId": "GargiService_GetExecution",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetExecutionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      }
+    },
+    "/v1/executions/{executionId}/cancel": {
+      "post": {
+        "summary": "CancelExecution cancels an in-flight graph execution.",
+        "operationId": "GargiService_CancelExecution",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CancelExecutionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GargiServiceCancelExecutionBody"
+            }
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      }
+    },
+    "/v1/executions/{executionId}/nodes/{nodeId}": {
+      "get": {
+        "summary": "GetNodeState queries the execution state of an individual node in the graph.",
+        "operationId": "GargiService_GetNodeState",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNodeStateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      }
+    },
+    "/v1/executions/{executionId}/nodes/{nodeId}/signal": {
+      "post": {
+        "summary": "SignalNode delivers an external event or signal to a node.",
+        "operationId": "GargiService_SignalNode",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SignalNodeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/GargiServiceSignalNodeBody"
+            }
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      }
+    },
+    "/v1/executions/{executionId}/stream": {
+      "get": {
+        "summary": "StreamExecutionUpdates opens a server-streaming channel for reactive execution events.",
+        "operationId": "GargiService_StreamExecutionUpdates",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1StreamExecutionUpdatesResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1StreamExecutionUpdatesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromSequence",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "GargiServiceCancelExecutionBody": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      },
+      "description": "CancelExecutionRequest requests cancellation of an execution."
+    },
+    "GargiServiceSignalNodeBody": {
+      "type": "object",
+      "properties": {
+        "signalName": {
+          "type": "string"
+        },
+        "payload": {}
+      },
+      "description": "SignalNodeRequest delivers an external event or signal to a waiting node."
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "protobufNullValue": {
+      "type": "string",
+      "enum": [
+        "NULL_VALUE"
+      ],
+      "default": "NULL_VALUE",
+      "description": "`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value."
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1CancelExecutionResponse": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExecutionStatus"
+        },
+        "cancelledAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "CancelExecutionResponse returns the updated status."
+    },
+    "v1ExecutionStatus": {
+      "type": "string",
+      "enum": [
+        "EXECUTION_STATUS_UNSPECIFIED",
+        "EXECUTION_STATUS_PENDING",
+        "EXECUTION_STATUS_RUNNING",
+        "EXECUTION_STATUS_SUCCEEDED",
+        "EXECUTION_STATUS_FAILED",
+        "EXECUTION_STATUS_CANCELLED"
+      ],
+      "default": "EXECUTION_STATUS_UNSPECIFIED",
+      "description": "ExecutionStatus represents the lifecycle state of a graph execution."
+    },
+    "v1GetExecutionResponse": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExecutionStatus"
+        },
+        "version": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "nodeStates": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1NodeStateDetail"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "GetExecutionResponse contains the full execution snapshot."
+    },
+    "v1GetNodeStateResponse": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "nodeState": {
+          "$ref": "#/definitions/v1NodeStateDetail"
+        }
+      },
+      "description": "GetNodeStateResponse contains the state of the queried node."
+    },
+    "v1NodeStateDetail": {
+      "type": "object",
+      "properties": {
+        "nodeId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1NodeStatus"
+        },
+        "output": {},
+        "errorMessage": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "NodeStateDetail describes the current snapshot state of an individual graph node."
+    },
+    "v1NodeStatus": {
+      "type": "string",
+      "enum": [
+        "NODE_STATUS_UNSPECIFIED",
+        "NODE_STATUS_PENDING",
+        "NODE_STATUS_READY",
+        "NODE_STATUS_RUNNING",
+        "NODE_STATUS_SUCCEEDED",
+        "NODE_STATUS_FAILED",
+        "NODE_STATUS_SKIPPED",
+        "NODE_STATUS_COMPENSATING",
+        "NODE_STATUS_COMPENSATED"
+      ],
+      "default": "NODE_STATUS_UNSPECIFIED",
+      "description": "NodeStatus represents the state of an individual node in the graph."
+    },
+    "v1SignalNodeResponse": {
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "description": "SignalNodeResponse acknowledges receipt of the signal."
+    },
+    "v1StreamExecutionUpdatesResponse": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "eventType": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "fromStatus": {
+          "$ref": "#/definitions/v1NodeStatus"
+        },
+        "toStatus": {
+          "$ref": "#/definitions/v1NodeStatus"
+        },
+        "payload": {},
+        "errorMessage": {
+          "type": "string"
+        }
+      },
+      "description": "StreamExecutionUpdatesResponse represents an event streamed to subscribers."
+    },
+    "v1SubmitExecutionRequest": {
+      "type": "object",
+      "properties": {
+        "graphDefinition": {
+          "type": "string",
+          "description": "Graph definition as JSON or YAML string."
+        },
+        "executionId": {
+          "type": "string",
+          "description": "Optional idempotency key / custom execution ID."
+        },
+        "inputs": {
+          "type": "object",
+          "description": "Initial input variables for the graph execution."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Metadata associated with this execution."
+        }
+      },
+      "description": "SubmitExecutionRequest defines the payload for submitting a graph execution."
+    },
+    "v1SubmitExecutionResponse": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExecutionStatus"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "SubmitExecutionResponse defines the response after submitting an execution."
+    }
+  }
+}

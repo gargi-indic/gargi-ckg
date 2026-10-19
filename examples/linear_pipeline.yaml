@@ -1,0 +1,26 @@
+apiVersion: graph/v1
+id: linear-pipeline-example
+nodes:
+  - id: fetch_user
+    type: transform
+    config:
+      set:
+        user_id: usr_9876
+        name: Jane Doe
+        tier: enterprise
+  - id: calculate_discount
+    type: transform
+    config:
+      set:
+        discount_rate: 0.25
+        eligible: true
+  - id: generate_invoice
+    type: transform
+    config:
+      set:
+        invoice_status: ready
+edges:
+  - from: fetch_user
+    to: calculate_discount
+  - from: calculate_discount
+    to: generate_invoice

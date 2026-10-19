@@ -1,0 +1,23 @@
+apiVersion: graph/v1
+id: saga-travel-booking
+nodes:
+  - id: reserve_flight
+    type: passthrough
+    compensation: cancel_flight
+  - id: book_hotel
+    type: passthrough
+    compensation: cancel_hotel
+  - id: process_payment
+    type: passthrough
+edges:
+  - from: reserve_flight
+    to: book_hotel
+  - from: book_hotel
+    to: process_payment
+compensations:
+  cancel_flight:
+    type: passthrough
+  cancel_hotel:
+    type: passthrough
+failurePolicy:
+  onCriticalFailure: compensate

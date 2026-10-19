@@ -28,20 +28,76 @@ func versionEvolutionWorkflow(ctx workflow.Context) (string, error) {
 
 func TestVersion_Helpers(t *testing.T) {
 	suite := &testsuite.WorkflowTestSuite{}
-	env := suite.NewTestWorkflowEnvironment()
 
-	helperTestWorkflow := func(ctx workflow.Context) (bool, error) {
-		isAtLeastV1 := orchestrator.IsVersionAtLeast(ctx, "test-change", orchestrator.VersionInitial, orchestrator.VersionV1, orchestrator.VersionV1)
-		return isAtLeastV1, nil
-	}
+	t.Run("Default execution returns maxSupported", func(t *testing.T) {
+		env := suite.NewTestWorkflowEnvironment()
+		workflowFunc := func(ctx workflow.Context) (workflow.Version, error) {
+			v := orchestrator.GetWorkflowVersion(ctx, "test-change", orchestrator.VersionInitial, orchestrator.VersionV1)
+			return v, nil
+		}
 
-	env.ExecuteWorkflow(helperTestWorkflow)
-	require.True(t, env.IsWorkflowCompleted())
-	require.NoError(t, env.GetWorkflowError())
+		env.ExecuteWorkflow(workflowFunc)
+		require.True(t, env.IsWorkflowCompleted())
+		require.NoError(t, env.GetWorkflowError())
 
-	var result bool
-	require.NoError(t, env.GetWorkflowResult(&result))
-	assert.True(t, result)
+		var result workflow.Version
+		require.NoError(t, env.GetWorkflowResult(&result))
+		assert.Equal(t, orchestrator.VersionV1, result)
+	})
+
+	t.Run("IsVersionAtLeast returns true when version equals required", func(t *testing.T) {
+		env := suite.NewTestWorkflowEnvironment()
+		env.OnGetVersion("test-change", orchestrator.VersionInitial, orchestrator.VersionV1).Return(orchestrator.VersionV1)
+
+		helperTestWorkflow := func(ctx workflow.Context) (bool, error) {
+			isAtLeastV1 := orchestrator.IsVersionAtLeast(ctx, "test-change", orchestrator.VersionInitial, orchestrator.VersionV1, orchestrator.VersionV1)
+			return isAtLeastV1, nil
+		}
+
+		env.ExecuteWorkflow(helperTestWorkflow)
+		require.True(t, env.IsWorkflowCompleted())
+		require.NoError(t, env.GetWorkflowError())
+
+		var result bool
+		require.NoError(t, env.GetWorkflowResult(&result))
+		assert.True(t, result)
+	})
+
+	t.Run("IsVersionAtLeast returns true when version exceeds required", func(t *testing.T) {
+		env := suite.NewTestWorkflowEnvironment()
+		env.OnGetVersion("test-change", orchestrator.VersionInitial, orchestrator.VersionV2).Return(orchestrator.VersionV2)
+
+		helperTestWorkflow := func(ctx workflow.Context) (bool, error) {
+			isAtLeastV1 := orchestrator.IsVersionAtLeast(ctx, "test-change", orchestrator.VersionInitial, orchestrator.VersionV2, orchestrator.VersionV1)
+			return isAtLeastV1, nil
+		}
+
+		env.ExecuteWorkflow(helperTestWorkflow)
+		require.True(t, env.IsWorkflowCompleted())
+		require.NoError(t, env.GetWorkflowError())
+
+		var result bool
+		require.NoError(t, env.GetWorkflowResult(&result))
+		assert.True(t, result)
+	})
+
+	t.Run("IsVersionAtLeast returns false when version is below required", func(t *testing.T) {
+		env := suite.NewTestWorkflowEnvironment()
+		env.OnGetVersion("test-change", orchestrator.VersionInitial, orchestrator.VersionV2).Return(orchestrator.VersionInitial)
+
+		helperTestWorkflow := func(ctx workflow.Context) (bool, error) {
+			isAtLeastV1 := orchestrator.IsVersionAtLeast(ctx, "test-change", orchestrator.VersionInitial, orchestrator.VersionV2, orchestrator.VersionV1)
+			return isAtLeastV1, nil
+		}
+
+		env.ExecuteWorkflow(helperTestWorkflow)
+		require.True(t, env.IsWorkflowCompleted())
+		require.NoError(t, env.GetWorkflowError())
+
+		var result bool
+		require.NoError(t, env.GetWorkflowResult(&result))
+		assert.False(t, result)
+	})
 }
 
 func TestVersion_EvolutionWorkflow_LegacyAndV1AndV2(t *testing.T) {
@@ -83,6 +139,64 @@ func TestVersion_EvolutionWorkflow_LegacyAndV1AndV2(t *testing.T) {
 			assert.Equal(t, tc.expectedRoute, res)
 		})
 	}
+}
+
+func TestVersion_DeprecationStep_LockToMinVersion(t *testing.T) {
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+
+	// Simulating Phase 3 where minSupported is locked to VersionV1
+	deprecatedWorkflow := func(ctx workflow.Context) (workflow.Version, error) {
+		v := orchestrator.GetWorkflowVersion(ctx, "deprecated-change", orchestrator.VersionV1, orchestrator.VersionV1)
+		return v, nil
+	}
+
+	env.ExecuteWorkflow(deprecatedWorkflow)
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	var res workflow.Version
+	require.NoError(t, env.GetWorkflowResult(&res))
+	assert.Equal(t, orchestrator.VersionV1, res)
+}
+
+func TestVersion_MultipleChangeIDs(t *testing.T) {
+	suite := &testsuite.WorkflowTestSuite{}
+	env := suite.NewTestWorkflowEnvironment()
+
+	multiChangeWorkflow := func(ctx workflow.Context) (map[string]bool, error) {
+		hasGraphV1 := orchestrator.IsVersionAtLeast(
+			ctx,
+			orchestrator.ChangeIDGraphWorkflowVersion,
+			orchestrator.VersionInitial,
+			orchestrator.VersionV1,
+			orchestrator.VersionV1,
+		)
+		hasPayloadVal := orchestrator.IsVersionAtLeast(
+			ctx,
+			orchestrator.ChangeIDPayloadValidation,
+			orchestrator.VersionInitial,
+			orchestrator.VersionV1,
+			orchestrator.VersionV1,
+		)
+
+		return map[string]bool{
+			"graph":   hasGraphV1,
+			"payload": hasPayloadVal,
+		}, nil
+	}
+
+	env.OnGetVersion(orchestrator.ChangeIDGraphWorkflowVersion, orchestrator.VersionInitial, orchestrator.VersionV1).Return(orchestrator.VersionV1)
+	env.OnGetVersion(orchestrator.ChangeIDPayloadValidation, orchestrator.VersionInitial, orchestrator.VersionV1).Return(orchestrator.VersionInitial)
+
+	env.ExecuteWorkflow(multiChangeWorkflow)
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	var res map[string]bool
+	require.NoError(t, env.GetWorkflowResult(&res))
+	assert.True(t, res["graph"])
+	assert.False(t, res["payload"])
 }
 
 func TestGraphExecutionWorkflow_VersionGating(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gargi-indic/gargi-ckg/internal/metrics"
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
 	"github.com/gorilla/websocket"
 	"google.golang.org/grpc/metadata"
@@ -386,6 +387,9 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("websocket upgrade failed", "error", err)
 		return
 	}
+
+	metrics.RecordStreamConnected("websocket")
+	defer metrics.RecordStreamDisconnected("websocket")
 
 	client := &wsConnection{
 		handler:       h,

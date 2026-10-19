@@ -12,6 +12,7 @@ import (
 
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc/status"
 )
 
@@ -103,6 +104,9 @@ func NewHTTPServer(
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"status":"READY"}`)
 	})
+
+	// Prometheus metrics endpoint
+	rootMux.Handle("GET /metrics", promhttp.Handler())
 
 	// Server-Sent Events (SSE) streaming endpoint
 	sseHandler := NewSSEHandler(service, logger)

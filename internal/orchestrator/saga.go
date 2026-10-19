@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gargi-indic/gargi-ckg/internal/metrics"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 	"go.temporal.io/sdk/workflow"
 )
@@ -103,6 +104,7 @@ func (s *SagaCoordinator) ExecuteCompensation(
 
 		statusCompensated := engine.StatusCompensated
 		if actErr != nil {
+			metrics.RecordCompensation("failure")
 			errMsg := actErr.Error()
 			state, _ = state.Apply(engine.StateMutation{
 				NodeID:          rec.NodeID,
@@ -112,6 +114,7 @@ func (s *SagaCoordinator) ExecuteCompensation(
 			})
 			compErrors = append(compErrors, fmt.Errorf("compensation %q for node %q failed: %w", rec.Compensation, rec.NodeID, actErr))
 		} else {
+			metrics.RecordCompensation("success")
 			mut := engine.StateMutation{
 				NodeID:          rec.NodeID,
 				ExpectedVersion: state.Version(),

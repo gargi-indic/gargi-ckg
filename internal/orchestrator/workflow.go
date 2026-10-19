@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gargi-indic/gargi-ckg/internal/metrics"
 	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/reactive"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
@@ -97,8 +98,18 @@ func (r *WorkflowRunner) GraphExecutionWorkflow(
 		execID = engine.ExecutionID(workflow.GetInfo(ctx).WorkflowExecution.ID)
 	}
 
+	startTime := workflow.Now(ctx)
+	if !workflow.IsReplaying(ctx) {
+		metrics.RecordExecutionStarted(string(input.Definition.ID))
+	}
+
 	signalRouter := NewSignalRouter()
 	var state *engine.GraphState
+	defer func() {
+		if !workflow.IsReplaying(ctx) && state != nil {
+			metrics.RecordExecutionCompleted(string(state.Status()), workflow.Now(ctx).Sub(startTime))
+		}
+	}()
 	if err := RegisterWorkflowQueries(ctx, func() *engine.GraphState { return state }); err != nil {
 		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("failed to register queries: %v", err), "InternalError", err)
 	}

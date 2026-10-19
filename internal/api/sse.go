@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gargi-indic/gargi-ckg/internal/metrics"
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
 	"google.golang.org/grpc/metadata"
 )
@@ -135,6 +136,9 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+
+	metrics.RecordStreamConnected("sse")
+	defer metrics.RecordStreamDisconnected("sse")
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gargi-indic/gargi-ckg/internal/api"
@@ -97,6 +98,22 @@ func TestHTTP_OpenAPIAndHealth(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		if string(body) != `{"status":"READY"}` {
 			t.Errorf("unexpected body: %s", string(body))
+		}
+	})
+
+	t.Run("GET /metrics", func(t *testing.T) {
+		resp, err := http.Get(ts.URL + "/metrics")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected status 200, got %d", resp.StatusCode)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		if !strings.Contains(string(body), "gargi_") && !strings.Contains(string(body), "promhttp_") {
+			t.Errorf("expected prometheus metrics in response, got: %s", string(body))
 		}
 	})
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"github.com/gargi-indic/gargi-ckg/internal/graph"
+	"github.com/gargi-indic/gargi-ckg/internal/metrics"
 	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
@@ -326,6 +327,9 @@ func (s *Server) StreamExecutionUpdates(
 	if req == nil || req.GetExecutionId() == "" {
 		return status.Error(codes.InvalidArgument, "execution_id is required")
 	}
+
+	metrics.RecordStreamConnected("grpc")
+	defer metrics.RecordStreamDisconnected("grpc")
 
 	ctx := stream.Context()
 	return s.bridge.Stream(ctx, req, stream)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gargi-indic/gargi-ckg/internal/logging"
+	"github.com/gargi-indic/gargi-ckg/internal/metrics"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -102,10 +103,20 @@ func deepCopyMap(m map[string]any) map[string]any {
 func (a *NodeActivities) ExecuteNodeActivity(
 	ctx context.Context,
 	input NodeActivityInput,
-) (*NodeActivityResult, error) {
+) (res *NodeActivityResult, retErr error) {
 	if a == nil || a.registry == nil {
 		return nil, engine.NewNonRetryableError(fmt.Errorf("NodeActivities is not initialized"))
 	}
+
+	startTime := time.Now()
+	defer func() {
+		duration := time.Since(startTime)
+		if retErr != nil {
+			metrics.RecordNodeExecution(input.NodeType, "failed", duration)
+		} else {
+			metrics.RecordNodeExecution(input.NodeType, "succeeded", duration)
+		}
+	}()
 
 	instance, err := a.registry.Instantiate(input.NodeType, input.Config)
 	if err != nil {
@@ -126,6 +137,9 @@ func (a *NodeActivities) ExecuteNodeActivity(
 	ctx = logging.WithCorrelation(ctx, string(input.ExecutionID), string(input.NodeID), wfID, runID)
 	if attempt <= 0 {
 		attempt = 1
+	}
+	if attempt > 1 {
+		metrics.RecordNodeRetry(input.NodeType)
 	}
 
 	tr := otel.GetTracerProvider().Tracer("gargi-ckg")

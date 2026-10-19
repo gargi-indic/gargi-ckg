@@ -107,6 +107,11 @@ func NewHTTPServer(
 	sseHandler := NewSSEHandler(service, logger)
 	rootMux.Handle("GET /v1/executions/{id}/events", sseHandler)
 
+	// WebSocket streaming endpoints
+	wsHandler := NewWebSocketHandler(service, logger)
+	rootMux.Handle("GET /v1/ws", wsHandler)
+	rootMux.Handle("GET /v1/executions/{id}/ws", wsHandler)
+
 	// Mount gRPC-Gateway router
 	rootMux.Handle("/", gwMux)
 

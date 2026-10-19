@@ -12,8 +12,11 @@ import (
 	"syscall"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	"github.com/gargi-indic/gargi-ckg/internal/store"
+	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.temporal.io/sdk/activity"
 )
 
 func main() {
@@ -67,8 +70,23 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	}
 	defer temporalClient.Close()
 
+	reg := engine.NewRegistry()
+	if err := nodes.RegisterDefaults(reg, nodes.Dependencies{
+		Signals: orchestrator.NewTemporalSignalSource(),
+	}); err != nil {
+		return fmt.Errorf("registering default nodes: %w", err)
+	}
+
+	na := orchestrator.NewNodeActivities(reg)
+	sa := orchestrator.NewStateActivities(st)
+
 	wm := orchestrator.NewWorkerManager(temporalClient, cfg.Temporal, logger)
-	wm.RegisterActivity(orchestrator.NewStateActivities(st))
+	wm.RegisterWorkflow(orchestrator.GraphExecutionWorkflow)
+	wm.RegisterActivity(sa.PersistStateActivity)
+	wm.RegisterActivity(sa.WriteStateActivity)
+	wm.RegisterActivityWithOptions(na.ExecuteNodeActivity, activity.RegisterOptions{
+		Name: orchestrator.ExecuteNodeActivityName,
+	})
 
 	return wm.Run(ctx)
 }

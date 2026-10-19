@@ -6,8 +6,10 @@ import (
 	"log/slog"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
+	"go.temporal.io/sdk/workflow"
 )
 
 // WorkerManager oversees workflow and activity workers with configurable task queues.
@@ -69,9 +71,19 @@ func (m *WorkerManager) RegisterWorkflow(w any) {
 	m.workflowWorker.RegisterWorkflow(w)
 }
 
+// RegisterWorkflowWithOptions registers a workflow function with options.
+func (m *WorkerManager) RegisterWorkflowWithOptions(w any, options workflow.RegisterOptions) {
+	m.workflowWorker.RegisterWorkflowWithOptions(w, options)
+}
+
 // RegisterActivity registers an activity struct or function with the activity worker.
 func (m *WorkerManager) RegisterActivity(a any) {
 	m.activityWorker.RegisterActivity(a)
+}
+
+// RegisterActivityWithOptions registers an activity struct or function with options.
+func (m *WorkerManager) RegisterActivityWithOptions(a any, options activity.RegisterOptions) {
+	m.activityWorker.RegisterActivityWithOptions(a, options)
 }
 
 // Start non-blockingly starts the underlying worker(s).

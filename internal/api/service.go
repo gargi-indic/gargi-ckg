@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"github.com/gargi-indic/gargi-ckg/internal/graph"
@@ -27,6 +26,7 @@ type Server struct {
 	store          engine.StateStore
 	logger         *slog.Logger
 	parser         *graph.Parser
+	bridge         *FanoutBridge
 }
 
 // NewServer creates a new GargiServiceServer instance.
@@ -45,6 +45,7 @@ func NewServer(
 		store:          st,
 		logger:         logger,
 		parser:         graph.NewParser(),
+		bridge:         NewFanoutBridge(st, logger),
 	}
 }
 
@@ -207,7 +208,7 @@ func (s *Server) SignalNode(ctx context.Context, req *gargiv1.SignalNodeRequest)
 	}, nil
 }
 
-// StreamExecutionUpdates streams execution updates to subscribers.
+// StreamExecutionUpdates streams execution updates to subscribers using the fan-out bridge.
 func (s *Server) StreamExecutionUpdates(
 	req *gargiv1.StreamExecutionUpdatesRequest,
 	stream gargiv1.GargiService_StreamExecutionUpdatesServer,
@@ -217,93 +218,7 @@ func (s *Server) StreamExecutionUpdates(
 	}
 
 	ctx := stream.Context()
-	execID := engine.ExecutionID(req.GetExecutionId())
-	seq := req.GetFromSequence()
-
-	// If execution log capability exists on store, replay any existing logs first
-	if logStore, ok := s.store.(engine.ExecutionLog); ok {
-		logs, err := logStore.GetLogs(ctx, execID, seq, 100)
-		if err == nil {
-			for _, entry := range logs {
-				if err := stream.Send(&gargiv1.StreamExecutionUpdatesResponse{
-					ExecutionId:  string(entry.ExecutionID),
-					Sequence:     entry.Sequence,
-					Timestamp:    timestamppb.New(entry.Timestamp),
-					EventType:    entry.Message,
-					ErrorMessage: "",
-				}); err != nil {
-					return err
-				}
-				if entry.Sequence >= seq {
-					seq = entry.Sequence + 1
-				}
-			}
-		}
-	}
-
-	// Poll/stream state transitions until execution terminates or client disconnects
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	lastStatuses := make(map[engine.NodeID]engine.Status)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			st, err := orchestrator.FetchStateWithFallback(ctx, s.store, s.temporalClient, string(execID), "")
-			if err != nil {
-				continue
-			}
-
-			// Stream any node state transitions detected
-			for _, nodeState := range st.NodeStates() {
-				nodeID := nodeState.NodeID()
-				currStatus := nodeState.Status()
-				prevStatus, exists := lastStatuses[nodeID]
-
-				if !exists || currStatus != prevStatus {
-					lastStatuses[nodeID] = currStatus
-					seq++
-
-					var outVal *structpb.Value
-					if outMap := nodeState.Output(); len(outMap) > 0 {
-						outVal, _ = structpb.NewValue(outMap)
-					}
-
-					resp := &gargiv1.StreamExecutionUpdatesResponse{
-						ExecutionId:  string(execID),
-						Sequence:     seq,
-						Timestamp:    timestamppb.Now(),
-						EventType:    "node_status_change",
-						NodeId:       string(nodeID),
-						FromStatus:   toPBNodeStatus(prevStatus),
-						ToStatus:     toPBNodeStatus(currStatus),
-						Payload:      outVal,
-						ErrorMessage: nodeState.ErrorMessage(),
-					}
-
-					if err := stream.Send(resp); err != nil {
-						return err
-					}
-				}
-			}
-
-			if st.Status().IsTerminal() {
-				// Stream final terminal execution event and finish
-				seq++
-				_ = stream.Send(&gargiv1.StreamExecutionUpdatesResponse{
-					ExecutionId: string(execID),
-					Sequence:    seq,
-					Timestamp:   timestamppb.Now(),
-					EventType:   "execution_completed",
-					ToStatus:    toPBNodeStatus(st.Status()),
-				})
-				return nil
-			}
-		}
-	}
+	return s.bridge.Stream(ctx, req, stream)
 }
 
 // Helpers for model conversion.

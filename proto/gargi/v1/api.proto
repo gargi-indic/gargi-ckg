@@ -1,0 +1,189 @@
+syntax = "proto3";
+
+package gargi.v1;
+
+option go_package = "github.com/gargi-indic/gargi-ckg/pkg/api/v1;gargiv1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// ExecutionStatus represents the lifecycle state of a graph execution.
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_PENDING = 1;
+  EXECUTION_STATUS_RUNNING = 2;
+  EXECUTION_STATUS_SUCCEEDED = 3;
+  EXECUTION_STATUS_FAILED = 4;
+  EXECUTION_STATUS_CANCELLED = 5;
+}
+
+// NodeStatus represents the state of an individual node in the graph.
+enum NodeStatus {
+  NODE_STATUS_UNSPECIFIED = 0;
+  NODE_STATUS_PENDING = 1;
+  NODE_STATUS_READY = 2;
+  NODE_STATUS_RUNNING = 3;
+  NODE_STATUS_SUCCEEDED = 4;
+  NODE_STATUS_FAILED = 5;
+  NODE_STATUS_SKIPPED = 6;
+  NODE_STATUS_COMPENSATING = 7;
+  NODE_STATUS_COMPENSATED = 8;
+}
+
+// NodeStateDetail describes the current snapshot state of an individual graph node.
+message NodeStateDetail {
+  string node_id = 1;
+  NodeStatus status = 2;
+  google.protobuf.Value output = 3;
+  string error_message = 4;
+  uint32 attempt = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  map<string, string> metadata = 8;
+}
+
+// SubmitExecutionRequest defines the payload for submitting a graph execution.
+message SubmitExecutionRequest {
+  // Graph definition as JSON or YAML string.
+  string graph_definition = 1;
+
+  // Optional idempotency key / custom execution ID.
+  string execution_id = 2;
+
+  // Initial input variables for the graph execution.
+  google.protobuf.Struct inputs = 3;
+
+  // Metadata associated with this execution.
+  map<string, string> metadata = 4;
+}
+
+// SubmitExecutionResponse defines the response after submitting an execution.
+message SubmitExecutionResponse {
+  string execution_id = 1;
+  ExecutionStatus status = 2;
+  google.protobuf.Timestamp started_at = 3;
+}
+
+// GetExecutionRequest queries the state of a graph execution.
+message GetExecutionRequest {
+  string execution_id = 1;
+}
+
+// GetExecutionResponse contains the full execution snapshot.
+message GetExecutionResponse {
+  string execution_id = 1;
+  ExecutionStatus status = 2;
+  uint64 version = 3;
+  map<string, NodeStateDetail> node_states = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  string error_message = 7;
+  map<string, string> metadata = 8;
+}
+
+// GetNodeStateRequest queries an individual node's state.
+message GetNodeStateRequest {
+  string execution_id = 1;
+  string node_id = 2;
+}
+
+// GetNodeStateResponse contains the state of the queried node.
+message GetNodeStateResponse {
+  string execution_id = 1;
+  NodeStateDetail node_state = 2;
+}
+
+// CancelExecutionRequest requests cancellation of an execution.
+message CancelExecutionRequest {
+  string execution_id = 1;
+  string reason = 2;
+}
+
+// CancelExecutionResponse returns the updated status.
+message CancelExecutionResponse {
+  string execution_id = 1;
+  ExecutionStatus status = 2;
+  google.protobuf.Timestamp cancelled_at = 3;
+}
+
+// SignalNodeRequest delivers an external event or signal to a waiting node.
+message SignalNodeRequest {
+  string execution_id = 1;
+  string node_id = 2;
+  string signal_name = 3;
+  google.protobuf.Value payload = 4;
+}
+
+// SignalNodeResponse acknowledges receipt of the signal.
+message SignalNodeResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+// StreamExecutionUpdatesRequest subscribes to execution updates.
+message StreamExecutionUpdatesRequest {
+  string execution_id = 1;
+  uint64 from_sequence = 2;
+}
+
+// StreamExecutionUpdatesResponse represents an event streamed to subscribers.
+message StreamExecutionUpdatesResponse {
+  string execution_id = 1;
+  uint64 sequence = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  string event_type = 4;
+  string node_id = 5;
+  NodeStatus from_status = 6;
+  NodeStatus to_status = 7;
+  google.protobuf.Value payload = 8;
+  string error_message = 9;
+}
+
+// GargiService exposes execution lifecycle management over gRPC and REST.
+service GargiService {
+  // SubmitExecution submits a new graph definition for asynchronous execution.
+  rpc SubmitExecution(SubmitExecutionRequest) returns (SubmitExecutionResponse) {
+    option (google.api.http) = {
+      post: "/v1/executions"
+      body: "*"
+    };
+  }
+
+  // GetExecution queries the state of a graph execution.
+  rpc GetExecution(GetExecutionRequest) returns (GetExecutionResponse) {
+    option (google.api.http) = {
+      get: "/v1/executions/{execution_id}"
+    };
+  }
+
+  // GetNodeState queries the execution state of an individual node in the graph.
+  rpc GetNodeState(GetNodeStateRequest) returns (GetNodeStateResponse) {
+    option (google.api.http) = {
+      get: "/v1/executions/{execution_id}/nodes/{node_id}"
+    };
+  }
+
+  // CancelExecution cancels an in-flight graph execution.
+  rpc CancelExecution(CancelExecutionRequest) returns (CancelExecutionResponse) {
+    option (google.api.http) = {
+      post: "/v1/executions/{execution_id}/cancel"
+      body: "*"
+    };
+  }
+
+  // SignalNode delivers an external event or signal to a node.
+  rpc SignalNode(SignalNodeRequest) returns (SignalNodeResponse) {
+    option (google.api.http) = {
+      post: "/v1/executions/{execution_id}/nodes/{node_id}/signal"
+      body: "*"
+    };
+  }
+
+  // StreamExecutionUpdates opens a server-streaming channel for reactive execution events.
+  rpc StreamExecutionUpdates(StreamExecutionUpdatesRequest) returns (stream StreamExecutionUpdatesResponse) {
+    option (google.api.http) = {
+      get: "/v1/executions/{execution_id}/stream"
+    };
+  }
+}

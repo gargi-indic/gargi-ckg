@@ -38,6 +38,10 @@ jobs:
       - name: Run tools, lint, test, build
         run: make tools lint test build
 
+      - name: Buf Breaking Change Check
+        run: make buf-breaking
+        if: github.event_name == 'pull_request'
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest

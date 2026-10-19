@@ -72,3 +72,7 @@ up:
 
 down:
 	docker compose -f $(COMPOSE_FILE) down
+
+docker-build:
+	docker build -t gargi-server:latest -f Dockerfile.server .
+	docker build -t gargi-worker:latest -f Dockerfile.worker .

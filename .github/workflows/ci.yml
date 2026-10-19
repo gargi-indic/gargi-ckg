@@ -58,3 +58,29 @@ jobs:
       # Note: Service containers or testcontainers-go will be used here when integration tests are added
       - name: Run integration tests
         run: make test-integration
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.server
+          push: false
+          tags: gargi-server:ci
+
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.worker
+          push: false
+          tags: gargi-worker:ci

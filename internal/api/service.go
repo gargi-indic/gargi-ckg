@@ -60,6 +60,78 @@ func NewServer(
 	}
 }
 
+// HealthStatus represents the health check report for the server dependencies.
+type HealthStatus struct {
+	Status string            `json:"status"`
+	Checks map[string]string `json:"checks"`
+	Errors map[string]string `json:"errors,omitempty"`
+}
+
+// CheckLiveness performs a basic liveness check ensuring the process is running.
+func (s *Server) CheckLiveness(ctx context.Context) HealthStatus {
+	return HealthStatus{
+		Status: "SERVING",
+		Checks: map[string]string{
+			"server": "UP",
+		},
+	}
+}
+
+// CheckReadiness checks connectivity to downstream dependencies (Temporal and StateStore).
+func (s *Server) CheckReadiness(ctx context.Context) (HealthStatus, bool) {
+	checks := make(map[string]string)
+	errs := make(map[string]string)
+	ready := true
+
+	// Check StateStore connectivity
+	if s.store != nil {
+		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, err := s.store.GetState(probeCtx, "healthcheck-probe")
+		cancel()
+		if err != nil && !engine.IsStoreNotFound(err) && !errors.Is(err, engine.ErrStoreNotFound) {
+			checks["store"] = "DOWN"
+			errs["store"] = err.Error()
+			ready = false
+		} else {
+			checks["store"] = "UP"
+		}
+	} else {
+		checks["store"] = "UP"
+	}
+
+	// Check Temporal connectivity
+	if s.temporalClient != nil {
+		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, err := s.temporalClient.CheckHealth(probeCtx, &client.CheckHealthRequest{})
+		cancel()
+		if err != nil {
+			checks["temporal"] = "DOWN"
+			errs["temporal"] = err.Error()
+			ready = false
+		} else {
+			checks["temporal"] = "UP"
+		}
+	} else {
+		// Degraded mode without Temporal client
+		checks["temporal"] = "DEGRADED"
+	}
+
+	overallStatus := "READY"
+	if !ready {
+		overallStatus = "NOT_READY"
+	}
+
+	res := HealthStatus{
+		Status: overallStatus,
+		Checks: checks,
+	}
+	if len(errs) > 0 {
+		res.Errors = errs
+	}
+
+	return res, ready
+}
+
 // SubmitExecution submits a new graph definition for asynchronous execution.
 func (s *Server) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecutionRequest) (*gargiv1.SubmitExecutionResponse, error) {
 	if req == nil || req.GetGraphDefinition() == "" {

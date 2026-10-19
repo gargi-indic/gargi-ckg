@@ -80,7 +80,7 @@ func TestHTTP_OpenAPIAndHealth(t *testing.T) {
 			t.Errorf("expected status 200, got %d", resp.StatusCode)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		if string(body) != `{"status":"SERVING"}` {
+		if !strings.Contains(string(body), "SERVING") {
 			t.Errorf("unexpected body: %s", string(body))
 		}
 	})
@@ -96,7 +96,7 @@ func TestHTTP_OpenAPIAndHealth(t *testing.T) {
 			t.Errorf("expected status 200, got %d", resp.StatusCode)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		if string(body) != `{"status":"READY"}` {
+		if !strings.Contains(string(body), "READY") {
 			t.Errorf("unexpected body: %s", string(body))
 		}
 	})

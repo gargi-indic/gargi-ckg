@@ -91,6 +91,51 @@ services:
       retries: 5
       start_period: 30s
 
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: gargi-server:latest
+    depends_on:
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - GARGI_STORE_DRIVER=redis
+      - GARGI_STORE_REDIS_ADDR=redis:6379
+      - GARGI_TEMPORAL_HOST_PORT=temporal:7233
+      - GARGI_SERVER_HTTP_ADDRESS=:8080
+      - GARGI_SERVER_GRPC_ADDRESS=:9090
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: gargi-worker:latest
+    depends_on:
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - GARGI_STORE_DRIVER=redis
+      - GARGI_STORE_REDIS_ADDR=redis:6379
+      - GARGI_TEMPORAL_HOST_PORT=temporal:7233
+
 volumes:
   postgres-data:
   redis-data:

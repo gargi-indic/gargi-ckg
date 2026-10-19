@@ -96,11 +96,26 @@ func NewHTTPServer(
 	// Liveness and readiness probes
 	rootMux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if srv, ok := service.(*Server); ok {
+			status := srv.CheckLiveness(r.Context())
+			_ = json.NewEncoder(w).Encode(status)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"status":"SERVING"}`)
 	})
 	rootMux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if srv, ok := service.(*Server); ok {
+			status, ready := srv.CheckReadiness(r.Context())
+			if !ready {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+			_ = json.NewEncoder(w).Encode(status)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"status":"READY"}`)
 	})

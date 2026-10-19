@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRun_Server(t *testing.T) {
@@ -35,7 +36,7 @@ func TestRun_Server(t *testing.T) {
 		}
 	})
 
-	t.Run("successful initialization with memory store", func(t *testing.T) {
+	t.Run("successful initialization with memory store and graceful shutdown", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfgFile := filepath.Join(tmpDir, "config.yaml")
 		yamlContent := `
@@ -47,12 +48,15 @@ temporal:
   task_queue: gargi_tasks
 server:
   http_address: :8080
-  grpc_address: :9090
+  grpc_address: 127.0.0.1:0
 `
 		_ = os.WriteFile(cfgFile, []byte(yamlContent), 0o644)
 
 		var stdout bytes.Buffer
-		err := run(context.Background(), []string{"-config", cfgFile}, os.LookupEnv, &stdout, &bytes.Buffer{})
+		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		defer cancel()
+
+		err := run(ctx, []string{"-config", cfgFile}, os.LookupEnv, &stdout, &bytes.Buffer{})
 		if err != nil {
 			t.Fatalf("expected success, got error: %v", err)
 		}

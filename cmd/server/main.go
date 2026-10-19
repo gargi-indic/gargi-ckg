@@ -7,14 +7,23 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/gargi-indic/gargi-ckg/internal/api"
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	"github.com/gargi-indic/gargi-ckg/internal/store"
+	"go.temporal.io/sdk/client"
 )
 
 func main() {
-	if err := run(context.Background(), os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := run(ctx, os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "server failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -47,7 +56,7 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	}
 
 	logger := slog.New(slog.NewTextHandler(stdout, nil))
-	logger.Info("Starting server", "store_driver", cfg.Store.Driver)
+	logger.Info("Starting server", "store_driver", cfg.Store.Driver, "grpc_addr", cfg.Server.GRPCAddress)
 
 	st, err := store.New(ctx, cfg.Store)
 	if err != nil {
@@ -55,9 +64,32 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	}
 	defer st.Close()
 
-	_ = st // StateStore available for API server handlers
+	var temporalClient client.Client
+	if tc, err := orchestrator.NewClient(cfg.Temporal, logger); err == nil {
+		temporalClient = tc
+		defer temporalClient.Close()
+	} else {
+		logger.Warn("Temporal client unavailable; running in degraded mode", "error", err)
+	}
 
-	// TODO(API Epic): Instantiate and start the API Server and Transport using cfg.Server and cfg.Temporal
+	grpcServer := api.NewGRPCServer(temporalClient, cfg.Temporal, st, logger)
 
-	return nil
+	lis, err := net.Listen("tcp", cfg.Server.GRPCAddress)
+	if err != nil {
+		return fmt.Errorf("listening on gRPC address %s: %w", cfg.Server.GRPCAddress, err)
+	}
+	defer lis.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- grpcServer.Serve(lis)
+	}()
+
+	select {
+	case <-ctx.Done():
+		grpcServer.GracefulStop()
+		return nil
+	case err := <-errCh:
+		return err
+	}
 }

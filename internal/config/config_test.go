@@ -374,3 +374,138 @@ func TestValidateBuildID(t *testing.T) {
 		t.Errorf("expected missing build_id error, got: %v", err)
 	}
 }
+
+func TestLoad_CapabilitiesYAML(t *testing.T) {
+	yamlContent := `
+store:
+  capabilities:
+    state: redis
+    lock: redis
+    events: redis
+    execution_log: postgres
+  redis:
+    addr: localhost:6379
+  postgres:
+    dsn: postgres://user:pass@localhost:5432/db
+temporal:
+  host_port: localhost:7233
+  namespace: default
+  task_queue: main_queue
+server:
+  http_address: :8080
+  grpc_address: :9090
+`
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(yamlContent), 0o644); err != nil {
+		t.Fatalf("failed to write test config file: %v", err)
+	}
+
+	cfg, err := Load(configFile)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if cfg.Store.EffectiveStateDriver() != "redis" {
+		t.Errorf("expected effective state driver 'redis', got '%s'", cfg.Store.EffectiveStateDriver())
+	}
+	if cfg.Store.EffectiveLockDriver() != "redis" {
+		t.Errorf("expected effective lock driver 'redis', got '%s'", cfg.Store.EffectiveLockDriver())
+	}
+	if cfg.Store.EffectiveEventsDriver() != "redis" {
+		t.Errorf("expected effective events driver 'redis', got '%s'", cfg.Store.EffectiveEventsDriver())
+	}
+	if cfg.Store.EffectiveExecutionLogDriver() != "postgres" {
+		t.Errorf("expected effective log driver 'postgres', got '%s'", cfg.Store.EffectiveExecutionLogDriver())
+	}
+
+	drivers := cfg.Store.DriversInUse()
+	if len(drivers) != 2 || drivers[0] != "redis" || drivers[1] != "postgres" {
+		t.Errorf("unexpected drivers in use: %v", drivers)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid config, got error: %v", err)
+	}
+}
+
+func TestLoad_CapabilitiesEnvOverrides(t *testing.T) {
+	t.Setenv("GARGI_STORE_CAPABILITIES_STATE", "redis")
+	t.Setenv("GARGI_STORE_CAPABILITIES_EXECUTION_LOG", "postgres")
+	t.Setenv("GARGI_STORE_REDIS_ADDR", "redis.local:6379")
+	t.Setenv("GARGI_STORE_POSTGRES_DSN", "postgres://localhost:5432/test")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("failed to load default config: %v", err)
+	}
+
+	if cfg.Store.Capabilities.State != "redis" {
+		t.Errorf("expected state driver 'redis', got '%s'", cfg.Store.Capabilities.State)
+	}
+	if cfg.Store.Capabilities.ExecutionLog != "postgres" {
+		t.Errorf("expected log driver 'postgres', got '%s'", cfg.Store.Capabilities.ExecutionLog)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected config to validate, got: %v", err)
+	}
+}
+
+func TestValidate_CapabilitiesFailFast(t *testing.T) {
+	baseCfg := func() Config {
+		return Config{
+			Temporal: TemporalConfig{HostPort: "h", Namespace: "n", TaskQueue: "t"},
+			Server:   ServerConfig{HTTPAddress: "h", GRPCAddress: "g"},
+		}
+	}
+
+	t.Run("neo4j for lock capability", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Capabilities.Lock = "neo4j"
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "neo4j does not support capability 'lock'") {
+			t.Fatalf("expected neo4j lock capability error, got: %v", err)
+		}
+	})
+
+	t.Run("neo4j for events capability", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Capabilities.Events = "neo4j"
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "neo4j does not support capability 'events'") {
+			t.Fatalf("expected neo4j events capability error, got: %v", err)
+		}
+	})
+
+	t.Run("invalid capability driver", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Capabilities.State = "cassandra"
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "invalid store state capability driver: cassandra") {
+			t.Fatalf("expected invalid capability driver error, got: %v", err)
+		}
+	})
+
+	t.Run("composite missing redis addr", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Capabilities.State = "redis"
+		cfg.Store.Capabilities.ExecutionLog = "postgres"
+		cfg.Store.Postgres = &PostgresConfig{DSN: "postgres://..."}
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "redis configuration requires addr") {
+			t.Fatalf("expected redis addr error, got: %v", err)
+		}
+	})
+
+	t.Run("composite missing postgres dsn", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Capabilities.State = "redis"
+		cfg.Store.Capabilities.ExecutionLog = "postgres"
+		cfg.Store.Redis = &RedisConfig{Addr: "localhost:6379"}
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "postgres configuration requires dsn") {
+			t.Fatalf("expected postgres dsn error, got: %v", err)
+		}
+	})
+}
+

@@ -1,6 +1,12 @@
 store:
-  # Allowed values: memory, redis, postgres, neo4j
+  # Allowed values for driver: memory, redis, postgres, neo4j
   driver: memory
+  # Optional capability-based composition (combining adapters, e.g. redis for state + postgres for audit log):
+  # capabilities:
+  #   state: redis
+  #   lock: redis
+  #   events: redis
+  #   execution_log: postgres
   # redis:
   #   addr: "localhost:6379"
   # postgres:

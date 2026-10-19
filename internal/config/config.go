@@ -11,12 +11,88 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// StoreCapabilitiesConfig specifies adapter selection per capability.
+type StoreCapabilitiesConfig struct {
+	State        string `yaml:"state,omitempty"`
+	Lock         string `yaml:"lock,omitempty"`
+	Events       string `yaml:"events,omitempty"`
+	ExecutionLog string `yaml:"execution_log,omitempty"`
+}
+
 // StoreConfig holds the configuration for the storage adapter.
 type StoreConfig struct {
-	Driver   string          `yaml:"driver"`
-	Redis    *RedisConfig    `yaml:"redis,omitempty"`
-	Postgres *PostgresConfig `yaml:"postgres,omitempty"`
-	Neo4j    *Neo4jConfig    `yaml:"neo4j,omitempty"`
+	Driver       string                  `yaml:"driver"`
+	Capabilities StoreCapabilitiesConfig `yaml:"capabilities,omitempty"`
+	Redis        *RedisConfig            `yaml:"redis,omitempty"`
+	Postgres     *PostgresConfig         `yaml:"postgres,omitempty"`
+	Neo4j        *Neo4jConfig            `yaml:"neo4j,omitempty"`
+}
+
+// EffectiveStateDriver returns the driver configured for state persistence.
+// Falls back to Driver if not explicitly configured in Capabilities.
+func (s StoreConfig) EffectiveStateDriver() string {
+	if s.Capabilities.State != "" {
+		return s.Capabilities.State
+	}
+	if s.Driver != "" {
+		return s.Driver
+	}
+	return "memory"
+}
+
+// EffectiveLockDriver returns the driver configured for distributed locks.
+// Falls back to Driver if not explicitly configured and Driver supports locking.
+func (s StoreConfig) EffectiveLockDriver() string {
+	if s.Capabilities.Lock != "" {
+		return s.Capabilities.Lock
+	}
+	// neo4j does not implement LockManager, so don't default lock to neo4j
+	if s.Driver == "neo4j" {
+		return ""
+	}
+	return s.Driver
+}
+
+// EffectiveEventsDriver returns the driver configured for event publishing.
+// Falls back to Driver if not explicitly configured and Driver supports events.
+func (s StoreConfig) EffectiveEventsDriver() string {
+	if s.Capabilities.Events != "" {
+		return s.Capabilities.Events
+	}
+	// neo4j does not implement EventPublisher, so don't default events to neo4j
+	if s.Driver == "neo4j" {
+		return ""
+	}
+	return s.Driver
+}
+
+// EffectiveExecutionLogDriver returns the driver configured for execution audit logging.
+// Falls back to Driver if not explicitly configured.
+func (s StoreConfig) EffectiveExecutionLogDriver() string {
+	if s.Capabilities.ExecutionLog != "" {
+		return s.Capabilities.ExecutionLog
+	}
+	return s.Driver
+}
+
+// DriversInUse returns a deduplicated list of drivers required across all configured capabilities.
+func (s StoreConfig) DriversInUse() []string {
+	seen := make(map[string]bool)
+	var drivers []string
+
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			drivers = append(drivers, d)
+		}
+	}
+
+	add(s.EffectiveStateDriver())
+	add(s.EffectiveLockDriver())
+	add(s.EffectiveEventsDriver())
+	add(s.EffectiveExecutionLogDriver())
+
+	return drivers
 }
 
 // RedisConfig holds connection settings for Redis.
@@ -163,6 +239,27 @@ func applyEnvOverrides(cfg *Config) {
 		cfg.Store.Neo4j.Password = val
 	}
 
+	if val, ok := os.LookupEnv("GARGI_STORE_CAPABILITIES_STATE"); ok {
+		cfg.Store.Capabilities.State = val
+	} else if val, ok := os.LookupEnv("GARGI_STORE_STATE_DRIVER"); ok {
+		cfg.Store.Capabilities.State = val
+	}
+	if val, ok := os.LookupEnv("GARGI_STORE_CAPABILITIES_LOCK"); ok {
+		cfg.Store.Capabilities.Lock = val
+	} else if val, ok := os.LookupEnv("GARGI_STORE_LOCK_DRIVER"); ok {
+		cfg.Store.Capabilities.Lock = val
+	}
+	if val, ok := os.LookupEnv("GARGI_STORE_CAPABILITIES_EVENTS"); ok {
+		cfg.Store.Capabilities.Events = val
+	} else if val, ok := os.LookupEnv("GARGI_STORE_EVENTS_DRIVER"); ok {
+		cfg.Store.Capabilities.Events = val
+	}
+	if val, ok := os.LookupEnv("GARGI_STORE_CAPABILITIES_EXECUTION_LOG"); ok {
+		cfg.Store.Capabilities.ExecutionLog = val
+	} else if val, ok := os.LookupEnv("GARGI_STORE_EXECUTION_LOG_DRIVER"); ok {
+		cfg.Store.Capabilities.ExecutionLog = val
+	}
+
 	if val, ok := os.LookupEnv("GARGI_TEMPORAL_HOST_PORT"); ok {
 		cfg.Temporal.HostPort = val
 	}
@@ -220,24 +317,72 @@ func applyEnvOverrides(cfg *Config) {
 // Validate checks the configuration for required fields and valid options.
 func (c *Config) Validate() error {
 	driver := c.Store.Driver
+	if driver != "" {
+		switch driver {
+		case "memory", "redis", "postgres", "neo4j":
+			// valid
+		default:
+			return fmt.Errorf("invalid store driver: %s. Allowed values: memory, redis, postgres, neo4j", c.Store.Driver)
+		}
+	}
 
-	switch driver {
-	case "memory":
+	stateDriver := c.Store.EffectiveStateDriver()
+	switch stateDriver {
+	case "memory", "redis", "postgres", "neo4j":
 		// valid
-	case "redis":
-		if c.Store.Redis == nil || c.Store.Redis.Addr == "" {
-			return errors.New("redis configuration requires addr")
-		}
-	case "postgres":
-		if c.Store.Postgres == nil || c.Store.Postgres.DSN == "" {
-			return errors.New("postgres configuration requires dsn")
-		}
-	case "neo4j":
-		if c.Store.Neo4j == nil || c.Store.Neo4j.URI == "" || c.Store.Neo4j.User == "" || c.Store.Neo4j.Password == "" {
-			return errors.New("neo4j configuration requires uri, user, and password")
-		}
 	default:
-		return fmt.Errorf("invalid store driver: %s. Allowed values: memory, redis, postgres, neo4j", c.Store.Driver)
+		return fmt.Errorf("invalid store state capability driver: %s. Allowed values: memory, redis, postgres, neo4j", stateDriver)
+	}
+
+	lockDriver := c.Store.EffectiveLockDriver()
+	if lockDriver != "" {
+		switch lockDriver {
+		case "memory", "redis", "postgres":
+			// valid
+		case "neo4j":
+			return errors.New("neo4j does not support capability 'lock' (allowed: memory, redis, postgres)")
+		default:
+			return fmt.Errorf("invalid store lock capability driver: %s. Allowed values: memory, redis, postgres", lockDriver)
+		}
+	}
+
+	eventsDriver := c.Store.EffectiveEventsDriver()
+	if eventsDriver != "" {
+		switch eventsDriver {
+		case "memory", "redis", "postgres":
+			// valid
+		case "neo4j":
+			return errors.New("neo4j does not support capability 'events' (allowed: memory, redis, postgres)")
+		default:
+			return fmt.Errorf("invalid store events capability driver: %s. Allowed values: memory, redis, postgres", eventsDriver)
+		}
+	}
+
+	logDriver := c.Store.EffectiveExecutionLogDriver()
+	if logDriver != "" {
+		switch logDriver {
+		case "memory", "redis", "postgres", "neo4j":
+			// valid
+		default:
+			return fmt.Errorf("invalid store execution_log capability driver: %s. Allowed values: memory, redis, postgres, neo4j", logDriver)
+		}
+	}
+
+	for _, d := range c.Store.DriversInUse() {
+		switch d {
+		case "redis":
+			if c.Store.Redis == nil || c.Store.Redis.Addr == "" {
+				return errors.New("redis configuration requires addr")
+			}
+		case "postgres":
+			if c.Store.Postgres == nil || c.Store.Postgres.DSN == "" {
+				return errors.New("postgres configuration requires dsn")
+			}
+		case "neo4j":
+			if c.Store.Neo4j == nil || c.Store.Neo4j.URI == "" || c.Store.Neo4j.User == "" || c.Store.Neo4j.Password == "" {
+				return errors.New("neo4j configuration requires uri, user, and password")
+			}
+		}
 	}
 
 	if c.Temporal.HostPort == "" {

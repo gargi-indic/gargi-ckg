@@ -13,6 +13,7 @@ import (
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
+	"github.com/gargi-indic/gargi-ckg/internal/store"
 )
 
 func main() {
@@ -54,8 +55,11 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	logger := slog.New(slog.NewTextHandler(stdout, nil))
 	logger.Info("Starting worker", "store_driver", cfg.Store.Driver)
 
-	// TODO(Issue #40): Instantiate the correct store adapter based on cfg.Store.Driver
-	// e.g., switch cfg.Store.Driver { case "memory": ... case "redis": ... }
+	st, err := store.New(ctx, cfg.Store)
+	if err != nil {
+		return fmt.Errorf("initializing state store: %w", err)
+	}
+	defer st.Close()
 
 	temporalClient, err := orchestrator.NewClient(cfg.Temporal, logger)
 	if err != nil {
@@ -64,6 +68,7 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	defer temporalClient.Close()
 
 	wm := orchestrator.NewWorkerManager(temporalClient, cfg.Temporal, logger)
+	wm.RegisterActivity(orchestrator.NewStateActivities(st))
 
 	return wm.Run(ctx)
 }

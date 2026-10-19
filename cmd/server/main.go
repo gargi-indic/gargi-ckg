@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-ckg/internal/store"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 	}
 }
 
-func run(_ context.Context, args []string, getenv func(string) (string, bool), stdout io.Writer, _ io.Writer) error {
+func run(ctx context.Context, args []string, getenv func(string) (string, bool), stdout io.Writer, _ io.Writer) error {
 	fs := flag.NewFlagSet("server", flag.ContinueOnError)
 	configPath := fs.String("config", "", "Path to configuration file")
 
@@ -48,8 +49,13 @@ func run(_ context.Context, args []string, getenv func(string) (string, bool), s
 	logger := slog.New(slog.NewTextHandler(stdout, nil))
 	logger.Info("Starting server", "store_driver", cfg.Store.Driver)
 
-	// TODO(Issue #40): Instantiate the correct store adapter based on cfg.Store.Driver
-	// e.g., switch cfg.Store.Driver { case "memory": ... case "redis": ... }
+	st, err := store.New(ctx, cfg.Store)
+	if err != nil {
+		return fmt.Errorf("initializing state store: %w", err)
+	}
+	defer st.Close()
+
+	_ = st // StateStore available for API server handlers
 
 	// TODO(API Epic): Instantiate and start the API Server and Transport using cfg.Server and cfg.Temporal
 

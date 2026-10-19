@@ -103,6 +103,10 @@ func NewHTTPServer(
 		_, _ = io.WriteString(w, `{"status":"READY"}`)
 	})
 
+	// Server-Sent Events (SSE) streaming endpoint
+	sseHandler := NewSSEHandler(service, logger)
+	rootMux.Handle("GET /v1/executions/{id}/events", sseHandler)
+
 	// Mount gRPC-Gateway router
 	rootMux.Handle("/", gwMux)
 

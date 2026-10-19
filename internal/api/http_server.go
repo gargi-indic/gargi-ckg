@@ -26,7 +26,7 @@ type APIError struct {
 	Details []string `json:"details,omitempty"`
 }
 
-// CustomErrorHandler transforms gRPC errors into consistent JSON APIError responses.
+// CustomErrorHandler transforms gRPC and domain errors into consistent JSON APIError responses.
 func CustomErrorHandler(
 	ctx context.Context,
 	mux *runtime.ServeMux,
@@ -35,7 +35,8 @@ func CustomErrorHandler(
 	r *http.Request,
 	err error,
 ) {
-	st := status.Convert(err)
+	grpcErr := ToGRPCError(err)
+	st := status.Convert(grpcErr)
 	httpStatus := runtime.HTTPStatusFromCode(st.Code())
 
 	w.Header().Set("Content-Type", "application/json")

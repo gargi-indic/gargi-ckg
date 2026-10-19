@@ -3,16 +3,20 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"github.com/gargi-indic/gargi-ckg/internal/graph"
+	"github.com/gargi-indic/gargi-ckg/internal/nodes"
 	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
 	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -27,6 +31,7 @@ type Server struct {
 	logger         *slog.Logger
 	parser         *graph.Parser
 	bridge         *FanoutBridge
+	registry       *engine.Registry
 }
 
 // NewServer creates a new GargiServiceServer instance.
@@ -39,6 +44,9 @@ func NewServer(
 	if logger == nil {
 		logger = slog.Default()
 	}
+	reg := engine.NewRegistry()
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
+
 	return &Server{
 		temporalClient: tc,
 		temporalConfig: tCfg,
@@ -46,6 +54,7 @@ func NewServer(
 		logger:         logger,
 		parser:         graph.NewParser(),
 		bridge:         NewFanoutBridge(st, logger),
+		registry:       reg,
 	}
 }
 
@@ -64,14 +73,51 @@ func (s *Server) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecuti
 		}
 	}
 
+	// 1. Structural schema validation
 	valErrs := graph.ValidateStructure(def)
 	if valErrs.Len() > 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid graph definition: %s", valErrs.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "invalid graph structure: %s", valErrs.Error())
 	}
 
+	// 2. Semantic node validation against registry
+	if s.registry != nil {
+		semErrs := graph.ValidateSemantics(def, s.registry)
+		if semErrs.Len() > 0 {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid graph semantics: %s", semErrs.Error())
+		}
+	}
+
+	// 3. Topology & cycle validation
+	g, err := def.ToGraph()
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid graph topology: %v", err)
+	}
+
+	// Idempotency key mapping to execution ID / Temporal workflow ID
 	execID := req.GetExecutionId()
 	if execID == "" {
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if vals := md.Get("idempotency-key"); len(vals) > 0 && vals[0] != "" {
+				execID = vals[0]
+			} else if vals := md.Get("x-idempotency-key"); len(vals) > 0 && vals[0] != "" {
+				execID = vals[0]
+			}
+		}
+	}
+	if execID == "" {
 		execID = generateUUID()
+	}
+
+	// Check if already executed / running in store for idempotent return
+	if s.store != nil {
+		if existingSt, err := s.store.GetState(ctx, engine.ExecutionID(execID)); err == nil && existingSt != nil {
+			s.logger.Info("idempotent submission: execution already exists in store", "execution_id", execID)
+			return &gargiv1.SubmitExecutionResponse{
+				ExecutionId: execID,
+				Status:      toPBExecutionStatus(existingSt.Status()),
+				StartedAt:   timestamppb.Now(),
+			}, nil
+		}
 	}
 
 	var inputs map[string]any
@@ -93,15 +139,22 @@ func (s *Server) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecuti
 	if s.temporalClient != nil {
 		_, err := s.temporalClient.ExecuteWorkflow(ctx, wfOptions, orchestrator.GraphExecutionWorkflowName, wfInput)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "starting workflow: %v", err)
+			var executionAlreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+			if errors.As(err, &executionAlreadyStarted) {
+				s.logger.Info("idempotent submission: workflow already started in temporal", "execution_id", execID)
+				return &gargiv1.SubmitExecutionResponse{
+					ExecutionId: execID,
+					Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_RUNNING,
+					StartedAt:   timestamppb.Now(),
+				}, nil
+			}
+			return nil, ToGRPCError(err)
 		}
 	}
 
 	if s.store != nil {
-		if g, err := def.ToGraph(); err == nil {
-			if initialState, err := engine.NewGraphState(engine.ExecutionID(execID), g); err == nil {
-				_ = s.store.SetState(ctx, engine.ExecutionID(execID), initialState, 0)
-			}
+		if initialState, err := engine.NewGraphState(engine.ExecutionID(execID), g); err == nil {
+			_ = s.store.SetState(ctx, engine.ExecutionID(execID), initialState, 0)
 		}
 	}
 
@@ -120,10 +173,7 @@ func (s *Server) GetExecution(ctx context.Context, req *gargiv1.GetExecutionRequ
 
 	st, err := orchestrator.FetchStateWithFallback(ctx, s.store, s.temporalClient, req.GetExecutionId(), "")
 	if err != nil {
-		if engine.IsStoreNotFound(err) {
-			return nil, status.Errorf(codes.NotFound, "execution %q not found", req.GetExecutionId())
-		}
-		return nil, status.Errorf(codes.NotFound, "execution %q not found: %v", req.GetExecutionId(), err)
+		return nil, ToGRPCError(err)
 	}
 
 	return toGetExecutionResponse(req.GetExecutionId(), st), nil
@@ -140,7 +190,7 @@ func (s *Server) GetNodeState(ctx context.Context, req *gargiv1.GetNodeStateRequ
 
 	st, err := orchestrator.FetchStateWithFallback(ctx, s.store, s.temporalClient, req.GetExecutionId(), "")
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "execution %q not found: %v", req.GetExecutionId(), err)
+		return nil, ToGRPCError(err)
 	}
 
 	ns := st.NodeState(engine.NodeID(req.GetNodeId()))
@@ -162,7 +212,7 @@ func (s *Server) CancelExecution(ctx context.Context, req *gargiv1.CancelExecuti
 
 	if s.temporalClient != nil {
 		if err := s.temporalClient.CancelWorkflow(ctx, req.GetExecutionId(), ""); err != nil {
-			return nil, status.Errorf(codes.Internal, "cancelling workflow: %v", err)
+			return nil, ToGRPCError(err)
 		}
 	}
 
@@ -198,7 +248,7 @@ func (s *Server) SignalNode(ctx context.Context, req *gargiv1.SignalNodeRequest)
 
 	if s.temporalClient != nil {
 		if err := orchestrator.SendNodeSignal(ctx, s.temporalClient, req.GetExecutionId(), "", sig); err != nil {
-			return nil, status.Errorf(codes.Internal, "sending signal: %v", err)
+			return nil, ToGRPCError(err)
 		}
 	}
 

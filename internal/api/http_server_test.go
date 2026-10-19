@@ -226,4 +226,26 @@ func TestHTTP_RESTEndpoints(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(body))
 		}
 	})
+
+	t.Run("POST /v1/executions sync mode with wait and timeout", func(t *testing.T) {
+		reqBody := map[string]any{
+			"graphDefinition": validJSONGraph,
+			"executionId":     "http-sync-exec-1",
+			"wait":            true,
+			"timeout":         "0.05s",
+		}
+		reqBytes, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(ts.URL+"/v1/executions", "application/json", bytes.NewReader(reqBytes))
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		// Expect 504 Deadline Exceeded or 408 Timeout mapped by CustomErrorHandler
+		if resp.StatusCode != http.StatusGatewayTimeout && resp.StatusCode != http.StatusRequestTimeout {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 504 or 408 for timeout, got %d: %s", resp.StatusCode, string(body))
+		}
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/gargi-indic/gargi-ckg/internal/config"
 	"github.com/gargi-indic/gargi-ckg/internal/graph"
@@ -112,11 +113,16 @@ func (s *Server) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecuti
 	if s.store != nil {
 		if existingSt, err := s.store.GetState(ctx, engine.ExecutionID(execID)); err == nil && existingSt != nil {
 			s.logger.Info("idempotent submission: execution already exists in store", "execution_id", execID)
-			return &gargiv1.SubmitExecutionResponse{
-				ExecutionId: execID,
-				Status:      toPBExecutionStatus(existingSt.Status()),
-				StartedAt:   timestamppb.Now(),
-			}, nil
+			if !req.GetWait() {
+				return &gargiv1.SubmitExecutionResponse{
+					ExecutionId: execID,
+					Status:      toPBExecutionStatus(existingSt.Status()),
+					StartedAt:   timestamppb.Now(),
+				}, nil
+			}
+			if isTerminalExecutionStatus(existingSt.Status()) {
+				return toSubmitExecutionResponse(execID, existingSt, nil), nil
+			}
 		}
 	}
 
@@ -136,33 +142,87 @@ func (s *Server) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecuti
 		TaskQueue: s.temporalConfig.EffectiveWorkflowTaskQueue(),
 	}
 
-	if s.temporalClient != nil {
-		_, err := s.temporalClient.ExecuteWorkflow(ctx, wfOptions, orchestrator.GraphExecutionWorkflowName, wfInput)
-		if err != nil {
-			var executionAlreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
-			if errors.As(err, &executionAlreadyStarted) {
-				s.logger.Info("idempotent submission: workflow already started in temporal", "execution_id", execID)
-				return &gargiv1.SubmitExecutionResponse{
-					ExecutionId: execID,
-					Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_RUNNING,
-					StartedAt:   timestamppb.Now(),
-				}, nil
-			}
-			return nil, ToGRPCError(err)
-		}
-	}
-
 	if s.store != nil {
 		if initialState, err := engine.NewGraphState(engine.ExecutionID(execID), g); err == nil {
 			_ = s.store.SetState(ctx, engine.ExecutionID(execID), initialState, 0)
 		}
 	}
 
-	return &gargiv1.SubmitExecutionResponse{
-		ExecutionId: execID,
-		Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_PENDING,
-		StartedAt:   timestamppb.Now(),
-	}, nil
+	var run client.WorkflowRun
+	if s.temporalClient != nil {
+		var err error
+		run, err = s.temporalClient.ExecuteWorkflow(ctx, wfOptions, orchestrator.GraphExecutionWorkflowName, wfInput)
+		if err != nil {
+			var executionAlreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+			if errors.As(err, &executionAlreadyStarted) {
+				s.logger.Info("idempotent submission: workflow already started in temporal", "execution_id", execID)
+				if !req.GetWait() {
+					return &gargiv1.SubmitExecutionResponse{
+						ExecutionId: execID,
+						Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_RUNNING,
+						StartedAt:   timestamppb.Now(),
+					}, nil
+				}
+				run = s.temporalClient.GetWorkflow(ctx, execID, "")
+			} else {
+				return nil, ToGRPCError(err)
+			}
+		}
+	}
+
+	if !req.GetWait() {
+		return &gargiv1.SubmitExecutionResponse{
+			ExecutionId: execID,
+			Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_PENDING,
+			StartedAt:   timestamppb.Now(),
+		}, nil
+	}
+
+	// Synchronous submit-and-wait mode
+	waitCtx := ctx
+	if req.GetTimeout() != nil && req.GetTimeout().AsDuration() > 0 {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, req.GetTimeout().AsDuration())
+		defer cancel()
+	}
+
+	if run != nil {
+		var wfResult orchestrator.GraphWorkflowResult
+		waitErr := run.Get(waitCtx, &wfResult)
+		if waitErr != nil {
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) || errors.Is(waitErr, context.DeadlineExceeded) {
+				return nil, status.Error(codes.DeadlineExceeded, "timed out waiting for execution completion")
+			}
+			if errors.Is(waitCtx.Err(), context.Canceled) || errors.Is(waitErr, context.Canceled) {
+				return nil, status.Error(codes.Canceled, "context canceled while waiting for execution completion")
+			}
+			st, _ := orchestrator.FetchStateWithFallback(ctx, s.store, s.temporalClient, execID, "")
+			return toSubmitExecutionResponse(execID, st, waitErr), nil
+		}
+
+		st := wfResult.FinalState
+		if st == nil {
+			st, _ = orchestrator.FetchStateWithFallback(ctx, s.store, s.temporalClient, execID, "")
+		}
+		return toSubmitExecutionResponse(execID, st, nil), nil
+	}
+
+	// Without a live Temporal client (e.g. testing with memory store), poll store until terminal or timeout
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if s.store != nil {
+			st, err := s.store.GetState(waitCtx, engine.ExecutionID(execID))
+			if err == nil && st != nil && isTerminalExecutionStatus(st.Status()) {
+				return toSubmitExecutionResponse(execID, st, nil), nil
+			}
+		}
+		select {
+		case <-waitCtx.Done():
+			return nil, status.Error(codes.DeadlineExceeded, "timed out waiting for execution completion")
+		case <-ticker.C:
+		}
+	}
 }
 
 // GetExecution queries the state of a graph execution.
@@ -273,6 +333,30 @@ func (s *Server) StreamExecutionUpdates(
 
 // Helpers for model conversion.
 
+func toSubmitExecutionResponse(execID string, st *engine.GraphState, err error) *gargiv1.SubmitExecutionResponse {
+	resp := &gargiv1.SubmitExecutionResponse{
+		ExecutionId: execID,
+		Status:      gargiv1.ExecutionStatus_EXECUTION_STATUS_SUCCEEDED,
+		StartedAt:   timestamppb.Now(),
+		CompletedAt: timestamppb.Now(),
+		NodeStates:  make(map[string]*gargiv1.NodeStateDetail),
+	}
+
+	if st != nil {
+		resp.Status = toPBExecutionStatus(st.Status())
+		for _, ns := range st.NodeStates() {
+			resp.NodeStates[string(ns.NodeID())] = toNodeStateDetail(ns)
+		}
+	}
+
+	if err != nil {
+		resp.Status = gargiv1.ExecutionStatus_EXECUTION_STATUS_FAILED
+		resp.ErrorMessage = err.Error()
+	}
+
+	return resp
+}
+
 func toGetExecutionResponse(execID string, st *engine.GraphState) *gargiv1.GetExecutionResponse {
 	resp := &gargiv1.GetExecutionResponse{
 		ExecutionId: execID,
@@ -354,3 +438,13 @@ func generateUUID() string {
 	_, _ = rand.Read(b[:])
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
+
+func isTerminalExecutionStatus(s engine.Status) bool {
+	switch s {
+	case engine.StatusSucceeded, engine.StatusFailed, engine.StatusSkipped, engine.StatusCompensated:
+		return true
+	default:
+		return false
+	}
+}
+

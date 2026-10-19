@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
@@ -252,8 +253,8 @@ func (b *FanoutBridge) Stream(
 					return err
 				}
 
-				if entry.Sequence > highestSeq {
-					highestSeq = entry.Sequence
+				if entry.Sequence > atomic.LoadUint64(&highestSeq) {
+					atomic.StoreUint64(&highestSeq, entry.Sequence)
 				}
 			}
 		}
@@ -275,7 +276,7 @@ func (b *FanoutBridge) Stream(
 						return
 					}
 					// Deduplicate events already emitted during gap-fill
-					if event.Sequence() > 0 && event.Sequence() <= highestSeq {
+					if event.Sequence() > 0 && event.Sequence() <= atomic.LoadUint64(&highestSeq) {
 						continue
 					}
 					if err := q.push(event); err != nil {
@@ -350,8 +351,14 @@ func (b *FanoutBridge) Stream(
 					return err
 				}
 
-				if event.Sequence() > highestSeq {
-					highestSeq = event.Sequence()
+				for {
+					curr := atomic.LoadUint64(&highestSeq)
+					if event.Sequence() <= curr {
+						break
+					}
+					if atomic.CompareAndSwapUint64(&highestSeq, curr, event.Sequence()) {
+						break
+					}
 				}
 
 				// Complete stream on terminal event

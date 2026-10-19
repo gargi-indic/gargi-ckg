@@ -502,6 +502,14 @@
             "type": "string"
           },
           "description": "Metadata associated with this execution."
+        },
+        "wait": {
+          "type": "boolean",
+          "description": "Wait for execution completion before returning (sync submit-and-wait)."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Optional timeout when wait is true."
         }
       },
       "description": "SubmitExecutionRequest defines the payload for submitting a graph execution."
@@ -518,6 +526,19 @@
         "startedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nodeStates": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1NodeStateDetail"
+          }
+        },
+        "errorMessage": {
+          "type": "string"
         }
       },
       "description": "SubmitExecutionResponse defines the response after submitting an execution."

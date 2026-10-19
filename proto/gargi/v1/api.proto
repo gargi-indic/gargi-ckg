@@ -5,6 +5,7 @@ package gargi.v1;
 option go_package = "github.com/gargi-indic/gargi-ckg/pkg/api/v1;gargiv1";
 
 import "google/api/annotations.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -56,6 +57,12 @@ message SubmitExecutionRequest {
 
   // Metadata associated with this execution.
   map<string, string> metadata = 4;
+
+  // Wait for execution completion before returning (sync submit-and-wait).
+  bool wait = 5;
+
+  // Optional timeout when wait is true.
+  google.protobuf.Duration timeout = 6;
 }
 
 // SubmitExecutionResponse defines the response after submitting an execution.
@@ -63,6 +70,9 @@ message SubmitExecutionResponse {
   string execution_id = 1;
   ExecutionStatus status = 2;
   google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp completed_at = 4;
+  map<string, NodeStateDetail> node_states = 5;
+  string error_message = 6;
 }
 
 // GetExecutionRequest queries the state of a graph execution.

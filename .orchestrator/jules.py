@@ -68,18 +68,23 @@ def all_activities(session):
 
 
 def call(method, path, body=None):
-    req = urllib.request.Request(
-        f"{API}/{path}",
-        method=method,
-        data=json.dumps(body).encode() if body is not None else None,
-        headers={"X-Goog-Api-Key": key(), "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = resp.read()
-            return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as e:
-        sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()}")
+    for attempt in range(5):
+        req = urllib.request.Request(
+            f"{API}/{path}",
+            method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"X-Goog-Api-Key": key(), "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                raw = resp.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()}")
+        except (urllib.error.URLError, ConnectionError, OSError) as e:
+            if attempt == 4:
+                sys.exit(f"Network error on {method} {path} after 5 attempts: {e}")
+            time.sleep(3 * (attempt + 1))
 
 
 def sid(s):

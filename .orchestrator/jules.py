@@ -17,6 +17,7 @@ Usage:
                                            After asking Jules for PR fixes: block until the PR head commit
                                            changes and the session stops working (or needs attention)
 """
+import http.client
 import json
 import os
 import subprocess
@@ -81,7 +82,7 @@ def call(method, path, body=None):
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as e:
             sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()}")
-        except (urllib.error.URLError, ConnectionError, OSError) as e:
+        except (urllib.error.URLError, ConnectionError, OSError, http.client.IncompleteRead, http.client.HTTPException) as e:
             if attempt == 4:
                 sys.exit(f"Network error on {method} {path} after 5 attempts: {e}")
             time.sleep(3 * (attempt + 1))

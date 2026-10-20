@@ -22,7 +22,7 @@ func setupTestHTTPServer(t *testing.T, st engine.StateStore) *httptest.Server {
 	tCfg := config.TemporalConfig{TaskQueue: "test-queue"}
 	service := api.NewServer(nil, tCfg, st, nil)
 
-	httpServer, err := api.NewHTTPServer(context.Background(), service, ":0", nil)
+	httpServer, err := api.NewHTTPServer(context.Background(), service, ":0", nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create http server: %v", err)
 	}

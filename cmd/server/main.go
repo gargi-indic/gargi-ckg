@@ -86,7 +86,7 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	}
 
 	grpcServer := api.NewGRPCServer(temporalClient, cfg.Temporal, st, logger)
-	httpServer, err := api.NewHTTPServer(ctx, grpcServer.Service(), cfg.Server.HTTPAddress, logger)
+	httpServer, err := api.NewHTTPServer(ctx, grpcServer.Service(), cfg.Server.HTTPAddress, cfg.Server.HTTP.CORS.AllowedOrigins, logger)
 	if err != nil {
 		return fmt.Errorf("initializing HTTP REST server: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -150,10 +151,22 @@ func (t TemporalConfig) EffectiveActivityTaskQueue() string {
 	return t.TaskQueue
 }
 
+// CORSConfig holds CORS configuration for the HTTP server.
+type CORSConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins,omitempty"`
+}
+
+// HTTPConfig holds the configuration for the HTTP server.
+type HTTPConfig struct {
+	Address string     `yaml:"address,omitempty"` // For backward compatibility if needed, but we keep HTTPAddress
+	CORS    CORSConfig `yaml:"cors,omitempty"`
+}
+
 // ServerConfig holds the configuration for the API server.
 type ServerConfig struct {
-	HTTPAddress string `yaml:"http_address"`
-	GRPCAddress string `yaml:"grpc_address"`
+	HTTPAddress string     `yaml:"http_address"`
+	GRPCAddress string     `yaml:"grpc_address"`
+	HTTP        HTTPConfig `yaml:"http,omitempty"`
 }
 
 // LoggingConfig holds configuration for application logging.
@@ -344,6 +357,13 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if val, ok := os.LookupEnv("GARGI_SERVER_GRPC_ADDRESS"); ok {
 		cfg.Server.GRPCAddress = val
+	}
+	if val, ok := os.LookupEnv("GARGI_HTTP_CORS_ALLOWED_ORIGINS"); ok {
+		origins := strings.Split(val, ",")
+		for i := range origins {
+			origins[i] = strings.TrimSpace(origins[i])
+		}
+		cfg.Server.HTTP.CORS.AllowedOrigins = origins
 	}
 
 	if val, ok := os.LookupEnv("GARGI_LOG_LEVEL"); ok {

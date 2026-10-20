@@ -1,0 +1,17 @@
+store:
+  driver: redis
+  redis:
+    addr: "127.0.0.1:6379"
+
+temporal:
+  host_port: "127.0.0.1:7233"
+  namespace: "default"
+  task_queue: "gargi_tasks"
+
+server:
+  http_address: ":8080"
+  grpc_address: ":9090"
+
+logging:
+  level: "info"
+  format: "text"

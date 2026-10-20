@@ -277,6 +277,9 @@ func (s *Server) SubmitExecution(ctx context.Context, req *gargiv1.SubmitExecuti
 		if st == nil {
 			st, _ = orchestrator.FetchStateWithFallback(ctx, s.store, s.temporalClient, execID, "")
 		}
+		if st != nil && s.store != nil {
+			_ = s.store.SetState(ctx, engine.ExecutionID(execID), st, 0)
+		}
 		return toSubmitExecutionResponse(execID, st, nil), nil
 	}
 

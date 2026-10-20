@@ -76,9 +76,10 @@ func RegisterWorkflowQueries(
 	return err
 }
 
-// FetchStateWithFallback attempts to fetch the latest GraphState from the StateStore.
-// If the StateStore is nil, or if it returns StoreNotFoundError or StoreUnavailableError,
-// it falls back to querying the running Temporal workflow via temporalClient.QueryWorkflow(ctx, workflowID, runID, QueryTypeGraphState).
+// FetchStateWithFallback attempts to fetch the latest GraphState.
+// If temporalClient is provided, it attempts to query the live/completed Temporal workflow
+// (updating the StateStore if present). If that is unavailable or temporalClient is nil,
+// it falls back to querying the StateStore.
 func FetchStateWithFallback(
 	ctx context.Context,
 	store engine.StateStore,
@@ -86,6 +87,19 @@ func FetchStateWithFallback(
 	workflowID string,
 	runID string,
 ) (*engine.GraphState, error) {
+	if temporalClient != nil {
+		qres, err := temporalClient.QueryWorkflow(ctx, workflowID, runID, QueryTypeGraphState)
+		if err == nil {
+			var st engine.GraphState
+			if err := qres.Get(&st); err == nil {
+				if store != nil {
+					_ = store.SetState(ctx, engine.ExecutionID(workflowID), &st, 0)
+				}
+				return &st, nil
+			}
+		}
+	}
+
 	if store != nil {
 		st, err := store.GetState(ctx, engine.ExecutionID(workflowID))
 		if err == nil && st != nil {
@@ -94,18 +108,6 @@ func FetchStateWithFallback(
 		if err != nil && !engine.IsStoreNotFound(err) && !engine.IsStoreUnavailable(err) && temporalClient == nil {
 			return nil, err
 		}
-	}
-
-	if temporalClient != nil {
-		qres, err := temporalClient.QueryWorkflow(ctx, workflowID, runID, QueryTypeGraphState)
-		if err != nil {
-			return nil, fmt.Errorf("fallback workflow query failed: %w", err)
-		}
-		var st engine.GraphState
-		if err := qres.Get(&st); err != nil {
-			return nil, fmt.Errorf("decoding workflow query state: %w", err)
-		}
-		return &st, nil
 	}
 
 	return nil, fmt.Errorf("state store unavailable and no temporal client provided for fallback")

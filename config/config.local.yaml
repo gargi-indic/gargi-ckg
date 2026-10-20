@@ -11,6 +11,9 @@ temporal:
 server:
   http_address: ":8080"
   grpc_address: ":9090"
+  http:
+    cors:
+      allowed_origins: ["http://localhost:5173"]
 
 logging:
   level: "info"

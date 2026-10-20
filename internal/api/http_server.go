@@ -70,6 +70,7 @@ func NewHTTPServer(
 	ctx context.Context,
 	service gargiv1.GargiServiceServer,
 	addr string,
+	allowedOrigins []string,
 	logger *slog.Logger,
 ) (*HTTPServer, error) {
 	if logger == nil {
@@ -137,9 +138,14 @@ func NewHTTPServer(
 	// Mount gRPC-Gateway router
 	rootMux.Handle("/", gwMux)
 
+	var handler http.Handler = rootMux
+	if len(allowedOrigins) > 0 {
+		handler = CORSMiddleware(allowedOrigins, handler)
+	}
+
 	httpSrv := &http.Server{
 		Addr:    addr,
-		Handler: rootMux,
+		Handler: handler,
 	}
 
 	return &HTTPServer{

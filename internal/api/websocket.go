@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/metrics"
-	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
+	"github.com/gargi-indic/gargi-flow/internal/metrics"
+	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
 	"github.com/gorilla/websocket"
 	"google.golang.org/grpc/metadata"
 )

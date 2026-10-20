@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // CompositeStore represents a composed storage engine combining multiple capability adapters.

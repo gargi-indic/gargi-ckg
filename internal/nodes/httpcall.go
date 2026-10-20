@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // httpCallConfig holds the configuration for making an HTTP request.

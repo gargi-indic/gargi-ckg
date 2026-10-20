@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	enums "go.temporal.io/api/enums/v1"

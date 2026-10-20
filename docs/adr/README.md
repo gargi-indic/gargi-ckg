@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADRs)
 
-This directory contains the Architecture Decision Records for the `gargi-ckg` project.
+This directory contains the Architecture Decision Records for the `gargi-flow` project.
 
 - [0001 - Language = Go](0001-language-go.md)
 - [0002 - Package Boundaries & Decoupling Rules](0002-package-boundaries-and-decoupling-rules.md)
@@ -9,3 +9,4 @@ This directory contains the Architecture Decision Records for the `gargi-ckg` pr
 - [0005 - Edge Condition Expression Language](0005-edge-condition-expression-language.md)
 - [0006 - Workflow Versioning & Replay Safety](0006-workflow-versioning-and-replay-safety.md)
 - [0007 - Temporal and StateStore Consistency Model](0007-temporal-and-statestore-consistency-model.md)
+- [0008 - Project Rename: gargi-ckg → gargi-flow](0008-project-rename-gargi-flow.md)

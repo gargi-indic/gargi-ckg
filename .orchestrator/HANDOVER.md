@@ -1,4 +1,4 @@
-# Orchestrator Handover: gargi-ckg
+# Orchestrator Handover: gargi-flow
 
 Snapshot refreshed on **2026-10-19** following the completion and verification of all 9 Epics (#1, #8, #15, #22, #29, #39, #48, #56, #61), all 66 backlog sub-issues, and repository CI lint/test stabilization.
 The **live** state is in GitHub issues and repository commits on `main`.
@@ -12,16 +12,16 @@ The **live** state is in GitHub issues and repository commits on `main`.
 ## 2. Where everything lives
 | Thing | Location |
 |---|---|
-| Active repo | `gargi-indic/gargi-ckg` (private, default branch `main`) |
-| Old repo | `gishnucodes/gargi-ckg`: **archived**, do not use |
-| Local clone (orchestrator machine) | `/Applications/code/gargi-ckg` |
+| Active repo | `gargi-indic/gargi-flow` (private, default branch `main`) |
+| Old repo | `gishnucodes/gargi-flow`: **archived**, do not use |
+| Local clone (orchestrator machine) | `/Applications/code/gargi-flow` |
 | Requirements spec | `docs/SPEC.md` |
 | Live log + runbook + status tables | Issue **#67 Orchestrator Logs** (pinned) |
 | Successor onboarding + paste-ready prompt | Issue **#68 Orchestrator Handover** (pinned) |
 | Jules API helper | `.orchestrator/jules.py` (stdlib Python + `gh`) |
 | Resume skill | `.claude/skills/gargi-orchestrator/SKILL.md` |
 | Jules API key | `~/.config/jules/env` on the orchestrator Mac (mode 600, exports `JULES_API_KEY`). **Never** paste it into GitHub, commits or logs. The human should rotate it (it was once pasted in a chat). |
-| Jules source id | `sources/github/gargi-indic/gargi-ckg` |
+| Jules source id | `sources/github/gargi-indic/gargi-flow` |
 | Jules web UI | `https://jules.google.com/session/<session-id>` |
 
 ## 3. Backlog map (GitHub issues)
@@ -72,13 +72,13 @@ Labels: `epic`, `task`, `area/*`, `needs-discussion`, `orchestrator`. Sub-tasks 
 | Date | Decision | By |
 |---|---|---|
 | 2026-10-03 | Language: **Go** | human |
-| 2026-10-05 | Repo: `gargi-indic/gargi-ckg` (Jules already connected); `gishnucodes/gargi-ckg` archived | human |
+| 2026-10-05 | Repo: `gargi-indic/gargi-flow` (Jules already connected); `gishnucodes/gargi-flow` archived | human |
 | 2026-10-05 | Integration with Jules is through the **API key**, not the GitHub label or CLI | human |
 | 2026-10-05 | **Orchestrator merges** Jules PRs after review (squash, delete branch) | human |
 | 2026-10-05 | Plans need approval (`requirePlanApproval: true`), `AUTO_CREATE_PR`, one session at a time | orchestrator |
 | 2026-10-05 | Epic 1 order #2 → #3 → #5 → #7 → #4 → #6 (CI early so later PRs are machine-checked) | orchestrator |
 | 2026-10-05 | #6 DI = **manual constructor wiring** in `cmd/*`, no framework; record as ADR in #7 | orchestrator default (human may override) |
-| 2026-10-05 | Go module path `github.com/gargi-indic/gargi-ckg`, `go 1.23` | orchestrator (via #2 review) |
+| 2026-10-05 | Go module path `github.com/gargi-indic/gargi-flow`, `go 1.23` | orchestrator (via #2 review) |
 | 2026-10-05 | Dependency rules: `pkg/engine` = public contracts only; `internal/graph` and `internal/reactive` never import `internal/{api,orchestrator,store}`; only `cmd/*` wires things. Enforced by depguard (#3) | orchestrator (via #2 review) |
 | 2026-10-05 | golangci-lint **v2**, pinned, installed to `./bin` | orchestrator (via #3 plan) |
 | 2026-10-05 | Config: `gopkg.in/yaml.v3` + explicit `GARGI_*` env overrides (no viper); precedence defaults < YAML < env; `store.driver` exact match `memory\|redis\|postgres\|neo4j`, fail fast | orchestrator (via #6 review) |
@@ -135,9 +135,9 @@ When Epic #15 is complete: close #15, post a summary on #67 and add the next epi
 
 
 ## 8. Chronological log (condensed; the full entries are #67's comments)
-- **2026-10-03:** Spec read. 9 epics + 57 sub-issues created (first in `gishnucodes/gargi-ckg`). Language chosen: Go.
+- **2026-10-03:** Spec read. 9 epics + 57 sub-issues created (first in `gishnucodes/gargi-flow`). Language chosen: Go.
 - **2026-10-05:**
-  - Jules API key received and stored at `~/.config/jules/env`. Jules could only see `gargi-indic/gargi-ckg`, so the human chose to move there. Seed commit `9760dac` (README + spec) pushed, the backlog was recreated with identical numbers, and the old repo was archived.
+  - Jules API key received and stored at `~/.config/jules/env`. Jules could only see `gargi-indic/gargi-flow`, so the human chose to move there. Seed commit `9760dac` (README + spec) pushed, the backlog was recreated with identical numbers, and the old repo was archived.
   - `#67 Orchestrator Logs` (pinned) created, `.orchestrator/jules.py` + README committed (`944f539`), and `#68 Orchestrator Handover` (pinned) created (`1686c47`).
   - **#2:** session `14117555043668616096`. Plan v1 rejected (wrong module path, out-of-scope interfaces), plan v2 approved. PR #69 reviewed and squash-merged as `832dc75`; #2 closed and criteria ticked. Accepted nit: the `internal/*` doc comments don't cite future issues.
   - Helper: `wait-reply` added (`e3d9f9f`).

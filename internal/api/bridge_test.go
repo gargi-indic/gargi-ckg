@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/api"
-	"github.com/gargi-indic/gargi-ckg/internal/store/memory"
-	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/api"
+	"github.com/gargi-indic/gargi-flow/internal/store/memory"
+	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"google.golang.org/grpc/metadata"
 )
 

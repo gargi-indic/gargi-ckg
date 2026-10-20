@@ -3,6 +3,6 @@
 // (engine.LockManager, engine.EventPublisher, engine.ExecutionLog).
 //
 // All storage adapter implementations (e.g., In-Memory, Redis, Postgres, Neo4j)
-// must pass this test suite to guarantee semantic compliance with Gargi CKG's
+// must pass this test suite to guarantee semantic compliance with Gargi Flow's
 // consistency model and optimistic concurrency contracts.
 package storetest

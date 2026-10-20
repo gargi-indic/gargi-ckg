@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/gargi-indic/gargi-ckg/internal/graph"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/graph"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 func generateChainGraph(b *testing.B, size int) *engine.Graph {

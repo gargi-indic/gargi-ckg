@@ -7,7 +7,7 @@ Accepted
 2026-10-19
 
 ## Context
-Gargi CKG executes reactive knowledge graph workflows using Temporal as the distributed orchestration engine. Workflows manage execution state across arbitrary DAG topologies, tracking node transitions, inputs, outputs, compensation records, and reactive event subscriptions.
+Gargi Flow executes reactive knowledge graph workflows using Temporal as the distributed orchestration engine. Workflows manage execution state across arbitrary DAG topologies, tracking node transitions, inputs, outputs, compensation records, and reactive event subscriptions.
 
 Issue #40 defined the `engine.StateStore` abstraction along with distributed locking (`LockManager`), audit logging (`ExecutionLog`), and event publishing (`EventPublisher`) interfaces. As part of Epic #39 (Pluggable State Storage Adapters), the system supports external storage backends (such as Redis, PostgreSQL, or DynamoDB) to enable low-latency point-in-time reads, live state dashboards, and reactive graph querying outside the Temporal cluster.
 

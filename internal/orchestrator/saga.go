@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gargi-indic/gargi-ckg/internal/metrics"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/metrics"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.temporal.io/sdk/workflow"
 )
 

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/store/storetest"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/store/storetest"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 func cloneGraphState(s *engine.GraphState) *engine.GraphState {

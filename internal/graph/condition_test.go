@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gargi-indic/gargi-ckg/internal/graph"
+	"github.com/gargi-indic/gargi-flow/internal/graph"
 )
 
 func TestCompileCondition_Success(t *testing.T) {

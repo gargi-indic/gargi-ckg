@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -21,7 +21,7 @@ import (
 )
 
 // DefaultTracerName is the default instrumentation scope name for OpenTelemetry traces.
-const DefaultTracerName = "gargi-ckg"
+const DefaultTracerName = "gargi-flow"
 
 // Tracer returns a named or default OpenTelemetry tracer from the global TracerProvider.
 func Tracer(name ...string) trace.Tracer {

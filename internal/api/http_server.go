@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/http"
 
-	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
+	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc/status"

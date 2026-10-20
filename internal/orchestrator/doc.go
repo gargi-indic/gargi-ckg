@@ -1,4 +1,4 @@
-// Package orchestrator handles Temporal integration and workflow orchestration for Gargi CKG.
+// Package orchestrator handles Temporal integration and workflow orchestration for Gargi Flow.
 //
 // # Workflow Execution
 //

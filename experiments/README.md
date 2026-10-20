@@ -1,6 +1,6 @@
-# Gargi CKG Experiments Suite
+# Gargi Flow Experiments Suite
 
-This directory contains standalone and orchestrated experiments designed to validate and demonstrate the computational graph execution capabilities of Gargi CKG (Computational Knowledge Graph).
+This directory contains standalone and orchestrated experiments designed to validate and demonstrate the computational graph execution capabilities of Gargi Flow.
 
 ---
 

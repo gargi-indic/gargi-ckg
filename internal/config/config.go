@@ -204,7 +204,7 @@ func Default() *Config {
 			Endpoint:     "",
 			Insecure:     true,
 			SamplerRatio: 1.0,
-			ServiceName:  "gargi-ckg",
+			ServiceName:  "gargi-flow",
 		},
 	}
 }

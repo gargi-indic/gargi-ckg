@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gargi-indic/gargi-ckg/internal/logging"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/logging"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -98,7 +98,7 @@ func (a *StateActivities) PersistStateActivity(
 	}
 	ctx = logging.WithCorrelation(ctx, string(input.ExecutionID), string(input.NodeID), wfID, runID)
 
-	tr := otel.GetTracerProvider().Tracer("gargi-ckg")
+	tr := otel.GetTracerProvider().Tracer("gargi-flow")
 	ctx, span := tr.Start(ctx, "StateActivity:PersistState",
 		trace.WithAttributes(
 			attribute.String("gargi.execution_id", string(input.ExecutionID)),

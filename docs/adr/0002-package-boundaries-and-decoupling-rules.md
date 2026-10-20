@@ -7,7 +7,7 @@ Accepted
 2026-10-05
 
 ## Context
-The `gargi-ckg` project is a modular middleware framework. According to the specification, AI agents implementing this architecture must strictly decouple execution logic, state persistence, orchestration, and communication interfaces. We need to define clear directory structures and strict dependency rules to prevent circular dependencies, ensure clean architecture, and enforce that plugins (storage adapters, orchestrators, transports) are properly isolated from the core domain logic.
+The `gargi-flow` project is a modular middleware framework. According to the specification, AI agents implementing this architecture must strictly decouple execution logic, state persistence, orchestration, and communication interfaces. We need to define clear directory structures and strict dependency rules to prevent circular dependencies, ensure clean architecture, and enforce that plugins (storage adapters, orchestrators, transports) are properly isolated from the core domain logic.
 
 ## Decision
 We establish the following directory layout and dependency rules, which will be strictly enforced programmatically via `depguard` in our `.golangci.yml`.

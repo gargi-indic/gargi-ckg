@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gargi CKG Experiment Runner
+Gargi Flow Experiment Runner
 Executes full suite of workflow graph execution experiments:
   1. Service health and readiness verification
   2. Synchronous linear DAG execution (Submit & Wait)

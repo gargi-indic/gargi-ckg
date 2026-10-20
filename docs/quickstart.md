@@ -13,8 +13,8 @@ This quickstart guides you through launching the Gargi Reactive Graph Engine, su
 
 ### Clone & Dependencies
 ```bash
-git clone https://github.com/gargi-indic/gargi-ckg.git
-cd gargi-ckg
+git clone https://github.com/gargi-indic/gargi-flow.git
+cd gargi-flow
 go mod download
 ```
 

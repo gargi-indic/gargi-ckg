@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/gargi-indic/gargi-ckg/internal/nodes"
-	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/nodes"
+	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 )

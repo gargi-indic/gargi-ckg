@@ -7,7 +7,7 @@ Accepted
 2026-10-05
 
 ## Context
-As a modular middleware framework (`gargi-ckg`), the application is composed of various loosely coupled components: domain logic, state storage adapters, orchestration integrations, and external APIs. These components are strictly isolated via interfaces (ADR-002). We need a mechanism to instantiate these components and wire them together securely and transparently.
+As a modular middleware framework (`gargi-flow`), the application is composed of various loosely coupled components: domain logic, state storage adapters, orchestration integrations, and external APIs. These components are strictly isolated via interfaces (ADR-002). We need a mechanism to instantiate these components and wire them together securely and transparently.
 
 ## Decision
 We will use manual constructor wiring (e.g., `NewService(store, orchestrator)`) in the composition roots located exclusively in `cmd/*` (e.g., `cmd/server/`, `cmd/worker/`).

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

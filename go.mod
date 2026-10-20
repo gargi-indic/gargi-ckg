@@ -1,4 +1,4 @@
-module github.com/gargi-indic/gargi-ckg
+module github.com/gargi-indic/gargi-flow
 
 go 1.26.0
 

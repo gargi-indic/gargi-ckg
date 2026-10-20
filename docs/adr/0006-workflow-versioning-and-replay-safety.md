@@ -9,7 +9,7 @@ Accepted
 ## Context
 Temporal executes workflows deterministically by recording history events and replaying those events when a workflow worker starts, recovers, or resumes execution. If workflow implementation code is changed directly (such as modifying activity invocation order, adding or removing activities, child workflows, timers, or side effects) without version gating, replaying existing in-flight workflow executions will produce non-deterministic errors (`workflow panic: nondeterministic error`).
 
-In Gargi CKG, workflows represent long-running reactive knowledge graph orchestrations (e.g., entity extraction, ontology alignment, multi-source ingestion, human review signals, and nested child sub-graphs) that may stay active for minutes, hours, or days. Therefore, zero-downtime rolling upgrades and backward-compatible execution replay are strict operational requirements.
+In Gargi Flow, workflows represent long-running reactive knowledge graph orchestrations (e.g., entity extraction, ontology alignment, multi-source ingestion, human review signals, and nested child sub-graphs) that may stay active for minutes, hours, or days. Therefore, zero-downtime rolling upgrades and backward-compatible execution replay are strict operational requirements.
 
 We need a standardized workflow versioning and testing strategy that:
 - Ensures running workflows continue execution deterministically across code deployments.

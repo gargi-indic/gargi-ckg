@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // mockStateStore is an in-memory implementation of engine.StateStore for testing.

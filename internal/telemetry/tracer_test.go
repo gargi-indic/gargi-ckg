@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/config"
 	"go.opentelemetry.io/otel/codes"
 )
 

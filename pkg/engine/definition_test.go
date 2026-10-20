@@ -3,7 +3,7 @@ package engine_test
 import (
 	"testing"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 func TestParseFormat(t *testing.T) {

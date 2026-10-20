@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // ValidateSemantics validates node types and their configurations against a node registry,

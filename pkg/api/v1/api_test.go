@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
+	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"

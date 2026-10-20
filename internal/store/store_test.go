@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
-	"github.com/gargi-indic/gargi-ckg/internal/store"
-	"github.com/gargi-indic/gargi-ckg/internal/store/memory"
-	"github.com/gargi-indic/gargi-ckg/internal/store/storetest"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/store"
+	"github.com/gargi-indic/gargi-flow/internal/store/memory"
+	"github.com/gargi-indic/gargi-flow/internal/store/storetest"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 func TestCompositeStore_Conformance(t *testing.T) {

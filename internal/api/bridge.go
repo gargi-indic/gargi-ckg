@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

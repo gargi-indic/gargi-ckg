@@ -1,4 +1,4 @@
-# Gargi CKG Performance Baselines & Load Testing
+# Gargi Flow Performance Baselines & Load Testing
 
 This document establishes performance baselines and documents benchmarks for the Gargi Reactive Graph Engine, covering the reactive scheduler, state store adapters, and load testing scenarios.
 

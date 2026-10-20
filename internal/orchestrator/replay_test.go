@@ -9,7 +9,7 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
 )
 
 // IncompatibleWorkflow simulates a developer modifying workflow logic without version gating

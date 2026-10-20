@@ -1,6 +1,6 @@
-# Gargi CKG Graph Definition Schema (v1)
+# Gargi Flow Graph Definition Schema (v1)
 
-This directory contains the JSON Schema (`schema.json`) defining the structure of a `graph/v1` execution payload for the Gargi CKG Reactive Graph Engine.
+This directory contains the JSON Schema (`schema.json`) defining the structure of a `graph/v1` execution payload for the Gargi Flow Reactive Graph Engine.
 
 ## Compatibility and Versioning
 

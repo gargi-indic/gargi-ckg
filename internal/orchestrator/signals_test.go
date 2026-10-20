@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

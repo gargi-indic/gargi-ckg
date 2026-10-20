@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/gargi-indic/gargi-ckg/internal/graph"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/graph"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // ExecutionPhase represents the current lifecycle phase of a graph execution.

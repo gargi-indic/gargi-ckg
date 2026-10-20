@@ -34,7 +34,7 @@ import (
     "errors"
     "fmt"
 
-    "github.com/gargi-indic/gargi-ckg/pkg/engine"
+    "github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // ConverterConfig defines configuration fields declared in graph definitions.

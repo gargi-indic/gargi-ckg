@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // Clock is a deterministic function returning the current logical timestamp.

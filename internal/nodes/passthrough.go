@@ -3,7 +3,7 @@ package nodes
 import (
 	"context"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // passthroughConfig acts as a schema for passthrough nodes.

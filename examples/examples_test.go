@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gargi-indic/gargi-ckg/internal/graph"
-	"github.com/gargi-indic/gargi-ckg/internal/nodes"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/graph"
+	"github.com/gargi-indic/gargi-flow/internal/nodes"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

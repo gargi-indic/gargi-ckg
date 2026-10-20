@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/gargi-indic/gargi-ckg/internal/nodes"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/nodes"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 type signalWaitKey struct {

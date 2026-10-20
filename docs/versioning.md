@@ -11,7 +11,7 @@ If workflow logic is modified in code without version gating (for example, inser
 workflow panic: nondeterministic error
 ```
 
-In the Gargi CKG orchestrator, reactive workflows (`GraphExecutionWorkflow`) execute complex graph-based computational DAGs, entity extraction pipelines, and external signal listeners. Executions can remain active across hours or days. Therefore, zero-downtime rolling deployments and deterministic backward compatibility are mandatory operational requirements.
+In the Gargi Flow orchestrator, reactive workflows (`GraphExecutionWorkflow`) execute complex graph-based computational DAGs, entity extraction pipelines, and external signal listeners. Executions can remain active across hours or days. Therefore, zero-downtime rolling deployments and deterministic backward compatibility are mandatory operational requirements.
 
 We adopt a two-tier versioning architecture:
 1. **In-Workflow Versioning (`workflow.GetVersion`)** for granular in-code logic changes, bug fixes, and feature additions within an existing workflow type.
@@ -103,13 +103,13 @@ temporal:
   host_port: "localhost:7233"
   namespace: "default"
   task_queue: "gargi_tasks"
-  build_id: "gargi-ckg-v1.2.0"
+  build_id: "gargi-flow-v1.2.0"
   use_build_id_for_versioning: true
 ```
 
 Or via environment variables:
 ```bash
-GARGI_TEMPORAL_BUILD_ID="gargi-ckg-v1.2.0"
+GARGI_TEMPORAL_BUILD_ID="gargi-flow-v1.2.0"
 GARGI_TEMPORAL_USE_BUILD_ID_FOR_VERSIONING="true"
 ```
 
@@ -130,20 +130,20 @@ Temporal Server organizes worker build IDs into **Version Sets**:
 ### 3.3 Canary Deployments
 
 To execute canary deployments with Worker Build IDs:
-1. **Deploy Canary Workers:** Deploy workers with the new `BuildID` (e.g. `gargi-ckg-v1.3.0`) and `UseBuildIDForVersioning: true`.
+1. **Deploy Canary Workers:** Deploy workers with the new `BuildID` (e.g. `gargi-flow-v1.3.0`) and `UseBuildIDForVersioning: true`.
 2. **Add to Version Set:** Using the Temporal CLI or client management APIs, add the new build ID to the version set without immediately promoting it as default:
    ```bash
    temporal task-queue versioning update-build-id-compatibility \
      --task-queue gargi_tasks \
-     --add-new-build-id gargi-ckg-v1.3.0 \
-     --existing-compatible-build-id gargi-ckg-v1.2.0
+     --add-new-build-id gargi-flow-v1.3.0 \
+     --existing-compatible-build-id gargi-flow-v1.2.0
    ```
 3. **Validate:** Monitor execution metrics, workflow completion rates, and error logs from canary instances.
 4. **Promote as Default:** Promote the validated build ID to default for new workflows:
    ```bash
    temporal task-queue versioning update-build-id-compatibility \
      --task-queue gargi_tasks \
-     --promote-build-id gargi-ckg-v1.3.0
+     --promote-build-id gargi-flow-v1.3.0
    ```
 5. **Drain & Retire:** Once in-flight executions on older build IDs have terminated, safely terminate older worker instances.
 

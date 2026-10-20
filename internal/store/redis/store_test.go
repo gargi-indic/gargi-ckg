@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	redisstore "github.com/gargi-indic/gargi-ckg/internal/store/redis"
-	"github.com/gargi-indic/gargi-ckg/internal/store/storetest"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	redisstore "github.com/gargi-indic/gargi-flow/internal/store/redis"
+	"github.com/gargi-indic/gargi-flow/internal/store/storetest"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/stretchr/testify/require"
 )
 

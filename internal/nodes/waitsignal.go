@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 type waitSignalConfig struct {

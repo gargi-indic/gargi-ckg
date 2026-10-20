@@ -26,12 +26,12 @@ import urllib.error
 import urllib.request
 
 API = "https://jules.googleapis.com/v1alpha"
-REPO = "gargi-indic/gargi-ckg"
+REPO = "gargi-indic/gargi-flow"
 SOURCE = f"sources/github/{REPO}"
 # States in which the orchestrator must act (or the session is over).
 ATTENTION = {"AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "PAUSED", "COMPLETED", "FAILED"}
 
-PROMPT = """You are implementing one sub-task of the gargi-ckg project: a pluggable Reactive Graph Engine middleware written in Go.
+PROMPT = """You are implementing one sub-task of the gargi-flow project: a pluggable Reactive Graph Engine middleware written in Go.
 
 Read docs/SPEC.md for the overall requirements before starting.
 

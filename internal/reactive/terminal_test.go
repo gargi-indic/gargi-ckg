@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/reactive"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/reactive"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 type mockSink struct {

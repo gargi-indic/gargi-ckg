@@ -12,7 +12,7 @@ We are building a Pluggable Reactive Graph Engine Middleware. The system needs t
 We need to choose a programming language that excels in concurrency, builds robust modular systems, integrates well with Temporal, and provides excellent performance for a middleware framework.
 
 ## Decision
-We will write the `gargi-ckg` project in Go, specifically using Go 1.23 or newer. The module path will be `github.com/gargi-indic/gargi-ckg`. We will enforce idiomatic Go code (gofmt/goimports clean).
+We will write the `gargi-flow` project in Go, specifically using Go 1.23 or newer. The module path will be `github.com/gargi-indic/gargi-flow`. We will enforce idiomatic Go code (gofmt/goimports clean).
 
 ## Consequences
 - **Positive:** Go provides native primitives for concurrency, which aligns perfectly with building an asynchronous, event-driven reactive engine.

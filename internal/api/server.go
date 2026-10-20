@@ -6,9 +6,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
-	gargiv1 "github.com/gargi-indic/gargi-ckg/pkg/api/v1"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/config"
+	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc"

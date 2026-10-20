@@ -1,4 +1,4 @@
-// Package redis provides a Redis-backed persistence adapter for gargi-ckg execution engine.
+// Package redis provides a Redis-backed persistence adapter for gargi-flow execution engine.
 //
 // It implements the following engine contracts:
 //   - engine.StateStore: GraphState storage with optimistic concurrency control (CAS) via Redis Lua scripts.

@@ -14,18 +14,18 @@ linters:
           files:
             - "**/pkg/engine/**"
           deny:
-            - pkg: "github.com/gargi-indic/gargi-ckg/internal"
+            - pkg: "github.com/gargi-indic/gargi-flow/internal"
               desc: "pkg/engine must not import internal packages"
         graph_and_reactive:
           files:
             - "**/internal/graph/**"
             - "**/internal/reactive/**"
           deny:
-            - pkg: "github.com/gargi-indic/gargi-ckg/internal/api"
+            - pkg: "github.com/gargi-indic/gargi-flow/internal/api"
               desc: "domain packages must not import internal/api"
-            - pkg: "github.com/gargi-indic/gargi-ckg/internal/orchestrator"
+            - pkg: "github.com/gargi-indic/gargi-flow/internal/orchestrator"
               desc: "domain packages must not import internal/orchestrator"
-            - pkg: "github.com/gargi-indic/gargi-ckg/internal/store"
+            - pkg: "github.com/gargi-indic/gargi-flow/internal/store"
               desc: "domain packages must not import internal/store"
 formatters:
   enable:

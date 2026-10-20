@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
-	"github.com/gargi-indic/gargi-ckg/internal/store/memory"
-	"github.com/gargi-indic/gargi-ckg/internal/store/neo4j"
-	"github.com/gargi-indic/gargi-ckg/internal/store/postgres"
-	"github.com/gargi-indic/gargi-ckg/internal/store/redis"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/store/memory"
+	"github.com/gargi-indic/gargi-flow/internal/store/neo4j"
+	"github.com/gargi-indic/gargi-flow/internal/store/postgres"
+	"github.com/gargi-indic/gargi-flow/internal/store/redis"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // Builder facilitates dependency injection and composition of capability adapters.

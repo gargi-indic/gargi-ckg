@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
-	"github.com/gargi-indic/gargi-ckg/internal/logging"
+	"github.com/gargi-indic/gargi-flow/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/logging"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/contrib/opentelemetry"
 )

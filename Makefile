@@ -1,4 +1,4 @@
-# Makefile for gargi-ckg
+# Makefile for gargi-flow
 
 export PATH := $(PATH):$(HOME)/.local/bin:$(HOME)/go/bin:./bin
 

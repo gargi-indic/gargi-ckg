@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/logging"
-	"github.com/gargi-indic/gargi-ckg/internal/metrics"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/logging"
+	"github.com/gargi-indic/gargi-flow/internal/metrics"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -142,7 +142,7 @@ func (a *NodeActivities) ExecuteNodeActivity(
 		metrics.RecordNodeRetry(input.NodeType)
 	}
 
-	tr := otel.GetTracerProvider().Tracer("gargi-ckg")
+	tr := otel.GetTracerProvider().Tracer("gargi-flow")
 	ctx, span := tr.Start(ctx, fmt.Sprintf("NodeActivity:%s", input.NodeType),
 		trace.WithAttributes(
 			attribute.String("gargi.execution_id", string(input.ExecutionID)),

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gargi-indic/gargi-ckg/internal/api"
-	"github.com/gargi-indic/gargi-ckg/internal/config"
-	"github.com/gargi-indic/gargi-ckg/internal/store/memory"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/api"
+	"github.com/gargi-indic/gargi-flow/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/store/memory"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 func setupTestHTTPServer(t *testing.T, st engine.StateStore) *httptest.Server {

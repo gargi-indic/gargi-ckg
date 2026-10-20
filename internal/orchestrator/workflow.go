@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gargi-indic/gargi-ckg/internal/metrics"
-	"github.com/gargi-indic/gargi-ckg/internal/nodes"
-	"github.com/gargi-indic/gargi-ckg/internal/reactive"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/metrics"
+	"github.com/gargi-indic/gargi-flow/internal/nodes"
+	"github.com/gargi-indic/gargi-flow/internal/reactive"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )

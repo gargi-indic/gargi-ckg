@@ -10,13 +10,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gargi-indic/gargi-ckg/internal/config"
-	"github.com/gargi-indic/gargi-ckg/internal/logging"
-	"github.com/gargi-indic/gargi-ckg/internal/nodes"
-	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
-	"github.com/gargi-indic/gargi-ckg/internal/store"
-	"github.com/gargi-indic/gargi-ckg/internal/telemetry"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/config"
+	"github.com/gargi-indic/gargi-flow/internal/logging"
+	"github.com/gargi-indic/gargi-flow/internal/nodes"
+	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/internal/store"
+	"github.com/gargi-indic/gargi-flow/internal/telemetry"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"go.temporal.io/sdk/activity"
 )
 

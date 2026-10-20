@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	neo4jstore "github.com/gargi-indic/gargi-ckg/internal/store/neo4j"
-	"github.com/gargi-indic/gargi-ckg/internal/store/storetest"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	neo4jstore "github.com/gargi-indic/gargi-flow/internal/store/neo4j"
+	"github.com/gargi-indic/gargi-flow/internal/store/storetest"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

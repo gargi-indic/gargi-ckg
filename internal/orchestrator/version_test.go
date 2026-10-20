@@ -9,9 +9,9 @@ import (
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 
-	"github.com/gargi-indic/gargi-ckg/internal/nodes"
-	"github.com/gargi-indic/gargi-ckg/internal/orchestrator"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/internal/nodes"
+	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 )
 
 // versionEvolutionWorkflow demonstrates safe evolution across multiple workflow versions.

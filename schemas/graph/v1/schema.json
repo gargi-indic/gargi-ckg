@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:gargi-ckg:schema:graph:v1",
-  "title": "Gargi CKG Graph Definition",
-  "description": "Version 1 Graph Definition Schema for Gargi CKG",
+  "$id": "urn:gargi-flow:schema:graph:v1",
+  "title": "Gargi Flow Graph Definition",
+  "description": "Version 1 Graph Definition Schema for Gargi Flow",
   "type": "object",
   "additionalProperties": false,
   "required": [

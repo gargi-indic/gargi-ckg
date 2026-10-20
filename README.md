@@ -1,4 +1,6 @@
-# gargi-ckg — Pluggable Reactive Graph Engine
+# gargi-flow
+
+> **Reactive and durable graph execution.**
 
 A modular Go middleware framework for asynchronous, stateful, event-driven DAG execution,
 orchestrated by Temporal, with pluggable state stores (in-memory, Redis, PostgreSQL, Neo4j)

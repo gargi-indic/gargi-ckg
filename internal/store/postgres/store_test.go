@@ -13,9 +13,9 @@ import (
 	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
-	postgresstore "github.com/gargi-indic/gargi-ckg/internal/store/postgres"
-	"github.com/gargi-indic/gargi-ckg/internal/store/storetest"
-	"github.com/gargi-indic/gargi-ckg/pkg/engine"
+	postgresstore "github.com/gargi-indic/gargi-flow/internal/store/postgres"
+	"github.com/gargi-indic/gargi-flow/internal/store/storetest"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

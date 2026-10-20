@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package gargi.v1;
 
-option go_package = "github.com/gargi-indic/gargi-ckg/pkg/api/v1;gargiv1";
+option go_package = "github.com/gargi-indic/gargi-flow/pkg/api/v1;gargiv1";
 
 import "google/api/annotations.proto";
 import "google/protobuf/duration.proto";

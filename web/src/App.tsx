@@ -99,7 +99,7 @@ function App() {
 
     // Open EventSource before POST
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-    const eventSource = new EventSource(`${baseUrl}/v1/executions/${newExecId}/stream`);
+    const eventSource = new EventSource(`${baseUrl}/v1/executions/${newExecId}/events`);
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {

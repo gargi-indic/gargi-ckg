@@ -36,6 +36,56 @@ const NodeDrawer: React.FC<NodeDrawerProps> = ({ executionId, nodeId, config, on
   };
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState<number>(0);
+
+  const [signalName, setSignalName] = useState<string>(
+    typeof config?.config?.signal === 'string' ? config.config.signal : ''
+  );
+  const [signalPayload, setSignalPayload] = useState<string>(JSON.stringify({ approved: true }, null, 2));
+  const [signalSending, setSignalSending] = useState<boolean>(false);
+  const [signalFeedback, setSignalFeedback] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleSendSignal = async () => {
+    if (!executionId || !nodeId) return;
+    if (!signalName.trim()) {
+      setSignalFeedback({ ok: false, message: 'Signal name is required' });
+      return;
+    }
+    let parsedPayload: unknown;
+    try {
+      parsedPayload = signalPayload.trim() === '' ? {} : JSON.parse(signalPayload);
+    } catch {
+      setSignalFeedback({ ok: false, message: 'Payload must be valid JSON' });
+      return;
+    }
+
+    setSignalSending(true);
+    setSignalFeedback(null);
+    try {
+      // Workaround for openapi-fetch types mismatch when generated with swagger 2.0
+      const res = await apiClient.POST('/v1/executions/{executionId}/nodes/{nodeId}/signal', {
+        params: { path: { executionId, nodeId } },
+        body: { signalName: signalName.trim(), payload: parsedPayload }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+      const data = res.data as definitions['v1SignalNodeResponse'] | undefined;
+      if (res.error) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const errObj = res.error as any;
+        setSignalFeedback({ ok: false, message: errObj?.message || 'Failed to send signal' });
+      } else if (data?.accepted === false) {
+        setSignalFeedback({ ok: false, message: data.message || 'Signal was not accepted' });
+      } else {
+        setSignalFeedback({ ok: true, message: data?.message || `Signal "${signalName.trim()}" sent` });
+        // Re-fetch node state immediately so the drawer reflects the resumed graph
+        setRefreshNonce((n) => n + 1);
+      }
+    } catch (err) {
+      setSignalFeedback({ ok: false, message: err instanceof Error ? err.message : 'Failed to send signal' });
+    } finally {
+      setSignalSending(false);
+    }
+  };
 
   useEffect(() => {
     if (!executionId || !nodeId) {
@@ -92,13 +142,17 @@ const NodeDrawer: React.FC<NodeDrawerProps> = ({ executionId, nodeId, config, on
     });
 
     return () => clearInterval(interval);
-  }, [executionId, nodeId]);
+  }, [executionId, nodeId, refreshNonce]);
 
   if (!nodeId) return null;
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
   };
+
+  const isWaitNode = config?.type === 'wait_for_signal';
+  const isNodeActive = nodeDetail?.status === 'NODE_STATUS_RUNNING';
+  const showSignalForm = !!executionId && (isNodeActive || (isWaitNode && !nodeDetail));
 
   const calculateDuration = () => {
     if (!nodeDetail?.startedAt || !nodeDetail?.completedAt) return 'N/A';
@@ -138,6 +192,47 @@ const NodeDrawer: React.FC<NodeDrawerProps> = ({ executionId, nodeId, config, on
         {error && <p style={{ color: 'red' }}>{error}</p>}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Signal Inspector */}
+          {showSignalForm && (
+            <div style={{ padding: '12px', backgroundColor: '#fff3e0', border: '1px solid #ffcc80', borderRadius: '4px' }}>
+              <strong style={{ display: 'block', marginBottom: '8px', color: '#e65100' }}>
+                {isWaitNode ? '⏳ Awaiting signal' : 'Send Signal'}
+              </strong>
+              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px' }} htmlFor="signal-name">
+                Signal name
+              </label>
+              <input
+                id="signal-name"
+                type="text"
+                value={signalName}
+                onChange={(e) => setSignalName(e.target.value)}
+                placeholder="e.g. manager_approval"
+                style={{ width: '100%', padding: '6px 8px', marginBottom: '8px', fontSize: '0.85rem', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }}
+              />
+              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px' }} htmlFor="signal-payload">
+                Payload (JSON)
+              </label>
+              <textarea
+                id="signal-payload"
+                value={signalPayload}
+                onChange={(e) => setSignalPayload(e.target.value)}
+                style={{ width: '100%', minHeight: '80px', padding: '8px', marginBottom: '8px', backgroundColor: '#fff', borderRadius: '4px', fontSize: '0.85rem', border: '1px solid #ddd', fontFamily: 'monospace', boxSizing: 'border-box' }}
+              />
+              <button
+                onClick={handleSendSignal}
+                disabled={signalSending}
+                style={{ padding: '6px 12px', fontSize: '0.85rem', cursor: signalSending ? 'not-allowed' : 'pointer', backgroundColor: '#ff9800', color: 'white', border: 'none', borderRadius: '4px', opacity: signalSending ? 0.7 : 1 }}
+              >
+                {signalSending ? 'Sending...' : 'Send Signal'}
+              </button>
+              {signalFeedback && (
+                <div style={{ marginTop: '8px', fontSize: '0.85rem', color: signalFeedback.ok ? '#2e7d32' : '#c62828' }}>
+                  {signalFeedback.ok ? '✔ ' : '✖ '}{signalFeedback.message}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Config Data */}
           {config && (

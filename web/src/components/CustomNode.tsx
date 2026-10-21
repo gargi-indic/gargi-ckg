@@ -6,28 +6,55 @@ interface CustomNodeProps {
     id: string;
     type: string;
     label?: string;
-    status?: string; // Optional status for the ring
+    status?: string;
   };
 }
 
 const CustomNode: React.FC<CustomNodeProps> = ({ data }) => {
-  // Determine color based on status or default
   let ringColor = '#ccc';
-  if (data.status === 'success') ringColor = '#4caf50';
-  if (data.status === 'error') ringColor = '#f44336';
-  if (data.status === 'running') ringColor = '#2196f3';
-  if (data.status === 'pending') ringColor = '#ff9800';
+  let animation = 'none';
+  let opacity = 1;
+  let borderStyle = 'solid';
+
+  switch (data.status) {
+    case 'NODE_STATUS_PENDING':
+    case 'NODE_STATUS_READY':
+      ringColor = '#9e9e9e'; // Grey
+      break;
+    case 'NODE_STATUS_RUNNING':
+    case 'NODE_STATUS_COMPENSATING':
+      ringColor = '#2196f3'; // Blue
+      animation = 'pulse 1.5s infinite';
+      break;
+    case 'NODE_STATUS_SUCCEEDED':
+    case 'NODE_STATUS_COMPENSATED':
+      ringColor = '#4caf50'; // Green
+      break;
+    case 'NODE_STATUS_FAILED':
+      ringColor = '#f44336'; // Red
+      break;
+    case 'NODE_STATUS_SKIPPED':
+      ringColor = '#9e9e9e'; // Grey
+      opacity = 0.5;
+      borderStyle = 'dashed';
+      break;
+    default:
+      ringColor = '#ccc'; // Default grey
+  }
 
   return (
     <div
+      className="custom-node"
       style={{
         padding: '10px',
-        border: `3px solid ${ringColor}`,
+        border: `3px ${borderStyle} ${ringColor}`,
         borderRadius: '8px',
         background: '#fff',
         minWidth: '150px',
         textAlign: 'center',
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        opacity: opacity,
+        animation: animation,
       }}
     >
       <Handle type="target" position={Position.Top} />
@@ -42,6 +69,9 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data }) => {
           {data.label}
         </div>
       )}
+      <div style={{ fontSize: '10px', color: ringColor, marginTop: '4px', fontWeight: 'bold' }}>
+        {data.status ? data.status.replace('NODE_STATUS_', '') : 'UNSPECIFIED'}
+      </div>
       <Handle type="source" position={Position.Bottom} />
     </div>
   );

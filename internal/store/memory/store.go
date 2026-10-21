@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,9 +42,17 @@ type subscriber struct {
 
 // Store is an in-memory, thread-safe implementation of engine.StateStore,
 // engine.LockManager, engine.EventPublisher, and engine.ExecutionLog.
+type stateRecord struct {
+	state     *engine.GraphState
+	createdAt time.Time
+	updatedAt time.Time
+}
+
+// Store is an in-memory, thread-safe implementation of engine.StateStore,
+// engine.LockManager, engine.EventPublisher, and engine.ExecutionLog.
 type Store struct {
 	stateMu sync.RWMutex
-	states  map[engine.ExecutionID]*engine.GraphState
+	states  map[engine.ExecutionID]*stateRecord
 
 	lockMu sync.Mutex
 	locks  map[string]*lockEntry
@@ -76,7 +85,7 @@ func WithSubscriptionBufferSize(size int) Option {
 // New creates a new in-memory Store with optional configuration options.
 func New(opts ...Option) *Store {
 	s := &Store{
-		states:        make(map[engine.ExecutionID]*engine.GraphState),
+		states:        make(map[engine.ExecutionID]*stateRecord),
 		locks:         make(map[string]*lockEntry),
 		subscribers:   make(map[uint64]*subscriber),
 		logs:          make(map[engine.ExecutionID][]*engine.ExecutionLogEntry),
@@ -123,7 +132,7 @@ func (s *Store) GetState(ctx context.Context, executionID engine.ExecutionID) (*
 		}
 	}
 
-	return cloneGraphState(st)
+	return cloneGraphState(st.state)
 }
 
 // SetState stores or updates the entire GraphState for an execution enforcing CAS concurrency.
@@ -162,18 +171,27 @@ func (s *Store) SetState(ctx context.Context, executionID engine.ExecutionID, st
 				Err:             engine.ErrStoreConflict,
 			}
 		}
+		s.states[executionID] = &stateRecord{
+			state:     cloned,
+			createdAt: time.Now().UTC(),
+			updatedAt: time.Now().UTC(),
+		}
 	} else {
-		if current.Version() != expectedVersion {
+		if current.state.Version() != expectedVersion {
 			return &engine.StoreConflictError{
 				ExecutionID:     executionID,
 				ExpectedVersion: expectedVersion,
-				ActualVersion:   current.Version(),
+				ActualVersion:   current.state.Version(),
 				Err:             engine.ErrStoreConflict,
 			}
 		}
+		s.states[executionID] = &stateRecord{
+			state:     cloned,
+			createdAt: current.createdAt,
+			updatedAt: time.Now().UTC(),
+		}
 	}
 
-	s.states[executionID] = cloned
 	return nil
 }
 
@@ -207,16 +225,16 @@ func (s *Store) PatchState(ctx context.Context, executionID engine.ExecutionID, 
 		}
 	}
 
-	if current.Version() != expectedVersion {
+	if current.state.Version() != expectedVersion {
 		return nil, &engine.StoreConflictError{
 			ExecutionID:     executionID,
 			ExpectedVersion: expectedVersion,
-			ActualVersion:   current.Version(),
+			ActualVersion:   current.state.Version(),
 			Err:             engine.ErrStoreConflict,
 		}
 	}
 
-	newState, err := current.Apply(*mutation)
+	newState, err := current.state.Apply(*mutation)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +244,11 @@ func (s *Store) PatchState(ctx context.Context, executionID engine.ExecutionID, 
 		return nil, err
 	}
 
-	s.states[executionID] = cloned
+	s.states[executionID] = &stateRecord{
+		state:     cloned,
+		createdAt: current.createdAt,
+		updatedAt: time.Now().UTC(),
+	}
 	return cloneGraphState(cloned)
 }
 
@@ -539,7 +561,7 @@ func (s *Store) GetLogs(ctx context.Context, executionID engine.ExecutionID, fro
 // Reset clears all stored states, locks, subscriber channels, and logs.
 func (s *Store) Reset() {
 	s.stateMu.Lock()
-	s.states = make(map[engine.ExecutionID]*engine.GraphState)
+	s.states = make(map[engine.ExecutionID]*stateRecord)
 	s.stateMu.Unlock()
 
 	s.lockMu.Lock()
@@ -684,4 +706,64 @@ func deepCopyAny(v any) any {
 	default:
 		return val
 	}
+}
+
+// ListExecutions filters and queries executions by status, time range, and graph ID.
+func (s *Store) ListExecutions(ctx context.Context, filter engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.closed.Load() {
+		return nil, &engine.StoreUnavailableError{
+			Backend: "memory",
+			Err:     errors.New("store is closed"),
+		}
+	}
+
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+
+	var summaries []*engine.ExecutionSummary
+	for execID, record := range s.states {
+		if filter.GraphID != "" && record.state.GraphID() != filter.GraphID {
+			continue
+		}
+		if filter.Status != "" && record.state.Status() != filter.Status {
+			continue
+		}
+		if filter.StartTime != nil && record.createdAt.Before(*filter.StartTime) {
+			continue
+		}
+		if filter.EndTime != nil && record.createdAt.After(*filter.EndTime) {
+			continue
+		}
+
+		summaries = append(summaries, &engine.ExecutionSummary{
+			ExecutionID: execID,
+			GraphID:     record.state.GraphID(),
+			Status:      record.state.Status(),
+			Version:     record.state.Version(),
+			CreatedAt:   record.createdAt,
+			UpdatedAt:   record.updatedAt,
+		})
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].CreatedAt.Equal(summaries[j].CreatedAt) {
+			return summaries[i].ExecutionID > summaries[j].ExecutionID
+		}
+		return summaries[i].CreatedAt.After(summaries[j].CreatedAt)
+	})
+
+	if filter.Offset > 0 {
+		if filter.Offset >= len(summaries) {
+			return []*engine.ExecutionSummary{}, nil
+		}
+		summaries = summaries[filter.Offset:]
+	}
+	if filter.Limit > 0 && len(summaries) > filter.Limit {
+		summaries = summaries[:filter.Limit]
+	}
+
+	return summaries, nil
 }

@@ -193,6 +193,9 @@ type StateStore interface {
 	// Returns the updated GraphState on success, or a StoreConflictError if expectedVersion does not match.
 	// If executionID is not found, returns StoreNotFoundError.
 	PatchState(ctx context.Context, executionID ExecutionID, mutation *StateMutation, expectedVersion uint64) (*GraphState, error)
+
+	// ListExecutions retrieves a list of execution summaries matching the given filter.
+	ListExecutions(ctx context.Context, filter ExecutionFilter) ([]*ExecutionSummary, error)
 }
 
 // LockHandle represents an acquired distributed lock token.
@@ -253,4 +256,24 @@ type ExecutionLog interface {
 	// GetLogs queries audit log entries for an execution starting from fromSequence up to limit entries.
 	// If limit <= 0, a default system limit or all entries may be returned.
 	GetLogs(ctx context.Context, executionID ExecutionID, fromSequence uint64, limit int) ([]*ExecutionLogEntry, error)
+}
+
+// ExecutionFilter defines filtering parameters for ListExecutions.
+type ExecutionFilter struct {
+	GraphID   string
+	Status    Status
+	StartTime *time.Time
+	EndTime   *time.Time
+	Limit     int
+	Offset    int
+}
+
+// ExecutionSummary represents summary metadata for an execution in ListExecutions.
+type ExecutionSummary struct {
+	ExecutionID ExecutionID `json:"executionId"`
+	GraphID     string      `json:"graphId"`
+	Status      Status      `json:"status"`
+	Version     uint64      `json:"version"`
+	CreatedAt   time.Time   `json:"createdAt"`
+	UpdatedAt   time.Time   `json:"updatedAt"`
 }

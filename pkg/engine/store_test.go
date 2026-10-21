@@ -731,3 +731,8 @@ func TestStoreErrors(t *testing.T) {
 		t.Errorf("IsStoreUnavailable(unrelatedErr) should be false")
 	}
 }
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (m *mockStateStore) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	return nil, nil
+}

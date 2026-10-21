@@ -837,3 +837,8 @@ func parseUint64(v any) uint64 {
 		return 0
 	}
 }
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (s *Store) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	return nil, errors.New("unimplemented: ListExecutions not supported by redis store")
+}

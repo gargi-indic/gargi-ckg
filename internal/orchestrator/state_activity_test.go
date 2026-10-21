@@ -528,3 +528,8 @@ func TestFetchStateWithFallback(t *testing.T) {
 	_, err = FetchStateWithFallback(ctx, unavailStore, nil, string(execID), "")
 	require.Error(t, err)
 }
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (m *mockStateStore) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	return nil, nil
+}

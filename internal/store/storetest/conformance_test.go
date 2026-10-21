@@ -407,3 +407,13 @@ func TestConformanceSuite_TeardownCallback(t *testing.T) {
 		t.Errorf("expected Teardown to be called at least once, got %d", teardownCount)
 	}
 }
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (m *fullMockStore) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	return nil, nil
+}
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (s *referenceStateStore) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	return nil, nil
+}

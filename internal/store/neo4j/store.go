@@ -718,3 +718,8 @@ func (s *Store) GetLogs(ctx context.Context, executionID engine.ExecutionID, fro
 	}
 	return res.([]*engine.ExecutionLogEntry), nil
 }
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (s *Store) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	return nil, errors.New("unimplemented: ListExecutions not supported by neo4j store")
+}

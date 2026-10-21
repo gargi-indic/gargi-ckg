@@ -40,26 +40,6 @@ type Config struct {
 	AutoMigrate bool
 }
 
-// ExecutionFilter defines filtering parameters for QueryExecutions.
-type ExecutionFilter struct {
-	GraphID   string
-	Status    engine.Status
-	StartTime *time.Time
-	EndTime   *time.Time
-	Limit     int
-	Offset    int
-}
-
-// ExecutionSummary represents summary metadata for an execution in QueryExecutions.
-type ExecutionSummary struct {
-	ExecutionID engine.ExecutionID `json:"executionId"`
-	GraphID     string             `json:"graphId"`
-	Status      engine.Status      `json:"status"`
-	Version     uint64             `json:"version"`
-	CreatedAt   time.Time          `json:"createdAt"`
-	UpdatedAt   time.Time          `json:"updatedAt"`
-}
-
 // NodeStateRecord represents an individual node execution state record in QueryNodeStates.
 type NodeStateRecord struct {
 	ExecutionID  engine.ExecutionID `json:"executionId"`
@@ -762,8 +742,8 @@ VALUES ($1, $2, $3, $4, $5, $6)
 	return nil
 }
 
-// QueryExecutions filters and queries executions by status, time range, and graph ID.
-func (s *Store) QueryExecutions(ctx context.Context, filter ExecutionFilter) ([]*ExecutionSummary, error) {
+// ListExecutions filters and queries executions by status, time range, and graph ID.
+func (s *Store) ListExecutions(ctx context.Context, filter engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -818,7 +798,7 @@ WHERE 1=1
 	}
 	defer rows.Close()
 
-	summaries := make([]*ExecutionSummary, 0)
+	summaries := make([]*engine.ExecutionSummary, 0)
 	for rows.Next() {
 		var (
 			execID    string
@@ -831,7 +811,7 @@ WHERE 1=1
 		if err := rows.Scan(&execID, &graphID, &status, &version, &createdAt, &updatedAt); err != nil {
 			return nil, s.wrapErr(err)
 		}
-		summaries = append(summaries, &ExecutionSummary{
+		summaries = append(summaries, &engine.ExecutionSummary{
 			ExecutionID: engine.ExecutionID(execID),
 			GraphID:     graphID,
 			Status:      engine.Status(status),

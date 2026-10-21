@@ -367,8 +367,8 @@ func TestAuditQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.SetState(ctx, e3ID, s3Success, 2))
 
-	// 1. QueryExecutions by Status
-	summaries, err := store.QueryExecutions(ctx, postgresstore.ExecutionFilter{
+	// 1. ListExecutions by Status
+	summaries, err := store.ListExecutions(ctx, engine.ExecutionFilter{
 		Status: engine.StatusSucceeded,
 	})
 	require.NoError(t, err)
@@ -376,17 +376,17 @@ func TestAuditQueries(t *testing.T) {
 	assert.Equal(t, e3ID, summaries[0].ExecutionID)
 	assert.Equal(t, "audit-graph-2", summaries[0].GraphID)
 
-	// QueryExecutions by GraphID
-	summaries, err = store.QueryExecutions(ctx, postgresstore.ExecutionFilter{
+	// ListExecutions by GraphID
+	summaries, err = store.ListExecutions(ctx, engine.ExecutionFilter{
 		GraphID: "audit-graph-1",
 	})
 	require.NoError(t, err)
 	assert.Len(t, summaries, 2)
 
-	// QueryExecutions by Time Range
+	// ListExecutions by Time Range
 	start := now.Add(-10 * time.Minute)
 	end := now.Add(10 * time.Minute)
-	summaries, err = store.QueryExecutions(ctx, postgresstore.ExecutionFilter{
+	summaries, err = store.ListExecutions(ctx, engine.ExecutionFilter{
 		StartTime: &start,
 		EndTime:   &end,
 		Limit:     2,

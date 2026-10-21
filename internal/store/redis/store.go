@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -839,6 +840,62 @@ func parseUint64(v any) uint64 {
 }
 
 // ListExecutions retrieves a list of execution summaries matching the given filter.
-func (s *Store) ListExecutions(_ context.Context, _ engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
-	return nil, errors.New("unimplemented: ListExecutions not supported by redis store")
+func (s *Store) ListExecutions(ctx context.Context, filter engine.ExecutionFilter) ([]*engine.ExecutionSummary, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.checkClosed(); err != nil {
+		return nil, err
+	}
+
+	pattern := fmt.Sprintf("%s:state:*", s.keyPrefix)
+	keys, err := s.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return nil, s.wrapError(err)
+	}
+
+	var summaries []*engine.ExecutionSummary
+	for _, k := range keys {
+		data, err := s.client.Get(ctx, k).Bytes()
+		if err != nil {
+			continue
+		}
+		var state engine.GraphState
+		if err := json.Unmarshal(data, &state); err != nil {
+			continue
+		}
+
+		if filter.GraphID != "" && state.GraphID() != filter.GraphID {
+			continue
+		}
+		if filter.Status != "" && state.Status() != filter.Status {
+			continue
+		}
+
+		summaries = append(summaries, &engine.ExecutionSummary{
+			ExecutionID: state.ExecutionID(),
+			GraphID:     state.GraphID(),
+			Status:      state.Status(),
+			Version:     state.Version(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		})
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].ExecutionID > summaries[j].ExecutionID
+	})
+
+	if filter.Offset > 0 {
+		if filter.Offset >= len(summaries) {
+			return []*engine.ExecutionSummary{}, nil
+		}
+		summaries = summaries[filter.Offset:]
+	}
+
+	if filter.Limit > 0 && len(summaries) > filter.Limit {
+		summaries = summaries[:filter.Limit]
+	}
+
+	return summaries, nil
 }

@@ -84,3 +84,24 @@ jobs:
           file: ./Dockerfile.worker
           push: false
           tags: gargi-worker:ci
+
+  ui:
+    name: UI Lint and Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: make ui-install
+
+      - name: Lint UI
+        run: make ui-lint
+
+      - name: Build UI
+        run: make ui-build

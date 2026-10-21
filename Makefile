@@ -76,3 +76,17 @@ down:
 docker-build:
 	docker build -t gargi-server:latest -f Dockerfile.server .
 	docker build -t gargi-worker:latest -f Dockerfile.worker .
+
+.PHONY: ui-install ui-dev ui-build ui-lint
+
+ui-install:
+	cd web && npm install
+
+ui-dev:
+	cd web && npm run dev
+
+ui-build:
+	cd web && npm run build
+
+ui-lint:
+	cd web && npm run lint

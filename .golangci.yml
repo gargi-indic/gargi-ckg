@@ -1,4 +1,8 @@
 version: "2"
+run:
+  skip-dirs:
+    - web
+    - web/node_modules
 linters:
   default: none
   enable:
@@ -27,6 +31,15 @@ linters:
               desc: "domain packages must not import internal/orchestrator"
             - pkg: "github.com/gargi-indic/gargi-flow/internal/store"
               desc: "domain packages must not import internal/store"
+issues:
+  exclude-rules:
+    - path: "web/.*"
+      linters:
+        - revive
+        - errcheck
+        - govet
+        - staticcheck
+        - depguard
 formatters:
   enable:
     - gofumpt

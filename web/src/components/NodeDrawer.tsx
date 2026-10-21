@@ -8,10 +8,32 @@ interface NodeDrawerProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: any;
   onClose: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onConfigChange?: (newConfig: any) => void;
 }
 
-const NodeDrawer: React.FC<NodeDrawerProps> = ({ executionId, nodeId, config, onClose }) => {
+const NodeDrawer: React.FC<NodeDrawerProps> = ({ executionId, nodeId, config, onClose, onConfigChange }) => {
   const [nodeDetail, setNodeDetail] = useState<definitions['v1NodeStateDetail'] | null>(null);
+  const [editingConfig, setEditingConfig] = useState<string>(config ? JSON.stringify(config, null, 2) : '');
+  const [configError, setConfigError] = useState<string | null>(null);
+
+  const [prevConfig, setPrevConfig] = useState(config);
+  if (config !== prevConfig) {
+    setPrevConfig(config);
+    setEditingConfig(config ? JSON.stringify(config, null, 2) : '');
+  }
+
+  const handleConfigSave = () => {
+    try {
+      const parsed = JSON.parse(editingConfig);
+      setConfigError(null);
+      if (onConfigChange) {
+        onConfigChange(parsed);
+      }
+    } catch (e) {
+      setConfigError('Invalid JSON');
+    }
+  };
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,17 +143,28 @@ const NodeDrawer: React.FC<NodeDrawerProps> = ({ executionId, nodeId, config, on
           {config && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <strong style={{ display: 'block' }}>Config</strong>
-                <button
-                  onClick={() => handleCopy(JSON.stringify(config, null, 2))}
-                  style={{ fontSize: '0.8rem', padding: '2px 6px', cursor: 'pointer' }}
-                >
-                  Copy
-                </button>
+                <strong style={{ display: 'block' }}>Config (Edit as JSON)</strong>
+                <div>
+                  <button
+                    onClick={handleConfigSave}
+                    style={{ fontSize: '0.8rem', padding: '2px 6px', cursor: 'pointer', marginRight: '4px', backgroundColor: '#4caf50', color: 'white', border: 'none', borderRadius: '4px' }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => handleCopy(JSON.stringify(config, null, 2))}
+                    style={{ fontSize: '0.8rem', padding: '2px 6px', cursor: 'pointer' }}
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
-              <pre style={{ margin: 0, padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', fontSize: '0.85rem', overflowX: 'auto', maxHeight: '300px', border: '1px solid #ddd' }}>
-                {String(JSON.stringify(config, null, 2))}
-              </pre>
+              <textarea
+                value={editingConfig}
+                onChange={(e) => setEditingConfig(e.target.value)}
+                style={{ width: '100%', minHeight: '150px', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', fontSize: '0.85rem', border: '1px solid #ddd', fontFamily: 'monospace', boxSizing: 'border-box' }}
+              />
+              {configError && <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>{configError}</div>}
             </div>
           )}
 

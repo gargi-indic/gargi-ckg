@@ -6,3 +6,6 @@ __pycache__/
 *$py.class
 web/node_modules/
 *.log
+
+# scripts/dev-up.sh logs
+.dev-logs/

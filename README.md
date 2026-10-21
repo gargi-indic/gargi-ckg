@@ -63,6 +63,89 @@ Default credentials for local development are stored in `.env.example`. The `mak
 | Temporal | `127.0.0.1:7233` | Orchestration server |
 | Temporal UI | `127.0.0.1:8233` | Web dashboard |
 
+### Docker-free stack
+
+`scripts/dev-up.sh` runs everything needed for local development as plain
+processes, with no Docker:
+
+```bash
+./scripts/dev-up.sh
+```
+
+| Process | Address |
+|---------|---------|
+| miniredis (`go run ./scripts/redis_dev.go`) | `127.0.0.1:6379` |
+| Temporal dev server (`temporal server start-dev`) | `127.0.0.1:7233`, UI on `http://localhost:8233` |
+| API server (`go run ./cmd/server/main.go`) | HTTP `:8080`, gRPC `:9090` |
+| Worker (`go run ./cmd/worker/main.go`) | — |
+| Web UI (`npm run dev` in `web/`) | `http://localhost:5173` |
+
+Prerequisites: `go`, `node`, `npm`, and the [Temporal CLI](https://docs.temporal.io/cli)
+(`brew install temporal` or `curl -sSf https://temporal.download/cli.sh | sh`).
+The script sets `GARGI_STORE_DRIVER=redis` so the server and worker share state, and
+allows the Vite origin through CORS. Per-service logs go to `.dev-logs/`.
+<kbd>Ctrl</kbd>+<kbd>C</kbd> stops every process it started.
+
+Optional knobs: `GARGI_DEV_SKIP_TEMPORAL=1` (use a Temporal you already run),
+`GARGI_DEV_SKIP_WEB=1` (backend only), `GARGI_DEV_LOG_DIR=<path>`.
+
+## Web UI / Visual DAG Canvas
+
+`web/` contains a React + Vite app for authoring graphs and watching them execute
+live. See [web/README.md](web/README.md) for its architecture.
+
+### Running it
+
+```bash
+./scripts/dev-up.sh          # full stack, then open http://localhost:5173
+# or, against an API you already run:
+make ui-install && make ui-dev
+```
+
+The UI calls `http://localhost:8080` by default (override with `VITE_API_BASE_URL`).
+The API only answers browser requests from allowed origins, so set
+`GARGI_HTTP_CORS_ALLOWED_ORIGINS=http://localhost:5173` when you don't use `dev-up.sh`.
+
+### Loading experiments
+
+- Use the **Load Example…** dropdown in the header to load any graph from
+  `web/public/examples/` (linear pipeline, fan-out/fan-in, conditional branch, saga
+  compensation, wait-for-signal) into the editor and canvas. Uploading a `.json` or
+  `.yaml` file and pasting into the editor work too.
+- The **Experiments Gallery** (shown when you open an execution and the editor has no
+  graph) offers **Load Code** and **Load & Run** for curated examples.
+- Press **Run** to submit the graph. Node rings and status badges update live over
+  SSE (falling back to polling), and the **Live Events** panel logs every transition.
+  **Recent Executions** in the left sidebar lets you reopen past runs.
+
+### Authoring DAGs
+
+- Drag node types from the **Node Palette** onto the canvas.
+- Drag from a node's bottom handle to another node's top handle to connect them.
+- Select a node or edge and press <kbd>Backspace</kbd> to delete it.
+- Click a node to edit its config in the drawer; click an edge to edit its CEL `condition`.
+- Every change is written back to the editor, which runs client-side validation
+  (unique IDs, no dangling edges, no cycles). **Export JSON** / **Export YAML** download it.
+
+### Human-in-the-loop signals
+
+1. Load **Wait Signal (YAML)** and press **Run**.
+2. When `await_manager_approval` is reached it shows an amber ring and an
+   **⏳ Awaiting signal** badge.
+3. Click the node. The signal inspector is pre-filled with the node's signal name
+   (`manager_approval`) and a JSON payload; edit it and press **Send**. The UI calls
+   `POST /v1/executions/{executionId}/nodes/{nodeId}/signal`, and the execution
+   continues to `dispatch_order`.
+
+### UI checks
+
+```bash
+cd web
+npm run lint && npm run build
+npx playwright install --with-deps chromium   # once
+npm run test:e2e                              # mocked-API smoke tests
+```
+
 ## Makefile Targets
 
 Common development tasks are managed via `make`:

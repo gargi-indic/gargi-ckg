@@ -474,6 +474,28 @@ function AppFlow() {
     setEdges(parsedGraphResult.edges);
   }
 
+  // Overlay live execution statuses onto the authored graph. `nodes`/`edges` only
+  // resync from the editor text, so status updates (SSE/polling) are applied here.
+  const displayNodes = useMemo(() => nodes.map((node) => {
+    const status = nodeStatuses[node.id] || 'NODE_STATUS_UNSPECIFIED';
+    return node.data.status === status ? node : { ...node, data: { ...node.data, status } };
+  }), [nodes, nodeStatuses]);
+
+  const displayEdges = useMemo(() => edges.map((edge) => {
+    const sourceStatus = nodeStatuses[edge.source];
+    const isDimmed = sourceStatus === 'NODE_STATUS_SKIPPED';
+    return {
+      ...edge,
+      animated: sourceStatus === 'NODE_STATUS_SUCCEEDED',
+      style: {
+        ...edge.style,
+        stroke: isDimmed ? '#ddd' : '#888',
+        opacity: isDimmed ? 0.3 : 1,
+        strokeDasharray: isDimmed ? '5,5' : 'none',
+      },
+    };
+  }), [edges, nodeStatuses]);
+
   const serializeGraph = (currentNodes: ReactFlowNode[], currentEdges: Edge[]) => {
     const graphObj = {
       apiVersion: 'graph/v1',
@@ -686,8 +708,8 @@ function AppFlow() {
             <div style={{ flex: 1, position: 'relative' }}>
               {nodes.length > 0 || !executionId ? ( // Show canvas even if empty to allow authoring
                 <GraphCanvas
-                  nodes={nodes}
-                  edges={edges}
+                  nodes={displayNodes}
+                  edges={displayEdges}
                   onNodeClick={(_, node) => {
                     setSelectedNodeId(node.id);
                     setSelectedEdgeId(null);

@@ -247,6 +247,33 @@ func (b *FanoutBridge) Stream(
 					if pbVal, err := structpb.NewValue(entry.Details); err == nil {
 						resp.Payload = pbVal
 					}
+					if nID, ok := entry.Details["nodeId"].(string); ok {
+						resp.NodeId = nID
+					} else if nID, ok := entry.Details["node_id"].(string); ok {
+						resp.NodeId = nID
+					}
+
+					var fromStatusStr, toStatusStr string
+					if oldSt, ok := entry.Details["oldStatus"].(string); ok {
+						fromStatusStr = oldSt
+					} else if oldSt, ok := entry.Details["from_status"].(string); ok {
+						fromStatusStr = oldSt
+					}
+
+					if newSt, ok := entry.Details["newStatus"].(string); ok {
+						toStatusStr = newSt
+					} else if newSt, ok := entry.Details["status"].(string); ok {
+						toStatusStr = newSt
+					} else if newSt, ok := entry.Details["to_status"].(string); ok {
+						toStatusStr = newSt
+					}
+
+					if fromStatusStr != "" {
+						resp.FromStatus = toPBNodeStatus(engine.Status(fromStatusStr))
+					}
+					if toStatusStr != "" {
+						resp.ToStatus = toPBNodeStatus(engine.Status(toStatusStr))
+					}
 				}
 
 				if err := stream.Send(resp); err != nil {
@@ -328,6 +355,10 @@ func (b *FanoutBridge) Stream(
 						}
 					}
 				case engine.NodeCompletedPayload:
+					resp.EventType = "node_state_changed"
+					if prev, ok := lastStatuses[event.NodeID()]; ok {
+						resp.FromStatus = toPBNodeStatus(prev)
+					}
 					resp.ToStatus = toPBNodeStatus(p.Status)
 					lastStatuses[event.NodeID()] = p.Status
 					if len(p.Output) > 0 {
@@ -336,6 +367,10 @@ func (b *FanoutBridge) Stream(
 						}
 					}
 				case engine.NodeFailedPayload:
+					resp.EventType = "node_state_changed"
+					if prev, ok := lastStatuses[event.NodeID()]; ok {
+						resp.FromStatus = toPBNodeStatus(prev)
+					}
 					resp.ToStatus = toPBNodeStatus(p.Status)
 					resp.ErrorMessage = p.ErrorMessage
 					lastStatuses[event.NodeID()] = p.Status
@@ -394,7 +429,7 @@ func (b *FanoutBridge) Stream(
 						ExecutionId:  string(execID),
 						Sequence:     highestSeq,
 						Timestamp:    timestamppb.Now(),
-						EventType:    "node_status_change",
+						EventType:    "node_state_changed",
 						NodeId:       string(nodeID),
 						FromStatus:   toPBNodeStatus(prevStatus),
 						ToStatus:     toPBNodeStatus(currStatus),
@@ -410,11 +445,15 @@ func (b *FanoutBridge) Stream(
 
 			if st.Status().IsTerminal() {
 				highestSeq++
+				eventType := "graph_completed"
+				if st.Status() == engine.StatusFailed {
+					eventType = "graph_failed"
+				}
 				_ = stream.Send(&gargiv1.StreamExecutionUpdatesResponse{
 					ExecutionId: string(execID),
 					Sequence:    highestSeq,
 					Timestamp:   timestamppb.Now(),
-					EventType:   "execution_completed",
+					EventType:   eventType,
 					ToStatus:    toPBNodeStatus(st.Status()),
 				})
 				return nil

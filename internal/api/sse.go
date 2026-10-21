@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/gargi-indic/gargi-flow/internal/metrics"
 	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // SSEOptions configures the behavior of the Server-Sent Events handler.
@@ -59,7 +59,11 @@ type sseStreamAdapter struct {
 }
 
 func (a *sseStreamAdapter) Send(resp *gargiv1.StreamExecutionUpdatesResponse) error {
-	data, err := json.Marshal(resp)
+	opts := protojson.MarshalOptions{
+		UseProtoNames:   true,
+		EmitUnpopulated: false,
+	}
+	data, err := opts.Marshal(resp)
 	if err != nil {
 		return err
 	}

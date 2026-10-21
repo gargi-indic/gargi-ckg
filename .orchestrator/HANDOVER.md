@@ -37,7 +37,7 @@ All original backend epics (#1, #8, #15, #22, #29, #39, #48, #56, #61) are fully
 | #107 | [UI] Run execution and animate node status live via SSE | #118 | ✅ Merged | `75996fc` |
 | #108 | [UI] Node inspector drawer (input, output, error, timing) | #119 | ✅ Merged | `4e1d5c7` |
 | #109 | [UI] Experiments gallery + recent executions sidebar | #120 | ✅ Merged | `adb0474`|
-| #110 | [UI] Minimal graph authoring / node editing | - | ⏳ Todo | Next after #109 |
+| #110 | [UI] Minimal graph authoring / node editing | #121 | ✅ Merged | `1167557` |
 | #111 | [UI] Trigger human-in-the-loop signals from node inspector | - | ⏳ Todo | Next after #110 |
 | #112 | [UI] Documentation & unified dev-up script | - | ⏳ Todo | Final task in Epic #101 |
 

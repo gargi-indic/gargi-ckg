@@ -17,6 +17,7 @@ const nodeTypes = {
 interface GraphCanvasProps {
   nodes: ReactFlowNode[];
   edges: Edge[];
+  onNodeClick?: (event: React.MouseEvent, node: ReactFlowNode) => void;
 }
 
 const nodeWidth = 200;
@@ -54,7 +55,7 @@ const getLayoutedElements = (nodes: ReactFlowNode[], edges: Edge[], direction = 
   return { layoutedNodes, layoutedEdges: edges };
 };
 
-const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes: initialNodes, edges: initialEdges }) => {
+const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes: initialNodes, edges: initialEdges, onNodeClick }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
@@ -76,6 +77,7 @@ const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes: initialNodes, edges: i
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
         defaultEdgeOptions={{

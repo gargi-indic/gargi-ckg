@@ -3,6 +3,7 @@ import * as jsyaml from 'js-yaml';
 import type { Node as ReactFlowNode, Edge } from '@xyflow/react';
 import './App.css';
 import GraphCanvas from './components/GraphCanvas';
+import NodeDrawer from './components/NodeDrawer';
 import { apiClient } from './api/client';
 import type { definitions } from './api/schema';
 
@@ -35,6 +36,9 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
+
+  // Drawer state
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const handleLoadExample = async (path: string) => {
     if (!path) return;
@@ -250,7 +254,9 @@ function App() {
         throw new Error('Graph definition must contain a "nodes" array');
       }
 
-      type NodeDef = { id: string; type?: string; name?: string };
+      // Use any for node config to avoid complex typing for the parser
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type NodeDef = { id: string; type?: string; name?: string; [key: string]: any };
       type EdgeDef = { from: string; to: string; condition?: string };
 
       const reactFlowNodes: ReactFlowNode[] = (parsedObj.nodes as NodeDef[]).map((node) => ({
@@ -262,6 +268,7 @@ function App() {
           type: node.type || 'unknown',
           label: node.name || node.id,
           status: nodeStatuses[node.id] || 'NODE_STATUS_UNSPECIFIED',
+          config: node,
         },
       }));
 
@@ -359,11 +366,25 @@ function App() {
 
         <div style={{ flex: 1, position: 'relative' }}>
           {parsedGraphResult.nodes.length > 0 ? (
-            <GraphCanvas nodes={parsedGraphResult.nodes} edges={parsedGraphResult.edges} />
+            <GraphCanvas
+              nodes={parsedGraphResult.nodes}
+              edges={parsedGraphResult.edges}
+              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#888' }}>
               No graph to display
             </div>
+          )}
+
+          {selectedNodeId && (
+            <NodeDrawer
+              key={selectedNodeId}
+              executionId={executionId}
+              nodeId={selectedNodeId}
+              config={parsedGraphResult.nodes.find(n => n.id === selectedNodeId)?.data.config}
+              onClose={() => setSelectedNodeId(null)}
+            />
           )}
         </div>
       </div>

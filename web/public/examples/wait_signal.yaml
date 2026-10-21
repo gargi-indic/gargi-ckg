@@ -1,0 +1,24 @@
+apiVersion: graph/v1
+id: approval-workflow-example
+nodes:
+  - id: submit_order
+    type: transform
+    config:
+      set:
+        order_id: "ord_1002"
+        amount: 5000
+  - id: await_manager_approval
+    type: wait_for_signal
+    config:
+      signal: manager_approval
+      timeout_seconds: 3600
+  - id: dispatch_order
+    type: transform
+    config:
+      set:
+        dispatched: true
+edges:
+  - from: submit_order
+    to: await_manager_approval
+  - from: await_manager_approval
+    to: dispatch_order

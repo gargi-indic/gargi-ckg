@@ -1,0 +1,27 @@
+apiVersion: graph/v1
+id: conditional-branch-example
+nodes:
+  - id: evaluate_risk
+    type: transform
+    config:
+      set:
+        risk_score: 85
+        requires_manual_review: true
+  - id: manual_review_queue
+    type: passthrough
+  - id: auto_approve
+    type: passthrough
+  - id: notify_decision
+    type: passthrough
+    joinMode: any_of
+edges:
+  - from: evaluate_risk
+    to: manual_review_queue
+    condition: "upstream.output.requires_manual_review == true"
+  - from: evaluate_risk
+    to: auto_approve
+    condition: "upstream.output.requires_manual_review == false"
+  - from: manual_review_queue
+    to: notify_decision
+  - from: auto_approve
+    to: notify_decision

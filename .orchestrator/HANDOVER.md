@@ -38,38 +38,23 @@ All original backend epics (#1, #8, #15, #22, #29, #39, #48, #56, #61) are fully
 | #108 | [UI] Node inspector drawer (input, output, error, timing) | #119 | ✅ Merged | `4e1d5c7` |
 | #109 | [UI] Experiments gallery + recent executions sidebar | #120 | ✅ Merged | `adb0474`|
 | #110 | [UI] Minimal graph authoring / node editing | #121 | ✅ Merged | `1167557` |
-| #111 | [UI] Trigger human-in-the-loop signals from node inspector | - | ⏳ Todo | Next after #110 |
-| #112 | [UI] Documentation & unified dev-up script | - | ⏳ Todo | Final task in Epic #101 |
+| #111 | [UI] Trigger human-in-the-loop signals from node inspector | #122 | ✅ Merged | `58bbbb0` |
+| #112 | [UI] Documentation & unified dev-up script | - | ⏳ Todo | Final task in Epic #101 (Next) |
 
 ---
 
 ## 4. Current State & Immediate Resume Instructions
 
-### Active Task: Issue #109 (`[UI] Experiments gallery + recent executions sidebar`)
-- **Active Jules Session:** `16366454225729211062`
-- **Jules URL:** https://jules.google.com/session/16366454225729211062
-- **Work Delivered in Session so Far:**
-  - Added `ListExecutions` RPC to Protobuf (`proto/gargi/v1/api.proto`) with HTTP GET `/v1/executions`.
-  - Implemented `ListExecutions` handler in `internal/api/service.go`.
-  - Added tests in `internal/api/service_test.go` and `internal/api/http_server_test.go`.
-- **Latest Interaction / Guidance Sent:**
-  - Jules asked about seeding `memory.Store` in unit tests and why `ListExecutions` returned 0 items.
-  - Provided guidance:
-    1. In `service.go`, if `req.Status == EXECUTION_STATUS_UNSPECIFIED`, set `filter.Status = ""` (do not filter out all items).
-    2. Seed `memory.Store` directly with `SetState` in unit tests (since `SubmitExecution` delegates to Temporal).
-    3. Pass `expectedVersion = 0` when calling `SetState` on new records.
-- **Immediate Next Action for Successor:**
-  1. Load environment: `source ~/.config/jules/env && cd /home/gishnum/code/gargi-ckg`.
-  2. Check session status: `python3 .orchestrator/jules.py get 16366454225729211062`.
-  3. Wait for Jules to complete implementation: `python3 .orchestrator/jules.py wait 16366454225729211062 1800` (run in background).
-  4. When PR is opened:
-     - Review diff (`gh api repos/gargi-indic/gargi-flow/pulls/<PR> -H "Accept: application/vnd.github.v3.diff"`).
-     - Check CI checks: `gh pr checks <PR> -R gargi-indic/gargi-flow` (all 4 jobs: Docker, Integration, Lint/Unit, UI Lint/Build).
-     - Merge: `gh pr merge <PR> -R gargi-indic/gargi-flow --squash --delete-branch`.
-     - Update Issue #109 checkboxes (`- [x]`) and close.
-     - Pull local main: `git pull --rebase`.
-     - Log merge comment on Issue #67.
-  5. Dispatch Task #110 (`python3 .orchestrator/jules.py start 110`).
+### Active Task: Issue #112 (`[UI] Documentation & unified dev-up script`)
+- **Epic**: #101 (Final task in UI prototype epic)
+- **Status**: Ready to dispatch.
+- **Previous Task Delivered**:
+  - Issue #111 delivered via PR #122 (`58bbbb0`): "⏳ Awaiting signal" badge in `CustomNode.tsx` and interactive signal dispatch form in `NodeDrawer.tsx`.
+- **Immediate Next Action for Successor**:
+  1. Inspect Issue #112 requirements: `gh issue view 112 -R gargi-indic/gargi-flow`.
+  2. Dispatch task #112 (`jules.py start 112` or Claude Code subagent).
+  3. Review implementation and PR, ensure all 4 CI checks pass, and squash-merge.
+  4. Close Epic #101 upon merge.
 
 ---
 

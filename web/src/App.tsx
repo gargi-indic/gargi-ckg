@@ -1,11 +1,27 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import * as jsyaml from 'js-yaml';
-import type { Node as ReactFlowNode, Edge } from '@xyflow/react';
+import {
+  addEdge,
+  applyNodeChanges,
+  applyEdgeChanges,
+  useReactFlow,
+  ReactFlowProvider
+} from '@xyflow/react';
+import type {
+  Node as ReactFlowNode,
+  Edge,
+  Connection,
+  EdgeChange,
+  NodeChange,
+} from '@xyflow/react';
+import dagre from 'dagre';
 import './App.css';
 import GraphCanvas from './components/GraphCanvas';
 import NodeDrawer from './components/NodeDrawer';
+import EdgeDrawer from './components/EdgeDrawer';
 import { ExecutionsSidebar } from './components/ExecutionsSidebar';
 import { ExperimentsGallery } from './components/ExperimentsGallery';
+import { NodePalette } from './components/NodePalette';
 import { apiClient } from './api/client';
 import type { definitions } from './api/schema';
 
@@ -27,7 +43,42 @@ export type EventLog = {
   toStatus: string;
 };
 
-function App() {
+const nodeWidth = 200;
+const nodeHeight = 100;
+
+const getLayoutedElements = (nodes: ReactFlowNode[], edges: Edge[], direction = 'TB') => {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+  // Increase nodesep and ranksep to give space for edge labels
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 150, ranksep: 100 });
+
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  const layoutedNodes = nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    // Adjust to shift the node center to top left for react flow
+    return {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - nodeWidth / 2,
+        y: nodeWithPosition.y - nodeHeight / 2,
+      },
+    };
+  });
+
+  return { layoutedNodes, layoutedEdges: edges };
+};
+
+function AppFlow() {
   const [inputData, setInputData] = useState<string>('');
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -41,10 +92,8 @@ function App() {
 
   // Drawer state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-
-
-
-
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const { screenToFlowPosition } = useReactFlow();
 
   const handleCancelExecution = async () => {
     if (!executionId) return;
@@ -321,7 +370,19 @@ function App() {
       type NodeDef = { id: string; type?: string; name?: string; [key: string]: any };
       type EdgeDef = { from: string; to: string; condition?: string };
 
-      const reactFlowNodes: ReactFlowNode[] = (parsedObj.nodes as NodeDef[]).map((node) => ({
+      const nodeDefs = parsedObj.nodes as NodeDef[];
+
+      // Client-side Validation: Unique IDs
+      const nodeIds = new Set<string>();
+      for (const n of nodeDefs) {
+        if (!n.id) throw new Error('All nodes must have an "id"');
+        if (nodeIds.has(n.id)) {
+          throw new Error(`Duplicate node ID found: ${n.id}`);
+        }
+        nodeIds.add(n.id);
+      }
+
+      const reactFlowNodes: ReactFlowNode[] = nodeDefs.map((node) => ({
         id: node.id,
         type: 'custom',
         position: { x: 0, y: 0 }, // Dagre will position
@@ -335,6 +396,41 @@ function App() {
       }));
 
       const edgesArr = Array.isArray(parsedObj.edges) ? (parsedObj.edges as EdgeDef[]) : [];
+
+      // Client-side Validation: Dangling edges
+      for (const e of edgesArr) {
+        if (!nodeIds.has(e.from)) throw new Error(`Edge references unknown source node: ${e.from}`);
+        if (!nodeIds.has(e.to)) throw new Error(`Edge references unknown target node: ${e.to}`);
+      }
+
+      // Client-side Validation: Cycles (simple DFS)
+      const adjList = new Map<string, string[]>();
+      for (const id of nodeIds) adjList.set(id, []);
+      for (const e of edgesArr) adjList.get(e.from)?.push(e.to);
+
+      const visited = new Set<string>();
+      const recursionStack = new Set<string>();
+
+      const detectCycle = (nodeId: string): boolean => {
+        if (!visited.has(nodeId)) {
+          visited.add(nodeId);
+          recursionStack.add(nodeId);
+
+          for (const neighbor of adjList.get(nodeId) || []) {
+            if (!visited.has(neighbor) && detectCycle(neighbor)) return true;
+            else if (recursionStack.has(neighbor)) return true;
+          }
+        }
+        recursionStack.delete(nodeId);
+        return false;
+      };
+
+      for (const id of nodeIds) {
+        if (detectCycle(id)) {
+          throw new Error(`Cycle detected involving node: ${id}`);
+        }
+      }
+
       const reactFlowEdges: Edge[] = edgesArr.map((edge, index) => {
         const sourceStatus = nodeStatuses[edge.from];
         const isDimmed = sourceStatus === 'NODE_STATUS_SKIPPED';
@@ -354,7 +450,9 @@ function App() {
         };
       });
 
-      return { nodes: reactFlowNodes, edges: reactFlowEdges, error: null };
+      const { layoutedNodes, layoutedEdges } = getLayoutedElements(reactFlowNodes, reactFlowEdges);
+
+      return { nodes: layoutedNodes, edges: layoutedEdges, error: null };
     } catch (err: unknown) {
       if (err instanceof Error) {
         return { nodes: [], edges: [], error: `Parse/Validation Error: ${err.message}` };
@@ -364,6 +462,128 @@ function App() {
   }, [inputData, nodeStatuses]);
 
   const displayError = fetchError || parsedGraphResult.error;
+
+  // Sync internal UI state with textual editor logic
+  const [nodes, setNodes] = useState<ReactFlowNode[]>(parsedGraphResult.nodes);
+  const [edges, setEdges] = useState<Edge[]>(parsedGraphResult.edges);
+
+  const [prevInputData, setPrevInputData] = useState(inputData);
+  if (inputData !== prevInputData) {
+    setPrevInputData(inputData);
+    setNodes(parsedGraphResult.nodes);
+    setEdges(parsedGraphResult.edges);
+  }
+
+  const serializeGraph = (currentNodes: ReactFlowNode[], currentEdges: Edge[]) => {
+    const graphObj = {
+      apiVersion: 'graph/v1',
+      id: executionId || 'authoring_graph',
+      nodes: currentNodes.map(n => ({
+          ...(typeof n.data.config === 'object' && n.data.config !== null ? n.data.config : {}),
+        id: n.id,
+        type: n.data.type,
+        name: n.data.label !== n.id ? n.data.label : undefined
+      })),
+      edges: currentEdges.map(e => ({
+        from: e.source,
+        to: e.target,
+        condition: e.label || undefined
+      }))
+    };
+
+    // Very simple check to decide if we should emit yaml or json
+    if (inputData.trim().startsWith('{')) {
+      setInputData(JSON.stringify(graphObj, null, 2));
+    } else {
+      setInputData(jsyaml.dump(graphObj));
+    }
+  };
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((nds) => {
+        const nextNodes = applyNodeChanges(changes, nds);
+        const hasAddOrRemove = changes.some(c => c.type === 'add' || c.type === 'remove');
+        if (hasAddOrRemove) {
+          serializeGraph(nextNodes, edges);
+        }
+        return nextNodes;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [edges, inputData]
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      setEdges((eds) => {
+        const nextEdges = applyEdgeChanges(changes, eds);
+        const hasAddOrRemove = changes.some(c => c.type === 'add' || c.type === 'remove');
+        if (hasAddOrRemove) {
+          serializeGraph(nodes, nextEdges);
+        }
+        return nextEdges;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, inputData]
+  );
+
+  const onConnect = useCallback(
+    (params: Connection) => {
+      setEdges((eds) => {
+        const nextEdges = addEdge(params, eds);
+        serializeGraph(nodes, nextEdges);
+        return nextEdges;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, inputData]
+  );
+
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData('application/reactflow');
+      if (typeof type === 'undefined' || !type) {
+        return;
+      }
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const newNodeId = `node-${Date.now()}`;
+
+      const newNode: ReactFlowNode = {
+        id: newNodeId,
+        type: 'custom',
+        position,
+        data: {
+          id: newNodeId,
+          type,
+          label: newNodeId,
+          status: 'NODE_STATUS_UNSPECIFIED',
+          config: { id: newNodeId, type }
+        },
+      };
+
+      setNodes((nds) => {
+        const nextNodes = nds.concat(newNode);
+        serializeGraph(nextNodes, edges);
+        return nextNodes;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [screenToFlowPosition, edges, inputData]
+  );
 
   return (
     <div className="App" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -376,7 +596,56 @@ function App() {
           ))}
         </select>
         <input type="file" accept=".json,.yaml,.yml" onChange={handleFileUpload} style={{ color: 'white' }} />
-                <button
+
+        <button
+          onClick={() => {
+            const blob = new Blob([inputData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'graph.json';
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          disabled={!inputData.trim() || !!parsedGraphResult.error}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: (!inputData.trim() || !!parsedGraphResult.error) ? '#555' : '#2196f3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: (!inputData.trim() || !!parsedGraphResult.error) ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          Export JSON
+        </button>
+
+        <button
+          onClick={() => {
+            const blob = new Blob([inputData], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'graph.yaml';
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          disabled={!inputData.trim() || !!parsedGraphResult.error}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: (!inputData.trim() || !!parsedGraphResult.error) ? '#555' : '#2196f3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: (!inputData.trim() || !!parsedGraphResult.error) ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          Export YAML
+        </button>
+
+        <button
           id="run-btn"
           onClick={handleRunExecution}
           disabled={!inputData.trim() || !!parsedGraphResult.error || isRunning}
@@ -412,8 +681,111 @@ function App() {
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <ExecutionsSidebar onSelectExecution={handleSelectExecution} currentExecutionId={executionId} />
-        <div style={{ width: '30%', minWidth: '300px', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '10px', background: '#eee', fontWeight: 'bold' }}>Input (JSON/YAML)</div>
+        <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              {nodes.length > 0 || !executionId ? ( // Show canvas even if empty to allow authoring
+                <GraphCanvas
+                  nodes={nodes}
+                  edges={edges}
+                  onNodeClick={(_, node) => {
+                    setSelectedNodeId(node.id);
+                    setSelectedEdgeId(null);
+                  }}
+                  onEdgeClick={(_, edge) => {
+                    setSelectedEdgeId(edge.id);
+                    setSelectedNodeId(null);
+                  }}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                />
+              ) : (
+                <div style={{ height: '100%', overflowY: 'auto' }}>
+                  <ExperimentsGallery onLoad={(path: string, run: boolean) => {
+                    handleLoadExample(path).then(() => {
+                      if (run) {
+                        setTimeout(() => {
+                          document.getElementById('run-btn')?.click();
+                        }, 50);
+                      }
+                    });
+                  }} />
+                </div>
+              )}
+
+              {selectedNodeId && (
+                <NodeDrawer
+                  key={selectedNodeId}
+                  executionId={executionId}
+                  nodeId={selectedNodeId}
+                  config={nodes.find(n => n.id === selectedNodeId)?.data.config}
+                  onClose={() => setSelectedNodeId(null)}
+                  onConfigChange={(newConfig) => {
+                    setNodes((nds) => {
+                      const nextNodes = nds.map((node) => {
+                        if (node.id === selectedNodeId) {
+                          // Allow id change by effectively re-creating node object data
+                          const finalId = newConfig.id || node.id;
+                          return {
+                            ...node,
+                            id: finalId, // React flow node ID
+                            data: {
+                              ...node.data,
+                              id: finalId,
+                              type: newConfig.type || node.data.type,
+                              label: newConfig.name || finalId,
+                              config: newConfig
+                            }
+                          };
+                        }
+                        return node;
+                      });
+                      serializeGraph(nextNodes, edges);
+                      return nextNodes;
+                    });
+
+                    // If ID changed, close drawer or update selected node id
+                    if (newConfig.id && newConfig.id !== selectedNodeId) {
+                       setSelectedNodeId(newConfig.id);
+                    }
+                  }}
+                />
+              )}
+
+              {selectedEdgeId && (
+                <EdgeDrawer
+                  key={selectedEdgeId}
+                  edgeId={selectedEdgeId}
+                  condition={edges.find(e => e.id === selectedEdgeId)?.label as string | undefined}
+                  onClose={() => setSelectedEdgeId(null)}
+                  onConditionChange={(newCondition) => {
+                    setEdges((eds) => {
+                      const nextEdges = eds.map((edge) => {
+                        if (edge.id === selectedEdgeId) {
+                          return {
+                            ...edge,
+                            label: newCondition
+                          };
+                        }
+                        return edge;
+                      });
+                      serializeGraph(nodes, nextEdges);
+                      return nextEdges;
+                    });
+                  }}
+                />
+              )}
+            </div>
+
+            <NodePalette />
+          </div>
+        </div>
+
+        <div style={{ width: '30%', minWidth: '300px', borderLeft: '1px solid #ccc', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '10px', background: '#eee', fontWeight: 'bold' }}>Input/Output (JSON/YAML)</div>
           <textarea
             style={{ flex: 1, width: '100%', padding: '10px', boxSizing: 'border-box', fontFamily: 'monospace', resize: 'none' }}
             value={inputData}
@@ -443,41 +815,16 @@ function App() {
             </div>
           )}
         </div>
-
-        <div style={{ flex: 1, position: 'relative' }}>
-          {parsedGraphResult.nodes.length > 0 ? (
-            <GraphCanvas
-              nodes={parsedGraphResult.nodes}
-              edges={parsedGraphResult.edges}
-              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-            />
-          ) : (
-            <div style={{ height: '100%', overflowY: 'auto' }}>
-              <ExperimentsGallery onLoad={(path: string, run: boolean) => {
-                handleLoadExample(path).then(() => {
-                  if (run) {
-                    // Slight delay to let the state update before triggering the execution
-                    setTimeout(() => {
-                      document.getElementById('run-btn')?.click();
-                    }, 50);
-                  }
-                });
-              }} />
-            </div>
-          )}
-
-          {selectedNodeId && (
-            <NodeDrawer
-              key={selectedNodeId}
-              executionId={executionId}
-              nodeId={selectedNodeId}
-              config={parsedGraphResult.nodes.find(n => n.id === selectedNodeId)?.data.config}
-              onClose={() => setSelectedNodeId(null)}
-            />
-          )}
-        </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ReactFlowProvider>
+      <AppFlow />
+    </ReactFlowProvider>
   );
 }
 

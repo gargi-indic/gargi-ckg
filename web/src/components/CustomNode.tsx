@@ -42,6 +42,11 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data }) => {
       ringColor = '#ccc'; // Default grey
   }
 
+  const isAwaitingSignal = data.type === 'wait_for_signal' && data.status === 'NODE_STATUS_RUNNING';
+  if (isAwaitingSignal) {
+    ringColor = '#ff9800'; // Amber
+  }
+
   return (
     <div
       className="custom-node"
@@ -72,6 +77,24 @@ const CustomNode: React.FC<CustomNodeProps> = ({ data }) => {
       <div style={{ fontSize: '10px', color: ringColor, marginTop: '4px', fontWeight: 'bold' }}>
         {data.status ? data.status.replace('NODE_STATUS_', '') : 'UNSPECIFIED'}
       </div>
+      {isAwaitingSignal && (
+        <div
+          data-testid="awaiting-signal-badge"
+          style={{
+            marginTop: '6px',
+            padding: '2px 8px',
+            display: 'inline-block',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            color: '#e65100',
+            backgroundColor: '#fff3e0',
+            border: '1px solid #ffcc80',
+            borderRadius: '12px',
+          }}
+        >
+          ⏳ Awaiting signal
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );

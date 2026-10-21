@@ -5,6 +5,7 @@
 
 export interface paths {
   "/v1/executions": {
+    get: operations["GargiService_ListExecutions"];
     post: operations["GargiService_SubmitExecution"];
   };
   "/v1/executions/{executionId}": {
@@ -73,6 +74,18 @@ export interface definitions {
     | "EXECUTION_STATUS_SUCCEEDED"
     | "EXECUTION_STATUS_FAILED"
     | "EXECUTION_STATUS_CANCELLED";
+  /** @description ExecutionSummary represents summary metadata for an execution. */
+  v1ExecutionSummary: {
+    executionId?: string;
+    graphId?: string;
+    status?: definitions["v1ExecutionStatus"];
+    /** Format: uint64 */
+    version?: string;
+    /** Format: date-time */
+    createdAt?: string;
+    /** Format: date-time */
+    updatedAt?: string;
+  };
   /** @description GetExecutionResponse contains the full execution snapshot. */
   v1GetExecutionResponse: {
     executionId?: string;
@@ -91,6 +104,10 @@ export interface definitions {
   v1GetNodeStateResponse: {
     executionId?: string;
     nodeState?: definitions["v1NodeStateDetail"];
+  };
+  /** @description ListExecutionsResponse returns a list of execution summaries. */
+  v1ListExecutionsResponse: {
+    executions?: definitions["v1ExecutionSummary"][];
   };
   /** @description NodeStateDetail describes the current snapshot state of an individual graph node. */
   v1NodeStateDetail: {
@@ -169,6 +186,34 @@ export interface definitions {
 }
 
 export interface operations {
+  GargiService_ListExecutions: {
+    parameters: {
+      query: {
+        graphId?: string;
+        status?:
+          | "EXECUTION_STATUS_UNSPECIFIED"
+          | "EXECUTION_STATUS_PENDING"
+          | "EXECUTION_STATUS_RUNNING"
+          | "EXECUTION_STATUS_SUCCEEDED"
+          | "EXECUTION_STATUS_FAILED"
+          | "EXECUTION_STATUS_CANCELLED";
+        startTime?: string;
+        endTime?: string;
+        limit?: number;
+        offset?: number;
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1ListExecutionsResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
   GargiService_SubmitExecution: {
     parameters: {
       body: {

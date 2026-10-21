@@ -4,6 +4,8 @@ import type { Node as ReactFlowNode, Edge } from '@xyflow/react';
 import './App.css';
 import GraphCanvas from './components/GraphCanvas';
 import NodeDrawer from './components/NodeDrawer';
+import { ExecutionsSidebar } from './components/ExecutionsSidebar';
+import { ExperimentsGallery } from './components/ExperimentsGallery';
 import { apiClient } from './api/client';
 import type { definitions } from './api/schema';
 
@@ -39,6 +41,64 @@ function App() {
 
   // Drawer state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+
+
+
+
+  const handleCancelExecution = async () => {
+    if (!executionId) return;
+    try {
+
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cancelReq: any = {
+        params: { path: { executionId } },
+        body: { reason: "User requested cancellation via UI" }
+      };
+      await apiClient.POST('/v1/executions/{executionId}/cancel', cancelReq);
+      // The poll interval will pick up the cancelled state on next tick
+    } catch (err) {
+      console.error('Cancel error', err);
+    }
+  };
+
+
+  const handleSelectExecution = async (execId: string) => {
+    resetExecution();
+    setExecutionId(execId);
+
+    // Fetch execution to populate editor and node states
+    try {
+      const res = await apiClient.GET('/v1/executions/{executionId}', {
+        params: { path: { executionId: execId } }
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataAny = res.data as any;
+      if (dataAny && dataAny.nodeStates) {
+        const statuses: Record<string, string> = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Object.values(dataAny.nodeStates).forEach((state: any) => {
+          if (state.nodeId && state.status) {
+            statuses[state.nodeId] = state.status;
+          }
+        });
+        setNodeStatuses(statuses);
+      }
+      // If we don't have the graph data for this execution, ideally we'd fetch it,
+      // but GET /v1/executions/{executionId} doesn't return graphDefinition in the proto schema right now.
+      // So we just rely on what is in the editor, or clear it if it doesn't match.
+      // We will fetch anyway and see if there is metadata.
+      if (dataAny?.status === 'EXECUTION_STATUS_RUNNING' || dataAny?.status === 'EXECUTION_STATUS_PENDING') {
+         setIsRunning(true);
+         startPolling(execId);
+      } else {
+         setIsRunning(false);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleLoadExample = async (path: string) => {
     if (!path) return;
@@ -176,14 +236,16 @@ function App() {
         });
 
         if (res.data && typeof res.data === 'object' && 'nodeStates' in res.data) {
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const dataAny = res.data as any;
+      const dataAny = res.data as any;
           if (dataAny.nodeStates) {
             const newStatuses: Record<string, string> = {};
             let statusChanged = false;
 
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            Object.values(dataAny.nodeStates).forEach((state: any) => {
+        Object.values(dataAny.nodeStates).forEach((state: any) => {
               if (state.nodeId && state.status) {
                 newStatuses[state.nodeId] = state.status;
               }
@@ -314,7 +376,8 @@ function App() {
           ))}
         </select>
         <input type="file" accept=".json,.yaml,.yml" onChange={handleFileUpload} style={{ color: 'white' }} />
-        <button
+                <button
+          id="run-btn"
           onClick={handleRunExecution}
           disabled={!inputData.trim() || !!parsedGraphResult.error || isRunning}
           style={{
@@ -329,9 +392,26 @@ function App() {
         >
           {isRunning ? 'Running...' : 'Run'}
         </button>
+        {isRunning && (
+          <button
+            onClick={handleCancelExecution}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            Cancel
+          </button>
+        )}
       </header>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <ExecutionsSidebar onSelectExecution={handleSelectExecution} currentExecutionId={executionId} />
         <div style={{ width: '30%', minWidth: '300px', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '10px', background: '#eee', fontWeight: 'bold' }}>Input (JSON/YAML)</div>
           <textarea
@@ -372,8 +452,17 @@ function App() {
               onNodeClick={(_, node) => setSelectedNodeId(node.id)}
             />
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#888' }}>
-              No graph to display
+            <div style={{ height: '100%', overflowY: 'auto' }}>
+              <ExperimentsGallery onLoad={(path: string, run: boolean) => {
+                handleLoadExample(path).then(() => {
+                  if (run) {
+                    // Slight delay to let the state update before triggering the execution
+                    setTimeout(() => {
+                      document.getElementById('run-btn')?.click();
+                    }, 50);
+                  }
+                });
+              }} />
             </div>
           )}
 

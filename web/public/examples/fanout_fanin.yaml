@@ -1,0 +1,33 @@
+apiVersion: graph/v1
+id: fanout-fanin-example
+nodes:
+  - id: ingest_batch
+    type: transform
+    config:
+      set:
+        total_records: 1000
+  - id: process_partition_a
+    type: transform
+    config:
+      set:
+        partition_a_processed: 500
+  - id: process_partition_b
+    type: transform
+    config:
+      set:
+        partition_b_processed: 500
+  - id: aggregate_results
+    type: transform
+    joinMode: all_of
+    config:
+      set:
+        batch_complete: true
+edges:
+  - from: ingest_batch
+    to: process_partition_a
+  - from: ingest_batch
+    to: process_partition_b
+  - from: process_partition_a
+    to: aggregate_results
+  - from: process_partition_b
+    to: aggregate_results

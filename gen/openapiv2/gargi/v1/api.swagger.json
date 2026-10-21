@@ -6,7 +6,8 @@
   },
   "tags": [
     {
-      "name": "GargiService"
+      "name": "GargiService",
+      "description": "GargiService exposes execution lifecycle management over gRPC and REST."
     }
   ],
   "consumes": [
@@ -17,6 +18,78 @@
   ],
   "paths": {
     "/v1/executions": {
+      "get": {
+        "summary": "ListExecutions lists executions based on filters.",
+        "operationId": "GargiService_ListExecutions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListExecutionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "graphId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "EXECUTION_STATUS_UNSPECIFIED",
+              "EXECUTION_STATUS_PENDING",
+              "EXECUTION_STATUS_RUNNING",
+              "EXECUTION_STATUS_SUCCEEDED",
+              "EXECUTION_STATUS_FAILED",
+              "EXECUTION_STATUS_CANCELLED"
+            ],
+            "default": "EXECUTION_STATUS_UNSPECIFIED"
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "GargiService"
+        ]
+      },
       "post": {
         "summary": "SubmitExecution submits a new graph definition for asynchronous execution.",
         "operationId": "GargiService_SubmitExecution",
@@ -277,7 +350,7 @@
           "type": "string"
         }
       },
-      "additionalProperties": {}
+      "additionalProperties": true
     },
     "protobufNullValue": {
       "type": "string",
@@ -335,6 +408,33 @@
       "default": "EXECUTION_STATUS_UNSPECIFIED",
       "description": "ExecutionStatus represents the lifecycle state of a graph execution."
     },
+    "v1ExecutionSummary": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "graphId": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExecutionStatus"
+        },
+        "version": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "ExecutionSummary represents summary metadata for an execution."
+    },
     "v1GetExecutionResponse": {
       "type": "object",
       "properties": {
@@ -385,6 +485,19 @@
         }
       },
       "description": "GetNodeStateResponse contains the state of the queried node."
+    },
+    "v1ListExecutionsResponse": {
+      "type": "object",
+      "properties": {
+        "executions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ExecutionSummary"
+          }
+        }
+      },
+      "description": "ListExecutionsResponse returns a list of execution summaries."
     },
     "v1NodeStateDetail": {
       "type": "object",

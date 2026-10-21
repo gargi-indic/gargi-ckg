@@ -526,3 +526,45 @@ func isTerminalExecutionStatus(s engine.Status) bool {
 		return false
 	}
 }
+
+// ListExecutions retrieves a list of execution summaries matching the given filter.
+func (s *Server) ListExecutions(ctx context.Context, req *gargiv1.ListExecutionsRequest) (*gargiv1.ListExecutionsResponse, error) {
+	filter := engine.ExecutionFilter{
+		GraphID: req.GetGraphId(),
+		Limit:   int(req.GetLimit()),
+		Offset:  int(req.GetOffset()),
+	}
+	if req.GetStatus() != gargiv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED {
+		filter.Status = engine.Status(req.GetStatus().String())
+	}
+
+	if req.GetStartTime() != nil {
+		t := req.GetStartTime().AsTime()
+		filter.StartTime = &t
+	}
+	if req.GetEndTime() != nil {
+		t := req.GetEndTime().AsTime()
+		filter.EndTime = &t
+	}
+
+	summaries, err := s.store.ListExecutions(ctx, filter)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list executions: %v", err)
+	}
+
+	var executions []*gargiv1.ExecutionSummary
+	for _, summary := range summaries {
+		executions = append(executions, &gargiv1.ExecutionSummary{
+			ExecutionId: string(summary.ExecutionID),
+			GraphId:     summary.GraphID,
+			Status:      toPBExecutionStatus(summary.Status),
+			Version:     summary.Version,
+			CreatedAt:   timestamppb.New(summary.CreatedAt),
+			UpdatedAt:   timestamppb.New(summary.UpdatedAt),
+		})
+	}
+
+	return &gargiv1.ListExecutionsResponse{
+		Executions: executions,
+	}, nil
+}

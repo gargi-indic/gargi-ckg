@@ -3,6 +3,7 @@ run:
   skip-dirs:
     - web
     - web/node_modules
+  skip-dirs-use-default: true
 linters:
   default: none
   enable:

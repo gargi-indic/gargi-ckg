@@ -150,6 +150,32 @@ message StreamExecutionUpdatesResponse {
   string error_message = 9;
 }
 
+
+// ListExecutionsRequest specifies filters for listing executions.
+message ListExecutionsRequest {
+  string graph_id = 1;
+  ExecutionStatus status = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+// ExecutionSummary represents summary metadata for an execution.
+message ExecutionSummary {
+  string execution_id = 1;
+  string graph_id = 2;
+  ExecutionStatus status = 3;
+  uint64 version = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// ListExecutionsResponse returns a list of execution summaries.
+message ListExecutionsResponse {
+  repeated ExecutionSummary executions = 1;
+}
+
 // GargiService exposes execution lifecycle management over gRPC and REST.
 service GargiService {
   // SubmitExecution submits a new graph definition for asynchronous execution.
@@ -157,6 +183,14 @@ service GargiService {
     option (google.api.http) = {
       post: "/v1/executions"
       body: "*"
+    };
+  }
+
+
+  // ListExecutions lists executions based on filters.
+  rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/executions"
     };
   }
 

@@ -58,10 +58,10 @@ def key():
 
 
 def all_activities(session):
-    """Fetch every activity, following nextPageToken (sessions can exceed one page of 100)."""
+    """Fetch every activity, following nextPageToken."""
     acts, token = [], ""
     while True:
-        page = call("GET", f"{sid(session)}/activities?pageSize=100" + (f"&pageToken={token}" if token else ""))
+        page = call("GET", f"{sid(session)}/activities?pageSize=30" + (f"&pageToken={token}" if token else ""))
         acts.extend(page.get("activities", []))
         token = page.get("nextPageToken")
         if not token:
@@ -69,7 +69,7 @@ def all_activities(session):
 
 
 def call(method, path, body=None):
-    for attempt in range(5):
+    for attempt in range(8):
         req = urllib.request.Request(
             f"{API}/{path}",
             method=method,
@@ -83,8 +83,8 @@ def call(method, path, body=None):
         except urllib.error.HTTPError as e:
             sys.exit(f"HTTP {e.code} on {method} {path}: {e.read().decode()}")
         except (urllib.error.URLError, ConnectionError, OSError, http.client.IncompleteRead, http.client.HTTPException) as e:
-            if attempt == 4:
-                sys.exit(f"Network error on {method} {path} after 5 attempts: {e}")
+            if attempt == 7:
+                sys.exit(f"Network error on {method} {path} after 8 attempts: {e}")
             time.sleep(3 * (attempt + 1))
 
 

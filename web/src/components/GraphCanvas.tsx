@@ -19,14 +19,15 @@ interface GraphCanvasProps {
   edges: Edge[];
 }
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
 const nodeWidth = 200;
 const nodeHeight = 100;
 
 const getLayoutedElements = (nodes: ReactFlowNode[], edges: Edge[], direction = 'TB') => {
-  dagreGraph.setGraph({ rankdir: direction });
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+  // Increase nodesep and ranksep to give space for edge labels
+  dagreGraph.setGraph({ rankdir: direction, nodesep: 150, ranksep: 100 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });

@@ -390,7 +390,7 @@ func TestRPC_StreamExecutionUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to receive state event: %v", err)
 	}
-	if ev2.GetNodeId() != "nodeA" && ev2.GetEventType() != "node_status_change" {
+	if ev2.GetNodeId() != "nodeA" && ev2.GetEventType() != "node_state_changed" {
 		t.Errorf("unexpected event: %v", ev2)
 	}
 }

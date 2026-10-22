@@ -10,105 +10,94 @@ import (
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
 
-// ValidateDecisions checks all decisions for matching options configurations mapping the correct rules references.
-// ValidateDecisions checks all decisions for matching options configurations mapping the correct rules references.
+// ValidateDecisions checks the observes list of every decision node. Each
+// path must be exactly <id>.output.<field> or <id>.status
+// (invalid_observe_path), name an existing node (unresolved_reference) and
+// name a strict ancestor of the decision (observes_non_ancestor).
 func ValidateDecisions(m *CompiledModel, errs *engine.ValidationErrors) {
-	var nodes []*engine.Node
-	var edges []*engine.Edge
-	if m.Graph != nil {
-		for _, nDef := range m.Graph.Nodes {
-			n, _ := engine.NewNode(nDef.ID, nDef.Type, nDef.Config)
-			if n != nil {
-				nodes = append(nodes, n)
-			}
-		}
-		for _, eDef := range m.Graph.Edges {
-			e, _ := engine.NewEdge(eDef.From, eDef.To, eDef.Condition, eDef.DataMapping)
-			if e != nil {
-				edges = append(edges, e)
-			}
+	if m == nil || m.Graph == nil {
+		return
+	}
+	nodes := make([]*engine.Node, 0, len(m.Graph.Nodes))
+	exists := make(map[string]bool, len(m.Graph.Nodes))
+	for _, nDef := range m.Graph.Nodes {
+		exists[string(nDef.ID)] = true
+		if n, err := engine.NewNode(nDef.ID, nDef.Type, nDef.Config); err == nil && n != nil {
+			nodes = append(nodes, n)
 		}
 	}
-	g, _ := engine.NewGraph("tmp", nodes, edges)
+	edges := make([]*engine.Edge, 0, len(m.Graph.Edges))
+	for _, eDef := range m.Graph.Edges {
+		if e, err := engine.NewEdge(eDef.From, eDef.To, eDef.Condition, eDef.DataMapping); err == nil && e != nil {
+			edges = append(edges, e)
+		}
+	}
+	// A graph that cannot be built has already been reported by graph
+	// validation; the ancestor check is skipped in that case.
+	g, gErr := engine.NewGraph("sim", nodes, edges)
 
 	for i, node := range m.Graph.Nodes {
 		if node.Type != "decision" {
 			continue
 		}
 
-		path := engine.PathRoot.Field("nodes").Index(i).Field("config").Field("observes")
+		var ancestors map[string]bool
+		if gErr == nil && g != nil {
+			if up, err := graph.Upstream(g, node.ID); err == nil {
+				ancestors = make(map[string]bool, len(up))
+				for _, u := range up {
+					if u != node.ID {
+						ancestors[string(u)] = true
+					}
+				}
+			}
+		}
 
+		path := engine.Path("$.graph:" + engine.PathRoot.Field("nodes").Index(i).Field("config").Field("observes").String())
 		observesList, _ := node.Config["observes"].([]any)
 		for j, obsRaw := range observesList {
 			obsPath := path.Index(j).String()
 			obs, ok := obsRaw.(string)
 			if !ok {
-				errs.Add(obsPath, engine.CodeInvalidType, "observe path must be a string")
+				errs.Add(obsPath, sim.CodeInvalidObservePath, "observe path must be a string")
 				continue
 			}
 
-			parts := strings.Split(obs, ".")
-			if len(parts) == 0 {
-				errs.Add(obsPath, sim.CodeInvalidObservePath, "empty observe path")
+			id, ok := parseObservePath(obs)
+			if !ok {
+				errs.Add(obsPath, sim.CodeInvalidObservePath,
+					fmt.Sprintf("invalid observe path %q: must be <id>.output.<field> or <id>.status", obs))
 				continue
 			}
-
-			id := parts[0]
-			if id == "" {
-				errs.Add(obsPath, sim.CodeInvalidObservePath, "empty node id in observe path")
-				continue
-			}
-
-			if len(parts) == 2 {
-				if parts[1] != "status" {
-					errs.Add(obsPath, sim.CodeInvalidObservePath, "invalid observe path format: if 2 segments, second must be 'status'")
-					continue
-				}
-			} else if len(parts) == 3 {
-				if parts[1] != "output" || parts[2] == "" {
-					errs.Add(obsPath, sim.CodeInvalidObservePath, "invalid observe path format: if 3 segments, must be <id>.output.<field> and field cannot be empty")
-					continue
-				}
-			} else {
-				errs.Add(obsPath, sim.CodeInvalidObservePath, "invalid observe path format: must be <id>.status or <id>.output.<field>")
-				continue
-			}
-
-			exists := false
-			for _, n := range m.Graph.Nodes {
-				if string(n.ID) == id {
-					exists = true
-					break
-				}
-			}
-
-			if !exists {
+			if !exists[id] {
 				errs.Add(obsPath, engine.CodeUnresolvedReference, fmt.Sprintf("node %q does not exist", id))
 				continue
 			}
-
-			if g != nil {
-				isUpstream := false
-				upstreamNodes, err := graph.Upstream(g, node.ID)
-				if err == nil {
-					for _, upNode := range upstreamNodes {
-						if string(upNode) == id {
-							isUpstream = true
-							break
-						}
-					}
-				}
-
-				if !isUpstream {
-					errs.Add(obsPath, sim.CodeObservesNonAncestor, fmt.Sprintf("observed node %q is not a strict ancestor of %q", id, node.ID))
-				}
+			if ancestors != nil && !ancestors[id] {
+				errs.Add(obsPath, sim.CodeObservesNonAncestor, fmt.Sprintf("observed node %q is not a strict ancestor of %q", id, node.ID))
 			}
 		}
 	}
 }
 
-// Discrete maps output states over defined behavior observations returns the constraint list and truth value.
-// Discrete maps output states over defined behavior observations returns the constraint list and truth value.
+// parseObservePath checks the observe-path grammar and returns the node id.
+func parseObservePath(obs string) (string, bool) {
+	parts := strings.Split(obs, ".")
+	if parts[0] == "" {
+		return "", false
+	}
+	switch len(parts) {
+	case 2:
+		return parts[0], parts[1] == "status"
+	case 3:
+		return parts[0], parts[1] == "output" && parts[2] != ""
+	}
+	return "", false
+}
+
+// Discrete reports whether the exact evaluator can run on the model. When it
+// cannot, it returns the sorted reasons: continuous distributions, and expr
+// outputs that feed an observed path.
 func (m *CompiledModel) Discrete() (bool, []string) {
 	var reasons []string
 
@@ -230,8 +219,10 @@ func (m *CompiledModel) observedSupportHelper(keys []string) []any {
 	return res
 }
 
-// ObservedSupport evaluates the choices mapped mapped output fields logic options.
-// ObservedSupport evaluates the choices mapped mapped output fields logic options.
+// ObservedSupport returns the discrete support of an observed path, taken from
+// choice, bernoulli and fixed behavior outputs, the options of upstream
+// decision nodes, and node statuses. It reports false when the support is not
+// known to be discrete.
 func (m *CompiledModel) ObservedSupport(path string) ([]any, bool) {
 	parts := strings.Split(path, ".")
 	if len(parts) < 2 {

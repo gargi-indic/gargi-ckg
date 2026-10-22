@@ -2,17 +2,20 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
+	"github.com/gargi-indic/gargi-flow/internal/graph"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/ast"
 )
 
-// runtimePolicy implements sim.Policy interface.
+// runtimePolicy implements sim.Policy for a compiled policy/v1 document.
 type runtimePolicy struct {
 	id          string
 	description string
@@ -20,11 +23,12 @@ type runtimePolicy struct {
 }
 
 type compiledDecision struct {
-	Options []string
-	Rules   []compiledRule
-	Table   []compiledTableRow
-	Default string
-	IsTable bool
+	// Observes lists the decision node's observed paths (its information set).
+	Observes []string
+	Rules    []compiledRule
+	Table    []compiledTableRow
+	Default  string
+	IsTable  bool
 }
 
 type compiledRule struct {
@@ -34,18 +38,29 @@ type compiledRule struct {
 }
 
 type compiledTableRow struct {
+	// Observed holds the row's expected values with numbers normalized to float64.
 	Observed map[string]any
 	Choose   string
 }
 
+var _ sim.Policy = (*runtimePolicy)(nil)
+
+// ID returns <policy id>@<version>.
 func (p *runtimePolicy) ID() string {
 	return p.id
 }
 
+// Describe returns a human-readable description of the policy.
 func (p *runtimePolicy) Describe() string {
 	return p.description
 }
 
+// Choose picks the option for decision from obs. Only the decision's observed
+// paths are read; an observed path missing from obs is treated as nil. Rules
+// return the choice of the first rule whose when is true, otherwise the else
+// choice. Tables return the choice of the first row whose observed values all
+// equal the observation exactly (nil matches null, numbers are compared as
+// float64), otherwise the default.
 func (p *runtimePolicy) Choose(ctx context.Context, decision engine.NodeID, obs sim.Observation, _ []string) (string, error) {
 	nodeID := string(decision)
 	d, ok := p.decisions[nodeID]
@@ -53,99 +68,119 @@ func (p *runtimePolicy) Choose(ctx context.Context, decision engine.NodeID, obs 
 		return "", fmt.Errorf("no policy for decision %q", nodeID)
 	}
 
-	info := make(map[string]any)
-	for k, v := range obs {
-		parts := strings.Split(k, ".")
-		current := info
-		for i, part := range parts {
-			if i == len(parts)-1 {
-				current[part] = v
-			} else {
-				if _, exists := current[part]; !exists {
-					current[part] = make(map[string]any)
-				}
-				if next, ok := current[part].(map[string]any); ok {
-					current = next
-				}
-			}
-		}
-	}
-
 	if d.IsTable {
 		for _, row := range d.Table {
-			match := true
-			for k, v := range row.Observed {
-				if infoVal, exists := obs[k]; exists {
-					// Normalize numeric types to float64
-					normInfoVal := infoVal
-					normV := v
-
-					if f, ok := infoVal.(float64); ok {
-						normInfoVal = f
-					} else if f, ok := infoVal.(float32); ok {
-						normInfoVal = float64(f)
-					} else if i, ok := infoVal.(int); ok {
-						normInfoVal = float64(i)
-					} else if i, ok := infoVal.(int64); ok {
-						normInfoVal = float64(i)
-					} else if i, ok := infoVal.(int32); ok {
-						normInfoVal = float64(i)
-					}
-
-					if f, ok := v.(float64); ok {
-						normV = f
-					} else if f, ok := v.(float32); ok {
-						normV = float64(f)
-					} else if i, ok := v.(int); ok {
-						normV = float64(i)
-					} else if i, ok := v.(int64); ok {
-						normV = float64(i)
-					} else if i, ok := v.(int32); ok {
-						normV = float64(i)
-					}
-
-					if normInfoVal != normV {
-						match = false
-						break
-					}
-				} else if v != nil {
-					match = false
-					break
-				}
-			}
-			if match {
+			if rowMatches(row, obs) {
 				return row.Choose, nil
 			}
 		}
-		if d.Default != "" {
-			return d.Default, nil
+		if d.Default == "" {
+			return "", fmt.Errorf("no matching table row and no default for %q", nodeID)
 		}
-		return "", fmt.Errorf("no matching table row and no default for %q", nodeID)
+		return d.Default, nil
 	}
 
-	for _, rule := range d.Rules {
-		if rule.When != nil {
-			out, _, err := rule.When.ContextEval(ctx, info)
-			if err != nil {
-				return "", fmt.Errorf("failed to evaluate when: %w", err)
+	activation := buildActivation(d.Observes, obs)
+	for i, rule := range d.Rules {
+		if rule.When == nil {
+			if rule.Else != "" {
+				return rule.Else, nil
 			}
-			if val, ok := out.Value().(bool); ok && val {
-				return rule.Choose, nil
-			}
+			continue
 		}
-		if rule.Else != "" {
-			return rule.Else, nil
+		out, _, err := rule.When.ContextEval(ctx, activation)
+		if err != nil {
+			return "", fmt.Errorf("decision %q rule %d: failed to evaluate when: %w", nodeID, i, err)
+		}
+		val, ok := out.Value().(bool)
+		if !ok {
+			return "", fmt.Errorf("decision %q rule %d: when evaluated to %T, want bool", nodeID, i, out.Value())
+		}
+		if val {
+			return rule.Choose, nil
 		}
 	}
 	return "", fmt.Errorf("no matching rule for %q", nodeID)
 }
 
-func getSelectPath(expr ast.Expr) string {
-	if expr.Kind() == ast.IdentKind {
-		return expr.AsIdent()
+// buildActivation nests the observed paths into maps keyed by node id, for
+// example "a.output.x" becomes {"a": {"output": {"x": v}}}.
+func buildActivation(observes []string, obs sim.Observation) map[string]any {
+	info := make(map[string]any)
+	for _, k := range observes {
+		parts := strings.Split(k, ".")
+		current := info
+		for i, part := range parts {
+			if i == len(parts)-1 {
+				current[part] = obs[k]
+				break
+			}
+			next, ok := current[part].(map[string]any)
+			if !ok {
+				next = make(map[string]any)
+				current[part] = next
+			}
+			current = next
+		}
 	}
-	if expr.Kind() == ast.SelectKind {
+	return info
+}
+
+func rowMatches(row compiledTableRow, obs sim.Observation) bool {
+	for k, want := range row.Observed {
+		if !reflect.DeepEqual(normalizeNumber(obs[k]), want) {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeNumber converts every numeric type to float64 so that a YAML 1
+// equals an observed 1.0. Other values are returned unchanged.
+func normalizeNumber(v any) any {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int8:
+		return float64(n)
+	case int16:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case uint:
+		return float64(n)
+	case uint8:
+		return float64(n)
+	case uint16:
+		return float64(n)
+	case uint32:
+		return float64(n)
+	case uint64:
+		return float64(n)
+	case json.Number:
+		if f, err := n.Float64(); err == nil {
+			return f
+		}
+		return n.String()
+	}
+	return v
+}
+
+func getSelectPath(expr ast.Expr) string {
+	switch expr.Kind() {
+	case ast.IdentKind:
+		return expr.AsIdent()
+	case ast.SelectKind:
 		sel := expr.AsSelect()
+		if sel.IsTestOnly() {
+			return ""
+		}
 		operandPath := getSelectPath(sel.Operand())
 		if operandPath == "" {
 			return ""
@@ -155,17 +190,56 @@ func getSelectPath(expr ast.Expr) string {
 	return ""
 }
 
-// CompilePolicy compiles the definitions rules for dynamic decision evaluations into an executable policy.
+func decisionOptions(node *engine.NodeDefinition) map[string]bool {
+	optsRaw, _ := node.Config["options"].([]any)
+	options := make(map[string]bool, len(optsRaw))
+	for _, o := range optsRaw {
+		switch v := o.(type) {
+		case string:
+			options[v] = true
+		case map[string]any:
+			if s, ok := v["value"].(string); ok {
+				options[s] = true
+			}
+		}
+	}
+	return options
+}
+
+func decisionObserves(node *engine.NodeDefinition) []string {
+	raw, _ := node.Config["observes"].([]any)
+	out := make([]string, 0, len(raw))
+	for _, o := range raw {
+		if s, ok := o.(string); ok {
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// CompilePolicy compiles a policy/v1 document against a compiled model. Rule
+// when expressions are type-checked in an environment that declares only the
+// decision's observed node ids, and the checked AST is walked to reject any
+// reference that is not a field selection of an observed path. Table keys
+// must be observed paths, every choice must be one of the decision's options,
+// every decision node must be covered and unknown decisions are rejected. It
+// returns nil errors on success.
 func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}
 	if p == nil {
-		return nil, nil
+		errs.Add(engine.PathRoot.String(), engine.CodeMissingRequired, "policy definition is nil")
+		return nil, sortedIssues(errs)
+	}
+	if m == nil || m.Graph == nil {
+		errs.Add(engine.PathRoot.String(), engine.CodeMissingRequired, "compiled model is nil")
+		return nil, sortedIssues(errs)
 	}
 
 	rp := &runtimePolicy{
 		id:          fmt.Sprintf("%s@%s", p.ID, p.Version),
-		description: fmt.Sprintf("Policy %s version %s", p.ID, p.Version),
-		decisions:   make(map[string]*compiledDecision),
+		description: fmt.Sprintf("policy %s version %s", p.ID, p.Version),
+		decisions:   make(map[string]*compiledDecision, len(p.Decisions)),
 	}
 
 	decisionNodes := make(map[string]*engine.NodeDefinition)
@@ -176,156 +250,131 @@ func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationE
 		}
 	}
 
-	var dIDs []string
-	for dID := range decisionNodes {
-		dIDs = append(dIDs, dID)
-	}
-	sort.Strings(dIDs)
-	for _, dID := range dIDs {
+	decisionsPath := engine.PathRoot.Field("decisions")
+	for _, dID := range sortedKeys(decisionNodes) {
 		if _, ok := p.Decisions[dID]; !ok {
-			errs.Add(engine.PathRoot.Field("decisions").String(), sim.CodePolicyMissingDecision, fmt.Sprintf("missing decision for node %q", dID))
+			errs.Add(decisionsPath.Field(dID).String(), sim.CodePolicyMissingDecision, fmt.Sprintf("missing decision for node %q", dID))
 		}
 	}
 
-	var decisionIDs []string
-	for id := range p.Decisions {
-		decisionIDs = append(decisionIDs, id)
-	}
-	sort.Strings(decisionIDs)
-	for _, id := range decisionIDs {
+	for _, id := range sortedKeys(p.Decisions) {
 		pd := p.Decisions[id]
-		path := engine.PathRoot.Field("decisions").Field(id)
+		path := decisionsPath.Field(id)
 		node, ok := decisionNodes[id]
 		if !ok {
 			errs.Add(path.String(), sim.CodePolicyUnknownDecision, fmt.Sprintf("unknown decision node %q", id))
 			continue
 		}
 
-		optsRaw, _ := node.Config["options"].([]any)
-		options := make(map[string]bool)
-		for _, o := range optsRaw {
-			if om, ok := o.(map[string]any); ok {
-				if v, ok := om["value"].(string); ok {
-					options[v] = true
-				}
-			} else if s, ok := o.(string); ok {
-				options[s] = true
-			}
-		}
-
-		observesRaw, _ := node.Config["observes"].([]any)
-		observedPaths := make(map[string]bool)
-		observedIDs := make(map[string]bool)
-		for _, obs := range observesRaw {
-			if s, ok := obs.(string); ok {
-				observedPaths[s] = true
-				parts := strings.Split(s, ".")
-				if len(parts) > 0 {
-					observedIDs[parts[0]] = true
-				}
+		options := decisionOptions(node)
+		checkOption := func(choice string, at engine.Path) {
+			if !options[choice] {
+				errs.Add(at.String(), sim.CodePolicyUnknownOption, fmt.Sprintf("unknown option %q for decision %q", choice, id))
 			}
 		}
 
 		cd := &compiledDecision{
-			IsTable: len(pd.Table) > 0,
+			Observes: decisionObserves(node),
+			IsTable:  len(pd.Table) > 0,
+		}
+		observed := make(map[string]bool, len(cd.Observes))
+		for _, o := range cd.Observes {
+			observed[o] = true
 		}
 
 		if cd.IsTable {
-			if pd.Default != "" && !options[pd.Default] {
-				errs.Add(path.Field("default").String(), sim.CodePolicyUnknownOption, fmt.Sprintf("unknown option %q", pd.Default))
-			}
-			cd.Default = pd.Default
-
-			for i, row := range pd.Table {
-				rowPath := path.Field("table").Index(i)
-				if !options[row.Choose] {
-					errs.Add(rowPath.Field("choose").String(), sim.CodePolicyUnknownOption, fmt.Sprintf("unknown option %q", row.Choose))
-				}
-
-				var obsKeys []string
-				for k := range row.Observed {
-					obsKeys = append(obsKeys, k)
-				}
-				sort.Strings(obsKeys)
-				for _, k := range obsKeys {
-					if !observedPaths[k] {
-						errs.Add(rowPath.Field("observed").Field(k).String(), sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference %q", k))
-					}
-				}
-				cd.Table = append(cd.Table, compiledTableRow(row))
-			}
+			compileTable(pd, path, observed, checkOption, cd, errs)
 		} else {
-			var oIDs []string
-			for oID := range observedIDs {
-				oIDs = append(oIDs, oID)
-			}
-			sort.Strings(oIDs)
-			envOpts := []cel.EnvOption{}
-			for _, oID := range oIDs {
-				envOpts = append(envOpts, cel.Variable(oID, cel.MapType(cel.StringType, cel.DynType)))
-			}
-
-			env, err := cel.NewEnv(envOpts...)
-			if err != nil {
-				errs.Add(path.String(), engine.CodeInvalidValue, "failed to create env for decision")
-				continue
-			}
-
-			for i, rule := range pd.Rules {
-				rulePath := path.Field("rules").Index(i)
-				cr := compiledRule{}
-
-				if rule.When != "" {
-					celAst, issues := env.Compile(rule.When)
-					if issues != nil && issues.Err() != nil {
-						errs.Add(rulePath.Field("when").String(), sim.CodeInvalidExpression, issues.Err().Error())
-					} else {
-						walkNativeAST(env, celAst, observedPaths, rulePath.Field("when").String(), errs)
-					}
-
-					if celAst != nil {
-						prog, err := env.Program(celAst, cel.CostLimit(1000), cel.EvalOptions(cel.OptTrackCost))
-						if err != nil {
-							errs.Add(rulePath.Field("when").String(), sim.CodeInvalidExpression, err.Error())
-						} else {
-							cr.When = prog
-						}
-					}
-				}
-
-				if rule.Choose != "" {
-					if !options[rule.Choose] {
-						errs.Add(rulePath.Field("choose").String(), sim.CodePolicyUnknownOption, fmt.Sprintf("unknown option %q", rule.Choose))
-					}
-					cr.Choose = rule.Choose
-				}
-				if rule.Else != "" {
-					if !options[rule.Else] {
-						errs.Add(rulePath.Field("else").String(), sim.CodePolicyUnknownOption, fmt.Sprintf("unknown option %q", rule.Else))
-					}
-					cr.Else = rule.Else
-				}
-
-				cd.Rules = append(cd.Rules, cr)
-			}
+			compileRules(pd, path, cd.Observes, observed, checkOption, cd, errs)
 		}
 		rp.decisions[id] = cd
 	}
 
 	if errs.Len() > 0 {
-		return nil, errs
+		return nil, sortedIssues(errs)
 	}
 	return rp, nil
 }
 
-func walkNativeAST(_ *cel.Env, celAst *cel.Ast, allowed map[string]bool, path string, errs *engine.ValidationErrors) {
-	if celAst == nil {
-		return
+func compileTable(pd Decision, path engine.Path, observed map[string]bool, checkOption func(string, engine.Path), cd *compiledDecision, errs *engine.ValidationErrors) {
+	if pd.Default != "" {
+		checkOption(pd.Default, path.Field("default"))
 	}
-	expr := celAst.NativeRep().Expr()
-	walkAST(expr, allowed, path, errs)
+	cd.Default = pd.Default
+
+	for i, row := range pd.Table {
+		rowPath := path.Field("table").Index(i)
+		checkOption(row.Choose, rowPath.Field("choose"))
+
+		norm := make(map[string]any, len(row.Observed))
+		for _, k := range sortedKeys(row.Observed) {
+			if !observed[k] {
+				errs.Add(rowPath.Field("observed").Field(k).String(), sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference %q", k))
+			}
+			norm[k] = normalizeNumber(row.Observed[k])
+		}
+		cd.Table = append(cd.Table, compiledTableRow{Observed: norm, Choose: row.Choose})
+	}
 }
 
+func compileRules(pd Decision, path engine.Path, observes []string, observed map[string]bool, checkOption func(string, engine.Path), cd *compiledDecision, errs *engine.ValidationErrors) {
+	idSet := make(map[string]bool)
+	for _, o := range observes {
+		idSet[strings.SplitN(o, ".", 2)[0]] = true
+	}
+	ids := sortedKeys(idSet)
+	env, err := newEnv(ids...)
+	if err != nil {
+		errs.Add(path.String(), engine.CodeInvalidValue, fmt.Sprintf("failed to create env for decision: %v", err))
+		return
+	}
+
+	for i, rule := range pd.Rules {
+		rulePath := path.Field("rules").Index(i)
+		cr := compiledRule{Choose: rule.Choose, Else: rule.Else}
+
+		if rule.When != "" {
+			whenPath := rulePath.Field("when").String()
+			celAst, issues := env.Compile(rule.When)
+			switch {
+			case issues != nil && issues.Err() != nil:
+				errs.Add(whenPath, sim.CodeInvalidExpression, issues.Err().Error())
+			case !celAst.OutputType().IsExactType(cel.BoolType) && !celAst.OutputType().IsExactType(cel.DynType):
+				errs.Add(whenPath, sim.CodeInvalidExpression, fmt.Sprintf("when must evaluate to bool, got %v", celAst.OutputType()))
+			default:
+				before := errs.Len()
+				walkAST(celAst.NativeRep().Expr(), observed, whenPath, errs)
+				if errs.Len() == before {
+					prog, err := env.Program(celAst, cel.CostLimit(graph.DefaultConditionCostLimit), cel.EvalOptions(cel.OptTrackCost))
+					if err != nil {
+						errs.Add(whenPath, sim.CodeInvalidExpression, err.Error())
+					}
+					cr.When = prog
+				}
+			}
+		}
+
+		if rule.Choose != "" {
+			checkOption(rule.Choose, rulePath.Field("choose"))
+		}
+		if rule.Else != "" {
+			checkOption(rule.Else, rulePath.Field("else"))
+		}
+		cd.Rules = append(cd.Rules, cr)
+	}
+}
+
+func isAllowedPath(p string, allowed map[string]bool) bool {
+	for a := range allowed {
+		if p == a || strings.HasPrefix(p, a+".") {
+			return true
+		}
+	}
+	return false
+}
+
+// walkAST rejects every reference in expr that is not a field-selection chain
+// starting with an observed path.
 func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.ValidationErrors) {
 	if expr == nil {
 		return
@@ -333,59 +382,53 @@ func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.V
 
 	switch expr.Kind() {
 	case ast.SelectKind:
+		sel := expr.AsSelect()
+		if sel.IsTestOnly() {
+			// has(x.y.z): the tested path must itself be observed.
+			p := getSelectPath(sel.Operand())
+			if p == "" || !isAllowedPath(p+"."+sel.FieldName(), allowed) {
+				errs.Add(path, sim.CodePolicyUnobservedReference, "has() must test an observed path")
+			}
+			return
+		}
 		p := getSelectPath(expr)
-		if p != "" {
-			valid := false
-			for a := range allowed {
-				if p == a || strings.HasPrefix(p, a+".") {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				errs.Add(path, sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference: %s", p))
-			}
-		} else {
+		if p == "" {
 			errs.Add(path, sim.CodePolicyUnobservedReference, "complex select or index access not allowed")
+			return
+		}
+		if !isAllowedPath(p, allowed) {
+			errs.Add(path, sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference: %s", p))
 		}
 	case ast.IdentKind:
 		ident := expr.AsIdent()
-		valid := false
-		for a := range allowed {
-			if ident == a || strings.HasPrefix(ident, a+".") {
-				valid = true
-				break
-			}
-		}
-		if !valid {
+		if !isAllowedPath(ident, allowed) {
 			errs.Add(path, sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference: %s", ident))
 		}
 	case ast.CallKind:
 		call := expr.AsCall()
-		if call.Target() != nil {
+		if call.IsMemberFunction() {
 			walkAST(call.Target(), allowed, path, errs)
 		}
 		for _, arg := range call.Args() {
 			walkAST(arg, allowed, path, errs)
 		}
 	case ast.ListKind:
-		list := expr.AsList()
-		for _, e := range list.Elements() {
+		for _, e := range expr.AsList().Elements() {
 			walkAST(e, allowed, path, errs)
 		}
 	case ast.MapKind:
-		m := expr.AsMap()
-		for _, e := range m.Entries() {
+		for _, e := range expr.AsMap().Entries() {
 			me := e.AsMapEntry()
 			walkAST(me.Key(), allowed, path, errs)
 			walkAST(me.Value(), allowed, path, errs)
 		}
+	case ast.StructKind:
+		for _, f := range expr.AsStruct().Fields() {
+			walkAST(f.AsStructField().Value(), allowed, path, errs)
+		}
 	case ast.ComprehensionKind:
-		comp := expr.AsComprehension()
-		walkAST(comp.IterRange(), allowed, path, errs)
-		walkAST(comp.AccuInit(), allowed, path, errs)
-		walkAST(comp.LoopCondition(), allowed, path, errs)
-		walkAST(comp.LoopStep(), allowed, path, errs)
-		walkAST(comp.Result(), allowed, path, errs)
+		// Comprehensions introduce iteration variables that cannot be
+		// checked against the information set, so they are rejected.
+		errs.Add(path, sim.CodePolicyUnobservedReference, "comprehensions are not allowed in policy rules")
 	}
 }

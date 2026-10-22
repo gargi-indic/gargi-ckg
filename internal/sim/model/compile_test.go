@@ -15,16 +15,38 @@ import (
 
 type dummyChooser struct{}
 
-func (dummyChooser) Choose(_ context.Context, decision engine.NodeID, obs map[string]any, options []string) (string, error) {
+func (dummyChooser) Choose(_ context.Context, _ engine.NodeID, _ map[string]any, _ []string) (string, error) {
 	return "", nil
 }
 
 func setupRegistry() *engine.Registry {
 	reg := engine.NewRegistry()
-	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
-	_ = nodes.RegisterDecision(reg, dummyChooser{})
-	_ = reg.Register("no_op", func(any) (engine.NodeInterface, error) { return nil, nil }, nil)
+	mustRegister(nodes.RegisterDefaults(reg, nodes.Dependencies{}))
+	mustRegister(nodes.RegisterDecision(reg, dummyChooser{}))
+	mustRegister(reg.Register("no_op", func(any) (engine.NodeInterface, error) { return nil, nil }, nil))
 	return reg
+}
+
+func mustRegister(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+// hasIssue reports whether errs contains an issue with the given code at path.
+func hasIssue(errs *engine.ValidationErrors, path string, code engine.ErrorCode) bool {
+	for _, is := range errs.Issues() {
+		if is.Path == path && is.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func requireIssue(t *testing.T, errs *engine.ValidationErrors, path string, code engine.ErrorCode) {
+	t.Helper()
+	require.NotNil(t, errs, "expected %s at %s", code, path)
+	require.True(t, hasIssue(errs, path, code), "expected %s at %s, got: %v", code, path, errs.Issues())
 }
 
 func TestCompile_LoanModelAndRecession(t *testing.T) {
@@ -77,7 +99,7 @@ edges:
     to: reject
     condition: "nodes['final'].output.choice == 'reject'"
 `
-	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0o644)
+	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0o600)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -172,7 +194,7 @@ nodes:
   - id: n1
     type: no_op
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o600)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -193,6 +215,7 @@ objective:
 	reg := setupRegistry()
 	_, errs := Compile(s, baseDir, reg)
 	require.NotNil(t, errs)
+	requireIssue(t, errs, "$.objective.value", sim.CodeInvalidExpression)
 	assert.Contains(t, errs.Error(), "invalid output type")
 }
 
@@ -205,7 +228,7 @@ nodes:
   - id: n1
     type: no_op
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o600)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -229,6 +252,7 @@ latents:
 	reg := setupRegistry()
 	_, errs := Compile(s, baseDir, reg)
 	require.NotNil(t, errs)
+	requireIssue(t, errs, "$.latents.l1.expr", sim.CodeInvalidExpression)
 	assert.Contains(t, errs.Error(), "undeclared reference to 'latent'")
 }
 
@@ -262,7 +286,7 @@ edges:
     to: reject
     condition: "nodes['route'].output.choice == 'reject'"
 `
-	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0o644)
+	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0o600)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -307,7 +331,7 @@ decisions:
 
 	_, pErrs := CompilePolicy(p, m)
 	require.NotNil(t, pErrs)
-	assert.Contains(t, pErrs.Error(), "unobserved reference")
+	requireIssue(t, pErrs, "$.decisions.route.rules[0].when", sim.CodePolicyUnobservedReference)
 
 	polYaml2 := `
 apiVersion: policy/v1
@@ -324,7 +348,7 @@ decisions:
 
 	_, pErrs2 := CompilePolicy(p2, m)
 	require.NotNil(t, pErrs2)
-	assert.Contains(t, pErrs2.Error(), "unknown option")
+	requireIssue(t, pErrs2, "$.decisions.route.rules[0].choose", sim.CodePolicyUnknownOption)
 
 	polYaml3 := `
 apiVersion: policy/v1
@@ -341,7 +365,7 @@ decisions:
 
 	_, pErrs3 := CompilePolicy(p3, m)
 	require.NotNil(t, pErrs3)
-	assert.Contains(t, pErrs3.Error(), "complex select or index access not allowed")
+	requireIssue(t, pErrs3, "$.decisions.route.rules[0].when", sim.CodePolicyUnobservedReference)
 
 	polYaml4 := `
 apiVersion: policy/v1
@@ -358,7 +382,7 @@ decisions:
 
 	_, pErrs4 := CompilePolicy(p4, m)
 	require.NotNil(t, pErrs4)
-	assert.Contains(t, pErrs4.Error(), "unobserved reference")
+	requireIssue(t, pErrs4, "$.decisions.route.rules[0].when", sim.CodePolicyUnobservedReference)
 }
 
 func TestPolicy_ElseFallthrough(t *testing.T) {
@@ -381,7 +405,7 @@ edges:
   - from: ai_score
     to: n1
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o600)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -403,7 +427,8 @@ behaviors:
 	require.NoError(t, err)
 
 	reg := setupRegistry()
-	m, _ := Compile(s, baseDir, reg)
+	m, cErrs := Compile(s, baseDir, reg)
+	require.Nil(t, cErrs)
 
 	polYaml := `
 apiVersion: policy/v1
@@ -449,7 +474,7 @@ edges:
   - from: ai_score
     to: n1
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o600)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -471,7 +496,8 @@ behaviors:
 	require.NoError(t, err)
 
 	reg := setupRegistry()
-	m, _ := Compile(s, baseDir, reg)
+	m, cErrs := Compile(s, baseDir, reg)
+	require.Nil(t, cErrs)
 
 	polYaml := `
 apiVersion: policy/v1

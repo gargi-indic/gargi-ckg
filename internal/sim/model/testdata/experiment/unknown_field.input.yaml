@@ -1,0 +1,9 @@
+apiVersion: experiment/v1
+model: ./sim.yaml
+worlds: [base]
+policies: {search: exhaustive}
+evaluator: both
+runs: 100
+seed: 42
+top: 5
+unknown_field: true

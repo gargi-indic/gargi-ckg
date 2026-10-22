@@ -1,0 +1,8 @@
+apiVersion: policy/v1
+id: example-policy
+version: v1
+decisions:
+  my_decision:
+    rules:
+      - when: "1 == 1"
+        else: opt2

@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.policies",
+      "code": "invalid_value",
+      "message": "policies must have exactly one of search or files"
+    }
+  ]
+}

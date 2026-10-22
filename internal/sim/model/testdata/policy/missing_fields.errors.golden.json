@@ -1,0 +1,14 @@
+{
+  "errors": [
+    {
+      "path": "$.decisions",
+      "code": "missing_required",
+      "message": "missing required property decisions"
+    },
+    {
+      "path": "$.version",
+      "code": "missing_required",
+      "message": "missing required property version"
+    }
+  ]
+}

@@ -7,10 +7,10 @@ import "github.com/gargi-indic/gargi-flow/pkg/engine"
 func DecodeStrict(data []byte, format engine.Format) (any, error) {
 	switch format {
 	case engine.FormatJSON:
-		return DecodeJSON(data)
+		return decodeJSON(data)
 	case engine.FormatYAML:
-		return DecodeYAML(data)
+		return decodeYAML(data)
 	default:
-		return nil, NewValidationError("$", engine.CodeInvalidFormat, "unsupported format")
+		return nil, newValidationError("$", engine.CodeInvalidFormat, "unsupported format")
 	}
 }

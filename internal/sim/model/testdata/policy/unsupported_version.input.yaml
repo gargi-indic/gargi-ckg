@@ -1,0 +1,9 @@
+apiVersion: graph/v1
+id: example-policy
+version: v1
+decisions:
+  my_decision:
+    rules:
+      - when: "1 == 1"
+        choose: opt1
+      - else: opt2

@@ -1,0 +1,17 @@
+apiVersion: sim/v1
+id: example-sim
+worlds:
+  base: {p: oops}
+latents:
+  my_latent: {fixed: 1, extra: 2}
+behaviors:
+  my_node:
+    cost: 10
+    duration: bad_duration
+    abandon: {p: oops}
+    fail: {p: 0.1, class: bad_class}
+    output:
+      out_key: {choice: {a: oops}}
+objective:
+  value: "100.0"
+  maximize: max

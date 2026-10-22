@@ -12,12 +12,12 @@ type Sim struct {
 	Objective  Objective                 `json:"objective"`
 }
 
-// Resource represents Resource.
+// Resource describes the constraints and capacity of a system resource.
 type Resource struct {
 	Capacity int `json:"capacity"`
 }
 
-// Objective represents Objective.
+// Objective defines the goal to maximize or minimize and its constraints.
 type Objective struct {
 	Name        string            `json:"name"`
 	Value       string            `json:"value"`
@@ -25,7 +25,7 @@ type Objective struct {
 	Constraints map[string]string `json:"constraints,omitempty"`
 }
 
-// Behavior represents Behavior.
+// Behavior specifies the cost, duration, failure rates, and outputs of a node.
 type Behavior struct {
 	Cost     any                  `json:"cost,omitempty"`     // number or string (CEL)
 	Duration any                  `json:"duration,omitempty"` // string ("48h") or ValueSpec
@@ -34,12 +34,12 @@ type Behavior struct {
 	Output   map[string]ValueSpec `json:"output,omitempty"`
 }
 
-// Abandon represents Abandon.
+// Abandon configures the probability of a task being abandoned.
 type Abandon struct {
 	P any `json:"p"` // number or string
 }
 
-// Fail represents Fail.
+// Fail configures the probability and classification of a failure.
 type Fail struct {
 	P     any    `json:"p"`     // number or string
 	Class string `json:"class"` // "retryable", "non_retryable", "critical"
@@ -58,30 +58,30 @@ type ValueSpec struct {
 	Expr       string         `json:"expr,omitempty"`
 }
 
-// Bernoulli represents Bernoulli.
+// Bernoulli represents a Bernoulli distribution.
 type Bernoulli struct {
 	P any `json:"p"`
 }
 
-// Normal represents Normal.
+// Normal represents a Normal (Gaussian) distribution.
 type Normal struct {
 	Mean any `json:"mean"`
 	SD   any `json:"sd"`
 }
 
-// Lognormal represents Lognormal.
+// Lognormal represents a Lognormal distribution.
 type Lognormal struct {
 	Mu    any `json:"mu"`
 	Sigma any `json:"sigma"`
 }
 
-// Uniform represents Uniform.
+// Uniform represents a continuous Uniform distribution.
 type Uniform struct {
 	Min any `json:"min"`
 	Max any `json:"max"`
 }
 
-// Triangular represents Triangular.
+// Triangular represents a Triangular distribution.
 type Triangular struct {
 	Min  any `json:"min"`
 	Mode any `json:"mode"`
@@ -96,21 +96,21 @@ type Policy struct {
 	Decisions  map[string]Decision `json:"decisions"`
 }
 
-// Decision represents Decision.
+// Decision contains the rules or table used to make a policy choice.
 type Decision struct {
 	Rules   []Rule     `json:"rules,omitempty"`
 	Table   []TableRow `json:"table,omitempty"`
 	Default string     `json:"default,omitempty"`
 }
 
-// Rule represents Rule.
+// Rule represents a conditional choice in a policy decision.
 type Rule struct {
 	When   string `json:"when,omitempty"`
 	Choose string `json:"choose,omitempty"`
 	Else   string `json:"else,omitempty"`
 }
 
-// TableRow represents TableRow.
+// TableRow represents a single observation and its corresponding choice.
 type TableRow struct {
 	Observed map[string]any `json:"observed"`
 	Choose   string         `json:"choose"`
@@ -129,7 +129,7 @@ type Experiment struct {
 	Top        int      `json:"top,omitempty"` // default 5
 }
 
-// Policies represents Policies.
+// Policies defines how policies are discovered or supplied to an experiment.
 type Policies struct {
 	Search string   `json:"search,omitempty"`
 	Files  []string `json:"files,omitempty"`

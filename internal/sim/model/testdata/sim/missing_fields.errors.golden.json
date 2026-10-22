@@ -1,14 +1,29 @@
 {
   "errors": [
     {
-      "path": "$.worlds",
+      "path": "$.graph",
       "code": "missing_required",
-      "message": "must have at least one world"
+      "message": "missing required property graph"
     },
     {
       "path": "$.objective.maximize",
       "code": "invalid_value",
       "message": "objective.maximize must be 'mean'"
+    },
+    {
+      "path": "$.objective.name",
+      "code": "missing_required",
+      "message": "missing required property name"
+    },
+    {
+      "path": "$.objective.value",
+      "code": "missing_required",
+      "message": "missing required property value"
+    },
+    {
+      "path": "$.worlds",
+      "code": "missing_required",
+      "message": "must have at least one world"
     }
   ]
 }

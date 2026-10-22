@@ -1,7 +1,7 @@
 {
   "errors": [
     {
-      "path": "$",
+      "path": "$.unknown_field",
       "code": "unknown_field",
       "message": "unknown field 'unknown_field'"
     }

@@ -38,7 +38,7 @@ A `decision` node declares `observes`, the upstream values its policy may read. 
 - RNG: `math/rand/v2` PCG streams only. No `math/rand` global state, no wall clock, no map-iteration-order dependence in `internal/sim`.
 - Per-replication seed: `sim.Seed(experimentSeed, world, replication)`, a stable hash in `pkg/sim`.
 - **Common random numbers:** replication `r` of world `w` uses the same seed for every policy, so policy comparisons are paired.
-- Each consumer draws from its own stream, split from the replication seed by **stream name** (e.g. a node ID, or `latent.<name>`), so adding a node or latent does not perturb other draws.
+- Each consumer draws from its own stream, split from the replication seed by **stream name**, so adding a node or latent does not perturb other draws. Stream names are fixed per draw site (e.g. `<node>/output/<field>`, `<node>/duration`, `latent/<name>`).
 - The scheduler's no-wall-clock audit (`TestScheduler_NoWallClockAudit`) gets a matching audit over `internal/sim`.
 
 ### 7. P0 scope
@@ -49,6 +49,11 @@ A `decision` node declares `observes`, the upstream values its policy may read. 
 - P0 core behaviors: `fixed`, `choice`, `bernoulli`, `normal`, `lognormal`, `triangular`, `empirical`.
 - The P0 entry point is `gargi sim run --local`: no server, no Docker, no database.
 - The P0 exit criterion is a golden test reproducing case 1 (loan underwriting) from the architecture document.
+- **Abandonment** (`abandon` in a behavior) ends the episode immediately: costs incurred so far count, no further nodes run, and `run.abandoned` is true in the objective environment.
+- **Constraints** are per-run boolean CEL in P0. A constraint's reported probability is the share of runs (or probability mass, for exact evaluation) where it holds. Aggregate constraints such as `p95(...)` come in P1.
+- **No retries in simulation:** a sampled failure moves the node straight to `Failed` and the graph's failure policy applies.
+- **No new dependencies:** distributions use stdlib `math/rand/v2` (PCG), the `gargi` CLI uses stdlib `flag`, and CEL reuses the already pinned `cel-go`.
+- CEL expressions compare node status using the engine's status strings (`'Succeeded'`, `'Skipped'`, ...).
 
 ## Consequences
 - **Positive:** One graph, one scheduler and one decision node serve both simulation and production, so simulation results transfer to deployed behavior.

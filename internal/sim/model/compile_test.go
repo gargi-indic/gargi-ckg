@@ -2,27 +2,28 @@ package model
 
 import (
 	"context"
-	"testing"
-	"path/filepath"
 	"os"
+	"path/filepath"
+	"testing"
 
 	"github.com/gargi-indic/gargi-flow/internal/nodes"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type dummyChooser struct{}
-func (dummyChooser) Choose(ctx context.Context, decision engine.NodeID, obs map[string]any, options []string) (string, error) {
+
+func (dummyChooser) Choose(_ context.Context, decision engine.NodeID, obs map[string]any, options []string) (string, error) {
 	return "", nil
 }
 
 func setupRegistry() *engine.Registry {
 	reg := engine.NewRegistry()
-	nodes.RegisterDefaults(reg, nodes.Dependencies{})
-	nodes.RegisterDecision(reg, dummyChooser{})
-	reg.Register("no_op", func(any) (engine.NodeInterface, error) { return nil, nil }, nil)
+	_ = nodes.RegisterDefaults(reg, nodes.Dependencies{})
+	_ = nodes.RegisterDecision(reg, dummyChooser{})
+	_ = reg.Register("no_op", func(any) (engine.NodeInterface, error) { return nil, nil }, nil)
 	return reg
 }
 
@@ -76,7 +77,7 @@ edges:
     to: reject
     condition: "nodes['final'].output.choice == 'reject'"
 `
-	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0644)
+	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0o644)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -171,7 +172,7 @@ nodes:
   - id: n1
     type: no_op
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -204,7 +205,7 @@ nodes:
   - id: n1
     type: no_op
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -261,7 +262,7 @@ edges:
     to: reject
     condition: "nodes['route'].output.choice == 'reject'"
 `
-	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0644)
+	err := os.WriteFile(filepath.Join(baseDir, "loan.graph.yaml"), []byte(graphYaml), 0o644)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -380,7 +381,7 @@ edges:
   - from: ai_score
     to: n1
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
 	require.NoError(t, err)
 
 	simYaml := `
@@ -448,7 +449,7 @@ edges:
   - from: ai_score
     to: n1
 `
-	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0644)
+	err := os.WriteFile(filepath.Join(baseDir, "test.graph.yaml"), []byte(graphYaml), 0o644)
 	require.NoError(t, err)
 
 	simYaml := `

@@ -13,7 +13,7 @@ Run these in order, and don't take any action until all of them are done:
 2. Read the live state: `gh issue view 67 -R gargi-indic/gargi-flow` (the body has the status tables, protocol and decisions), then the **latest 5 comments**: `gh issue view 67 -R gargi-indic/gargi-flow --comments | tail -120`. #67 overrides HANDOVER.md wherever they differ.
 3. Load the key: `source ~/.config/jules/env`. If `JULES_API_KEY` is still empty, stop and ask the human. Never print, paste or commit the key.
 4. Find the active task's session in #67 and run `python3 .orchestrator/jules.py get <session>` and `python3 .orchestrator/jules.py activities <session> 5`.
-5. Run `gh pr list -R gargi-indic/gargi-flow` and `git -C /Applications/code/gargi-flow pull --rebase`.
+5. Run `gh pr list -R gargi-indic/gargi-flow` and `git -C /home/gishnum/code/gargi-ckg pull --rebase`.
 6. Post a #67 comment: `**<date> · Orchestration taken over by <you>.** Resuming at <task> / <state>.`
 
 Then continue the per-task loop from whatever state the active task is in.
@@ -58,7 +58,7 @@ Run waits **in the background** (they take 5–35 min) and react when they finis
 
 ## 4. Escalate to the human (comment on #67, then stop and wait) when
 - An issue is labelled `needs-discussion` and #67/HANDOVER has no recorded decision (currently undecided: #20, #40, #41, #51).
-- Jules fails twice on the same task, a session ends `FAILED`, or Jules says something can't be done.
+- Jules says something can't be done. (If Jules **fails** a task, meaning the session ends `FAILED`, times out, or two attempts miss required functionality, do **not** escalate. Per the human's 2026-10-22 decision, reassign it to an Opus Claude sub-agent; see HANDOVER §5 and §7.6.)
 - A change would alter the spec, another epic's public interfaces, or the Go version, or would add a dependency/service outside the spec's stack.
 - Anything destructive or administrative: force-push, history rewrite, deleting anything other than merged PR branches, repo settings or branch protection, rotating keys, installing software on the human's machine.
 

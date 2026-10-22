@@ -1,69 +1,137 @@
 # Orchestrator Handover: gargi-flow
 
-Snapshot refreshed on **2026-10-21** during the execution of **Epic #101 (UI Prototype: Visual DAG Canvas with Live Execution)**.
-The **live** state is in GitHub issues and repository commits on `main`.
+Snapshot refreshed on **2026-10-22 (23:10 UTC)**, during **Epic #124 (Simulation P0: kernel and loan golden case)**, step 6 of 11.
+The **live** state is in issue **#67** (body tables + latest comments) and on `main`. #67 overrides this file wherever they differ.
 
 ---
 
 ## 1. What this project is
-- **Product:** A pluggable Reactive Graph Engine middleware in **Go** named **gargi-flow** (*"Reactive and durable graph execution"*). It runs DAGs on Temporal, with pluggable state stores (in-memory, Redis, Postgres, Neo4j) and gRPC/REST/SSE/WebSocket APIs, alongside a visual React Flow execution canvas in `web/`. Requirements are in [`docs/SPEC.md`](../docs/SPEC.md).
-- **How it is built:** An orchestrator agent assigns backlog sub-issues **one at a time** to **Jules** (Google coding agent) through the Jules API. It reviews each plan and PR, squash-merges into `main`, and logs every step in #67.
+- **Engine (done):** **gargi-flow** is a Go middleware for reactive, durable DAG execution. It runs on Temporal, with pluggable stores (memory/Redis/Postgres/Neo4j), gRPC/REST/SSE/WebSocket APIs, and a React Flow canvas in `web/`. Spec: [`docs/SPEC.md`](../docs/SPEC.md).
+- **Product being built now:** a **simulation and decision-optimization engine** on top of the same graph model. The idea is to model a decision process once, simulate it across uncertain worlds without Temporal, find the best policy, then deploy it on the engine. Architecture: [`docs/simulation/ARCHITECTURE.md`](../docs/simulation/ARCHITECTURE.md). Boundaries: [`docs/adr/0009-simulation-engine.md`](../docs/adr/0009-simulation-engine.md). Reference prototype for the golden numbers: [`docs/simulation/prototypes/loan_sim.py`](../docs/simulation/prototypes/loan_sim.py).
+- **How it is built:** the orchestrator agent assigns sub-issues one at a time to **Jules** (Google coding agent, via `.orchestrator/jules.py`), or to a **Claude Code sub-agent** for `agent/claude` issues and Jules failures. It reviews plans and PRs, squash-merges into `main`, and logs every step in #67.
 
 ## 2. Where everything lives
 | Thing | Location |
 |---|---|
-| Active repo | `gargi-indic/gargi-flow` (default branch `main`) |
-| Local clone (orchestrator environment) | `/home/gishnum/code/gargi-ckg` (WSL `Ubuntu-24.04`) |
-| Requirements spec | `docs/SPEC.md` |
-| Live log + status tables | Issue **#67 Orchestrator Logs** (pinned) |
-| Successor onboarding | Issue **#68 Orchestrator Handover** (pinned) |
-| Jules API helper | `.orchestrator/jules.py` (Python 3 client with pagination and backoff) |
+| Repo | `gargi-indic/gargi-flow` (default branch `main`) |
+| Local clone | `/home/gishnum/code/gargi-ckg` (WSL `Ubuntu-24.04`; Go 1.26 installed; pinned lint at `bin/golangci-lint-v2.14.0`) |
+| Live log + status tables | Issue **#67** |
+| Jules helper | `.orchestrator/jules.py` |
 | Resume skill | `.claude/skills/gargi-orchestrator/SKILL.md` |
-| Credentials | `~/.config/jules/env` in WSL (`GH_TOKEN`, `JULES_API_KEY`). **Never** print or commit these keys. |
-| Jules source id | `sources/github/gargi-indic/gargi-flow` |
-| Jules web UI | `https://jules.google.com/session/<session-id>` |
+| Credentials | `~/.config/jules/env` (`GH_TOKEN`, `JULES_API_KEY`). Run `source` on it in the same shell as `gh`/`jules.py`. **Never** print or commit it. |
+| Claude sub-agent worktrees | `.claude/worktrees/agent-*` (harness-managed, untracked; do not commit) |
 
-## 3. Backlog Map & Epic Status
-All original backend epics (#1, #8, #15, #22, #29, #39, #48, #56, #61) are fully implemented, merged, and closed.
+## 3. Backlog map
+- All original backend epics (#1, #8, #15, #22, #29, #39, #48, #56, #61) and UI Epic #101 are complete and closed.
+- **Simulation epics** (created 2026-10-22, label `area/simulation`; each sub-issue is labelled `agent/jules` or `agent/claude`):
 
-### Epic #101: `[Epic] UI Prototype: Visual DAG Canvas with Live Execution` (✅ Complete)
-| Sub-issue | Title | PR | Status | Commit |
+| Epic | Scope | Sub-issues | Status |
+|---|---|---|---|
+| **#124 P0** | kernel + loan golden case | #125–#135 | **active**: 5/11 merged |
+| #136 P1 | solvers, reports, API, MCP, canvas | #137–#147 | ready, starts after P0 |
+| #148 P2 | queues/resources, optimizers, agents | #149–#158 | ready |
+| #159 P3 | deploy, outcomes, calibration, drift | #160–#167 | ready |
+
+### Epic #124 build order
+| Step | Issue | Agent | Status | PR / commit |
 |---|---|---|---|---|
-| #102 | [Backend] Add configurable CORS middleware to REST/SSE gateway | #113 | ✅ Merged | `0cff997` |
-| #103 | [Backend] Stream terminal node transitions over SSE | #114 | ✅ Merged | `7855b07` |
-| #104 | [Backend] Add GET /v1/executions list endpoint (paginated) | #115 | ✅ Merged | `aaaa7c3` |
-| #105 | [UI] Scaffold web/ app (Vite + React + TS + React Flow) | #116 | ✅ Merged | `ad396a5` |
-| #106 | [UI] Render GraphDefinition as an auto-laid-out DAG | #117 | ✅ Merged | `eb877f1` |
-| #107 | [UI] Run execution and animate node status live via SSE | #118 | ✅ Merged | `75996fc` |
-| #108 | [UI] Node inspector drawer (input, output, error, timing) | #119 | ✅ Merged | `4e1d5c7` |
-| #109 | [UI] Experiments gallery + recent executions sidebar | #120 | ✅ Merged | `adb0474`|
-| #110 | [UI] Minimal graph authoring / node editing | #121 | ✅ Merged | `1167557` |
-| #111 | [UI] Trigger human-in-the-loop signals from node inspector | #122 | ✅ Merged | `58bbbb0` |
-| #112 | [UI] Documentation & unified dev-up script | #123 | ✅ Merged | `16b31e9` |
+| 1 | #125 ADR-0009 + depguard rules | Claude | ✅ | #168 `234b768` |
+| 2 | #126 `pkg/sim` public contracts | Jules | ✅ | #169 `85f30b9` |
+| 3 | #127 sim/policy/experiment schemas + strict parsers + loan files | Jules | ✅ | #170 `47fe9b5` |
+| 4 | #128 `decision` node (sim registry only) | Jules | ✅ | #171 `2349674` |
+| 5 | #129 model compilation + CEL envs + info-set enforcement | Jules ×2 → **Opus sub-agent** | ✅ | #173 `537784f` (supersedes #172) |
+| 6 | #130 behaviors + samplers (Monte Carlo + enumerating) | Jules | 🧭 planning | session `11182749359574682895` |
+| 7 | #131 kernel mode A | Jules | ⏳ | |
+| 8 | #132 experiment runner + Monte Carlo evaluator | Jules | ⏳ | |
+| 9 | #133 exact evaluator + exhaustive policy search | Claude | ⏳ | |
+| 10 | #134 `gargi` CLI (`--local`) | Jules | ⏳ | |
+| 11 | #135 loan golden test, benchmark, quickstart | Claude | ⏳ | |
 
----
+**P0 exit criterion:** `gargi sim run examples/simulation/loan/experiment.yaml --local` reproduces exactly 42 policies, best EV **460.0** (base) and **202.5** (recession), with Monte Carlo (200k runs, seed 42) within 3 SE.
 
-## 4. Current State & Immediate Resume Instructions
+## 4. Current state and immediate resume steps
+1. **#130 is in Jules' planning phase.** At 23:06 UTC the session was `IN_PROGRESS` with no activities and no plan yet. The previous orchestrator's background wait died with its session, so run: `python3 .orchestrator/jules.py wait 11182749359574682895 2400` (in the background).
+2. **When the #130 plan arrives, require all of the following** (send corrections if any are missing):
+   - Consume #129's compiled types from `internal/sim/model/compile.go`, **never recompile CEL**:
+     - `CompiledModel.LatentOrder` + `CompiledLatents map[string]CompiledValue`;
+     - `CompiledBehaviors map[string]CompiledBehavior{Cost, AbandonP, FailP *CompiledParam; Duration *CompiledValue; Outputs map[string]CompiledValue}`;
+     - `CompiledValue{Kind, Fixed, Choice []CompiledChoiceOption{Value, Weight}, Params map[string]CompiledParam, Empirical, Expr}`;
+     - `CompiledParam{Program, Literal}` with `IsLiteral()`.
+   - **Duration:** `KindFixed` holding a Go duration string such as `"48h"` (parse with `time.ParseDuration`), or a value spec in seconds.
+   - **Fail class:** `CompiledBehavior` has no field for it; read `Def.Behaviors[id].Fail.Class`.
+   - **Packages:** `internal/sim/sampler` (`NewMonteCarlo(seed)` with per-stream PCG seeded from `(seed, fnv64(stream))`; `NewEnumerator()` as an odometer over choice points with weight = product of normalized probabilities, skipping zero branches, and `Float` returning `sim.ErrNotDiscrete`) and `internal/sim/behavior`.
+   - **Stream names, fixed:** `<node>/abandon`, `<node>/fail`, `<node>/duration`, `<node>/output/<field>` (fields sorted), `latent/<name>`.
+   - **Abandon:** `Abandoned: true`; nothing else is sampled.
+   - **Fail:** an engine error of the class (ADR-0003).
+   - **Acceptance tests:**
+     - moment tests (100k draws);
+     - stream independence (a new stream does not perturb existing ones);
+     - loan enumerator branch weights sum to 1 ±1e-12 per world;
+     - abandon, fail per class, CEL-weighted choice, CEL param error path.
+   - **Process:**
+     - **No scratch scripts.**
+     - Run lint and `-race` tests and paste the raw output.
+     - PR title `#130: …` with a body that starts `Closes #130`.
+3. Then continue the per-task loop for #131 → #135 (checklists in §6).
 
-### Epic #101 Complete
-- All 11 sub-issues (#102–#112) have been implemented, reviewed, tested with all 4 CI checks passing green, and squash-merged into `main`.
-- Epic #101 issue closed.
-- Prototype capabilities delivered:
-  - Vite + React 19 + TypeScript + React Flow (`@xyflow/react`) visual DAG execution canvas in `web/`.
-  - Auto-layout via Dagre and live node animation via SSE streaming (`/v1/executions/{id}/events`).
-  - Node inspector drawer (timings, inputs, outputs, errors, live config editing, signal form).
-  - Graph authoring palette with drag-and-drop, connect, delete, cycle detection, edge CEL editing, and YAML/JSON export.
-  - Interactive Human-in-the-Loop signal triggers for `wait_for_signal` nodes.
-  - Unified docker-free local dev stack (`scripts/dev-up.sh`) and Playwright E2E smoke tests.
-- **Immediate Next Action**: Consult backlog / maintainers for next epic or production hardening items.
-  3. Review implementation and PR, ensure all 4 CI checks pass, and squash-merge.
-  4. Close Epic #101 upon merge.
+## 5. Decisions recorded (also in the #67 body)
+- **Human (2026-10-22):**
+  - Build the simulation engine as Epics #124/#136/#148/#159, P0 first.
+  - **License deferred**; do not add a LICENSE file.
+  - **Jules failure fallback:** if Jules fails a task (session `FAILED`, timeout, or two attempts that miss required functionality), reassign it to an **Opus Claude sub-agent** (`model: opus`, worktree isolation) instead of escalating. Other escalations (needs-discussion, spec/interface changes, destructive actions) still go to the human.
+- **P0 defaults (orchestrator, open to override; also in ADR-0009 §7):**
+  - The `decision` node is registered in the sim registry only; production registration is P3.
+  - Abandonment ends the episode.
+  - Constraints are per-run boolean.
+  - No retries in simulation.
+  - No new dependencies (stdlib `math/rand/v2`, stdlib `flag`, existing `cel-go`).
+  - CEL uses the engine status strings (`'Succeeded'`).
+- **Policies cannot read `world`** (orchestrator default for P0): rules see only the decision's observed node paths.
+- **Simulation error codes** live in `pkg/sim/codes.go` (snake_case `engine.ErrorCode`), never in `pkg/engine`.
+- **Open `needs-discussion` items** (later epics): #144 MCP SDK dependency, #152 TPE in-house vs library, #153 agent provider and spend limits, #158 mode C now or later.
 
----
+## 6. Review checklists for the remaining P0 tasks
+- **All tasks:**
+  - Only the files in scope.
+  - No scratch scripts (`fix_*.py` and the like).
+  - Godoc on exported identifiers.
+  - The depguard `simulation`/`sim_contracts` rules hold.
+  - **Check out the PR locally and run `bin/golangci-lint-v2.14.0 run ./...` and `go test -race` yourself.** Jules has claimed lint passed when it had not.
+- **#131 kernel:**
+  - Mirror the `internal/orchestrator/workflow.go` step loop (`EvaluateStep` → `Running` via `state.Apply` → execute → completion/failure → `detector.AssessState`) without importing the orchestrator.
+  - Virtual-time heap ordered by `(time, nodeID)`.
+  - Pure nodes run their real implementation; effectful nodes run behaviors; decisions run the policy via `nodes.RegisterDecision`.
+  - Abandon ends the episode.
+  - `TestSim_NoWallClockAudit`.
+  - The three `examples/*.yaml` graphs reach the expected statuses.
+- **#132 runner:**
+  - Byte-identical report JSON with 1 vs 8 workers.
+  - Common random numbers: `sim.Seed(seed, world, r)` is the same for every policy.
+  - Loan + `recession-v1`, 200k runs, mean within 3 SE of 202.5.
+- **#133 exact/exhaustive (Claude):**
+  - Exactly **42** reduced policies.
+  - Exact EVs match `loan_sim.py` to 1e-9.
+  - The emitted best policy re-parses and evaluates to the same EV.
+- **#134 CLI:**
+  - stdlib `flag`.
+  - `--local` prints EV 460.0 / 202.5.
+  - Without `--local`, exit 2.
+- **#135 golden (Claude):**
+  - Golden JSON for 42×2 policies.
+  - Regret 267.5 / 142.2 and VOI 158.0 / 130.3.
+  - Benchmarks recorded.
+  - Quickstart verified verbatim.
 
-## 5. Review Checklists & Key Architecture Decisions
-- **Frontend Stack in `web/`:** Vite + React 19 + TypeScript + `@xyflow/react` + `dagre` (top-to-bottom layout) + `js-yaml` + `openapi-fetch`.
-- **Backend Streaming Endpoint:** The browser SSE endpoint is `/v1/executions/{id}/events` (mounted in `internal/api/http_server.go`).
-- **One Jules Session at a Time:** Adhere strictly to the build order.
-- **Do Not Touch `.orchestrator/` or `.claude/` in Product PRs:** Jules PRs must only touch production code and relevant tests.
-- **All 4 CI Checks Required:** Every PR must have passing `UI Lint and Build`, `Integration Tests`, `Lint and Unit Tests`, and `Build Docker Images` before merging.
+## 7. Lessons learned (this session)
+1. **Jules state lags its messages by up to ~30 min.** `jules.py wait` returns immediately while the state is `AWAITING_USER_FEEDBACK`. Poll for **both** a state change and a new `agentMessaged` activity.
+2. **Jules repeats "please approve" after approval, and checks in mid-task.** Right after `approve`, send a "proceed with no check-ins" message that restates the key requirements.
+3. **Jules' first plans are often vague.** Give exact specs up front (file names, signatures, exact YAML contents, test lists). On #127 this cut the rounds to one.
+4. **Jules skips lint and commits scratch scripts** (#127, #129). Always verify locally, and say "no scratch scripts" in every proceed message.
+5. **Verify behavior with your own adversarial probe tests** on a local checkout. On #129 this caught an information-set prefix leak (`band` vs `bandit`) and uncompiled CEL params that Jules' tests missed. Handing the verified regression test file to the next agent works well.
+6. **Claude sub-agents:**
+   - `gh` is not authenticated in their worktree, and **`git push` fails** because the Windows Git Credential Manager is unreachable from the agent context.
+   - Paste the full issue and epic text into the brief.
+   - Have the sub-agent write the PR body to the scratchpad. The orchestrator then reviews the commit, pushes from the main clone, and opens the PR.
+7. **A branch checked out in an agent worktree** cannot be added to another worktree. Use `git worktree add --detach <path> <branch>` to verify it.
+8. **Known flaky tests** (pre-existing; follow-ups): `internal/orchestrator` `TestGraphExecutionWorkflow_Linear_Diamond` ("unknown queryType graph_state") and `cmd/server` `TestRun_Server` (data race, goroutine at `cmd/server/main.go:110`). Rerun before concluding that a PR broke them.
+9. **Before merging, edit the #67 body** (fetch it first): the Current status table plus the build-order row. Then post one comment per event, starting `**YYYY-MM-DD · #N <event>.**`.

@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.latents.my_latent",
+      "code": "invalid_value",
+      "message": "value spec must have exactly one key"
+    }
+  ]
+}

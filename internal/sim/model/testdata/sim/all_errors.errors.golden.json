@@ -1,0 +1,34 @@
+{
+  "errors": [
+    {
+      "path": "$.behaviors.my_node.duration",
+      "code": "invalid_value",
+      "message": "invalid duration format"
+    },
+    {
+      "path": "$.behaviors.my_node.fail.class",
+      "code": "invalid_value",
+      "message": "invalid class enum"
+    },
+    {
+      "path": "$.graph",
+      "code": "missing_required",
+      "message": "missing required property graph"
+    },
+    {
+      "path": "$.latents.my_latent.extra",
+      "code": "unknown_field",
+      "message": "unknown field 'extra'"
+    },
+    {
+      "path": "$.objective.maximize",
+      "code": "invalid_value",
+      "message": "objective.maximize must be 'mean'"
+    },
+    {
+      "path": "$.objective.name",
+      "code": "missing_required",
+      "message": "missing required property name"
+    }
+  ]
+}

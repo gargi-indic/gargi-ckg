@@ -1,0 +1,38 @@
+{
+  "apiVersion": "sim/v1",
+  "id": "example-sim",
+  "graph": "./graph.yaml",
+  "worlds": {
+    "base": {
+      "p": 0.5
+    }
+  },
+  "latents": {
+    "my_latent": {
+      "fixed": 1
+    }
+  },
+  "behaviors": {
+    "my_node": {
+      "cost": 10,
+      "duration": "1s",
+      "abandon": {
+        "p": 0.1
+      },
+      "fail": {
+        "p": 0.1,
+        "class": "retryable"
+      },
+      "output": {
+        "out_key": {
+          "fixed": 1
+        }
+      }
+    }
+  },
+  "objective": {
+    "name": "my_objective",
+    "value": "100.0",
+    "maximize": "mean"
+  }
+}

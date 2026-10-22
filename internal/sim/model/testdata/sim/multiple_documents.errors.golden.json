@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$",
+      "code": "invalid_format",
+      "message": "multiple YAML documents are not allowed"
+    }
+  ]
+}

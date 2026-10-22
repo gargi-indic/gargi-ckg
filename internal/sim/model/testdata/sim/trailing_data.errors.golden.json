@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$",
+      "code": "invalid_format",
+      "message": "trailing data after JSON document"
+    }
+  ]
+}

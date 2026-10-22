@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.decisions.my_decision.rules[0]",
+      "code": "invalid_value",
+      "message": "rule must have either when/choose or else"
+    }
+  ]
+}

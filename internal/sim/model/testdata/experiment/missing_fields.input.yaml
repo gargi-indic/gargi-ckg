@@ -1,0 +1,2 @@
+apiVersion: experiment/v1
+model: ./sim.yaml

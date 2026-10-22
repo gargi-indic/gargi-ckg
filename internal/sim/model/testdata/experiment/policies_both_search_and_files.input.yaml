@@ -1,0 +1,7 @@
+apiVersion: experiment/v1
+model: ./sim.yaml
+policies:
+  search: exhaustive
+  files: ["a", "b"]
+runs: 100
+seed: 42

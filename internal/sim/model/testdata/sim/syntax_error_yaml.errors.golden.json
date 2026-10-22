@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$",
+      "code": "invalid_format",
+      "message": "YAML decode error: yaml: line 4: did not find expected ',' or '}'"
+    }
+  ]
+}

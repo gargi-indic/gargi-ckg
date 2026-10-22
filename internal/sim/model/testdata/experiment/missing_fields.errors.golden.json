@@ -1,0 +1,14 @@
+{
+  "errors": [
+    {
+      "path": "$.policies",
+      "code": "invalid_value",
+      "message": "policies must have exactly one of search or files"
+    },
+    {
+      "path": "$.runs",
+      "code": "invalid_value",
+      "message": "runs must be \u003e= 1"
+    }
+  ]
+}

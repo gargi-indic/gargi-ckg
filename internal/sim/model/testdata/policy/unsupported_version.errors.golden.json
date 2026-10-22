@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.apiVersion",
+      "code": "unsupported_version",
+      "message": "unsupported apiVersion: graph/v1"
+    }
+  ]
+}

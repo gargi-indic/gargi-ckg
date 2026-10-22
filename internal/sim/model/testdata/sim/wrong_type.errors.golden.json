@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.objective.value",
+      "code": "missing_required",
+      "message": "missing required property value"
+    }
+  ]
+}

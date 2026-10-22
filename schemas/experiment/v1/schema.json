@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gargi-flow:schema:experiment:v1",
+  "title": "Gargi Flow Experiment Definition",
+  "description": "Version 1 Experiment Definition Schema for Gargi Flow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "model",
+    "policies",
+    "runs",
+    "seed"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "experiment/v1",
+      "description": "API Version for the experiment schema definition"
+    },
+    "model": {
+      "type": "string"
+    },
+    "worlds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "policies": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["search"],
+          "properties": {
+            "search": { "const": "exhaustive" }
+          }
+        },
+        {
+          "required": ["files"],
+          "properties": {
+            "files": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      ]
+    },
+    "evaluator": {
+      "type": "string",
+      "enum": ["monte_carlo", "exact", "both"],
+      "default": "monte_carlo"
+    },
+    "runs": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "workers": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "top": {
+      "type": "integer",
+      "default": 5
+    }
+  }
+}

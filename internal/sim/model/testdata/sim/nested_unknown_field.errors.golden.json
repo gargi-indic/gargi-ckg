@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.behaviors.my_node.output.out_key.oops",
+      "code": "unknown_field",
+      "message": "unknown field 'oops'"
+    }
+  ]
+}

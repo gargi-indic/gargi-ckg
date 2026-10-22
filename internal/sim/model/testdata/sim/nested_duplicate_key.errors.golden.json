@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.latents.my_latent.fixed",
+      "code": "invalid_format",
+      "message": "duplicate key 'fixed'"
+    }
+  ]
+}

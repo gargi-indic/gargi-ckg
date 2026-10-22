@@ -1,0 +1,10 @@
+apiVersion: sim/v1
+id: example-sim
+id: example-sim-2
+graph: ./graph.yaml
+worlds:
+  base: {p: 0.5}
+objective:
+  name: my_objective
+  value: "100.0"
+  maximize: mean

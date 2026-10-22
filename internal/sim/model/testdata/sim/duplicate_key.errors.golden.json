@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$.id",
+      "code": "invalid_format",
+      "message": "duplicate key 'id'"
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+package model
+
+import (
+	"fmt"
+	"sort"
+	"time"
+
+	"github.com/gargi-indic/gargi-flow/internal/graph"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
+)
+
+func newValidationError(path string, code engine.ErrorCode, message string) error {
+	errs := &engine.ValidationErrors{}
+	errs.Add(path, code, message)
+	return errs
+}
+
+// ParseSimModel parses a simulation definition from bytes.
+func ParseSimModel(data []byte, format engine.Format) (*Sim, error) {
+	tree, err := graph.DecodeStrict(data, format)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := tree.(map[string]any)
+	if !ok {
+		return nil, newValidationError("$", engine.CodeInvalidType, "root must be an object")
+	}
+
+	if apiVersion, ok := m["apiVersion"].(string); !ok || apiVersion != "sim/v1" {
+		return nil, newValidationError("$.apiVersion", engine.CodeUnsupportedVersion, fmt.Sprintf("unsupported apiVersion: %v", m["apiVersion"]))
+	}
+
+	errs := &engine.ValidationErrors{}
+	sim, bindErr := bindSim(tree)
+	if bindErr != nil {
+		errs.Merge(bindErr.(*engine.ValidationErrors))
+	}
+
+	if valErr := validateSim(sim); valErr != nil {
+		errs.Merge(valErr.(*engine.ValidationErrors))
+	}
+
+	if errs.Len() > 0 {
+		return nil, sortErrors(errs)
+	}
+	return sim, nil
+}
+
+// ParsePolicy parses a policy definition from bytes.
+func ParsePolicy(data []byte, format engine.Format) (*Policy, error) {
+	tree, err := graph.DecodeStrict(data, format)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := tree.(map[string]any)
+	if !ok {
+		return nil, newValidationError("$", engine.CodeInvalidType, "root must be an object")
+	}
+
+	if apiVersion, ok := m["apiVersion"].(string); !ok || apiVersion != "policy/v1" {
+		return nil, newValidationError("$.apiVersion", engine.CodeUnsupportedVersion, fmt.Sprintf("unsupported apiVersion: %v", m["apiVersion"]))
+	}
+
+	errs := &engine.ValidationErrors{}
+	pol, bindErr := bindPolicy(tree)
+	if bindErr != nil {
+		errs.Merge(bindErr.(*engine.ValidationErrors))
+	}
+
+	if valErr := validatePolicy(pol); valErr != nil {
+		errs.Merge(valErr.(*engine.ValidationErrors))
+	}
+
+	if errs.Len() > 0 {
+		return nil, sortErrors(errs)
+	}
+	return pol, nil
+}
+
+// ParseExperiment parses an experiment definition from bytes.
+func ParseExperiment(data []byte, format engine.Format) (*Experiment, error) {
+	tree, err := graph.DecodeStrict(data, format)
+	if err != nil {
+		return nil, err
+	}
+
+	m, ok := tree.(map[string]any)
+	if !ok {
+		return nil, newValidationError("$", engine.CodeInvalidType, "root must be an object")
+	}
+
+	if apiVersion, ok := m["apiVersion"].(string); !ok || apiVersion != "experiment/v1" {
+		return nil, newValidationError("$.apiVersion", engine.CodeUnsupportedVersion, fmt.Sprintf("unsupported apiVersion: %v", m["apiVersion"]))
+	}
+
+	errs := &engine.ValidationErrors{}
+	exp, bindErr := bindExperiment(tree)
+	if bindErr != nil {
+		errs.Merge(bindErr.(*engine.ValidationErrors))
+	}
+
+	if exp.Evaluator == "" {
+		exp.Evaluator = "monte_carlo"
+	}
+	if exp.Top == 0 {
+		exp.Top = 5
+	}
+
+	if valErr := validateExperiment(exp); valErr != nil {
+		errs.Merge(valErr.(*engine.ValidationErrors))
+	}
+
+	if errs.Len() > 0 {
+		return nil, sortErrors(errs)
+	}
+	return exp, nil
+}
+
+func sortErrors(err error) error {
+	verrs, ok := err.(*engine.ValidationErrors)
+	if !ok {
+		return err
+	}
+	issues := verrs.Issues()
+	sort.Slice(issues, func(i, j int) bool {
+		if issues[i].Path != issues[j].Path {
+			return issues[i].Path < issues[j].Path
+		}
+		if issues[i].Code != issues[j].Code {
+			return issues[i].Code < issues[j].Code
+		}
+		return issues[i].Message < issues[j].Message
+	})
+	sorted := &engine.ValidationErrors{}
+	for _, issue := range issues {
+		sorted.AddIssue(issue)
+	}
+	return sorted
+}
+
+func validateSim(s *Sim) error {
+	errs := &engine.ValidationErrors{}
+
+	if s.ID == "" {
+		errs.Add("$.id", engine.CodeMissingRequired, "missing required property id")
+	}
+	if s.Graph == "" {
+		errs.Add("$.graph", engine.CodeMissingRequired, "missing required property graph")
+	}
+	if s.Objective.Name == "" {
+		errs.Add("$.objective.name", engine.CodeMissingRequired, "missing required property name")
+	}
+	if s.Objective.Value == "" {
+		errs.Add("$.objective.value", engine.CodeMissingRequired, "missing required property value")
+	}
+
+	if len(s.Worlds) == 0 {
+		errs.Add("$.worlds", engine.CodeMissingRequired, "must have at least one world")
+	}
+
+	for name, vs := range s.Latents {
+		if checkValueSpec(vs) != 1 {
+			errs.Add(fmt.Sprintf("$.latents.%s", name), engine.CodeInvalidValue, "value spec must have exactly one key")
+		}
+	}
+	for bName, b := range s.Behaviors {
+		if b.Duration != nil {
+			if sDur, ok := b.Duration.(string); ok {
+				if _, err := time.ParseDuration(sDur); err != nil {
+					errs.Add(fmt.Sprintf("$.behaviors.%s.duration", bName), engine.CodeInvalidValue, "invalid duration format")
+				}
+			} else if vs, ok := b.Duration.(ValueSpec); ok {
+				if checkValueSpec(vs) != 1 {
+					errs.Add(fmt.Sprintf("$.behaviors.%s.duration", bName), engine.CodeInvalidValue, "value spec must have exactly one key")
+				}
+			}
+		}
+		if b.Fail != nil {
+			class := b.Fail.Class
+			if class != "retryable" && class != "non_retryable" && class != "critical" {
+				errs.Add(fmt.Sprintf("$.behaviors.%s.fail.class", bName), engine.CodeInvalidValue, "invalid class enum")
+			}
+		}
+		for outName, vs := range b.Output {
+			if checkValueSpec(vs) != 1 {
+				errs.Add(fmt.Sprintf("$.behaviors.%s.output.%s", bName, outName), engine.CodeInvalidValue, "value spec must have exactly one key")
+			}
+		}
+	}
+	for rName, r := range s.Resources {
+		if r.Capacity < 1 {
+			errs.Add(fmt.Sprintf("$.resources.%s.capacity", rName), engine.CodeInvalidValue, "capacity must be >= 1")
+		}
+	}
+
+	if s.Objective.Maximize != "mean" {
+		errs.Add("$.objective.maximize", engine.CodeInvalidValue, "objective.maximize must be 'mean'")
+	}
+
+	if errs.Len() > 0 {
+		return errs
+	}
+	return nil
+}
+
+func validatePolicy(p *Policy) error {
+	errs := &engine.ValidationErrors{}
+	if p.ID == "" {
+		errs.Add("$.id", engine.CodeMissingRequired, "missing required property id")
+	}
+	if p.Version == "" {
+		errs.Add("$.version", engine.CodeMissingRequired, "missing required property version")
+	}
+	if p.Decisions == nil {
+		errs.Add("$.decisions", engine.CodeMissingRequired, "missing required property decisions")
+	}
+
+	for dName, d := range p.Decisions {
+		path := fmt.Sprintf("$.decisions.%s", dName)
+		hasRules := len(d.Rules) > 0
+		hasTable := len(d.Table) > 0
+
+		if (hasRules && hasTable) || (!hasRules && !hasTable) {
+			errs.Add(path, engine.CodeInvalidValue, "decision must have exactly one of rules or table")
+		}
+
+		if hasRules {
+			if d.Default != "" {
+				errs.Add(path+".default", engine.CodeInvalidValue, "default is only allowed with table")
+			}
+			for i, r := range d.Rules {
+				rp := fmt.Sprintf("%s.rules[%d]", path, i)
+				if r.When != "" && r.Choose != "" {
+					if r.Else != "" {
+						errs.Add(rp, engine.CodeInvalidValue, "rule cannot mix when/choose with else")
+					}
+				} else if r.Else != "" {
+					if r.When != "" || r.Choose != "" {
+						errs.Add(rp, engine.CodeInvalidValue, "rule cannot mix when/choose with else")
+					}
+					if i != len(d.Rules)-1 {
+						errs.Add(rp, engine.CodeInvalidValue, "else must be the last rule")
+					}
+				} else {
+					errs.Add(rp, engine.CodeInvalidValue, "rule must have either when/choose or else")
+				}
+			}
+		}
+		if hasTable {
+			if d.Default == "" {
+				errs.Add(path+".default", engine.CodeMissingRequired, "missing required property default")
+			}
+			for i, r := range d.Table {
+				rp := fmt.Sprintf("%s.table[%d]", path, i)
+				if len(r.Observed) == 0 {
+					errs.Add(rp+".observed", engine.CodeMissingRequired, "missing required property observed")
+				}
+				if r.Choose == "" {
+					errs.Add(rp+".choose", engine.CodeMissingRequired, "missing required property choose")
+				}
+			}
+		}
+	}
+	if errs.Len() > 0 {
+		return errs
+	}
+	return nil
+}
+
+func validateExperiment(e *Experiment) error {
+	errs := &engine.ValidationErrors{}
+	if e.Model == "" {
+		errs.Add("$.model", engine.CodeMissingRequired, "missing required property model")
+	}
+	if e.Runs < 1 {
+		errs.Add("$.runs", engine.CodeInvalidValue, "runs must be >= 1")
+	}
+	if e.Evaluator != "monte_carlo" && e.Evaluator != "exact" && e.Evaluator != "both" {
+		errs.Add("$.evaluator", engine.CodeInvalidValue, "invalid evaluator enum")
+	}
+	if e.Policies.Search != "" && len(e.Policies.Files) > 0 {
+		errs.Add("$.policies", engine.CodeInvalidValue, "policies must have exactly one of search or files")
+	} else if e.Policies.Search == "" && len(e.Policies.Files) == 0 {
+		errs.Add("$.policies", engine.CodeInvalidValue, "policies must have exactly one of search or files")
+	}
+	if e.Policies.Search != "" && e.Policies.Search != "exhaustive" {
+		errs.Add("$.policies.search", engine.CodeInvalidValue, "search must be exhaustive")
+	}
+	if e.Workers < 0 {
+		errs.Add("$.workers", engine.CodeInvalidValue, "workers must be >= 1")
+	}
+	if e.Top < 1 {
+		errs.Add("$.top", engine.CodeInvalidValue, "top must be >= 1")
+	}
+
+	if errs.Len() > 0 {
+		return errs
+	}
+	return nil
+}
+
+func checkValueSpec(vs ValueSpec) int {
+	c := 0
+	if vs.Fixed != nil {
+		c++
+	}
+	if vs.Choice != nil {
+		c++
+	}
+	if vs.Bernoulli != nil {
+		c++
+	}
+	if vs.Normal != nil {
+		c++
+	}
+	if vs.Lognormal != nil {
+		c++
+	}
+	if vs.Uniform != nil {
+		c++
+	}
+	if vs.Triangular != nil {
+		c++
+	}
+	if vs.Empirical != nil {
+		c++
+	}
+	if vs.Expr != "" {
+		c++
+	}
+	return c
+}

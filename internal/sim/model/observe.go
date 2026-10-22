@@ -153,22 +153,10 @@ func (m *CompiledModel) Discrete() (bool, []string) {
 		b := m.Def.Behaviors[id]
 		path := engine.PathRoot.Field("behaviors").Field(id)
 
-		if durMap, ok := b.Duration.(map[string]any); ok {
-			if durMap["normal"] != nil {
-				reasons = append(reasons, fmt.Sprintf("%s: normal distribution is continuous", path.Field("duration").Field("normal").String()))
-			}
-			if durMap["lognormal"] != nil {
-				reasons = append(reasons, fmt.Sprintf("%s: lognormal distribution is continuous", path.Field("duration").Field("lognormal").String()))
-			}
-			if durMap["uniform"] != nil {
-				reasons = append(reasons, fmt.Sprintf("%s: uniform distribution is continuous", path.Field("duration").Field("uniform").String()))
-			}
-			if durMap["triangular"] != nil {
-				reasons = append(reasons, fmt.Sprintf("%s: triangular distribution is continuous", path.Field("duration").Field("triangular").String()))
-			}
-			if emp, ok := durMap["empirical"].([]any); ok && len(emp) > 0 {
-				reasons = append(reasons, fmt.Sprintf("%s: empirical distribution is continuous", path.Field("duration").Field("empirical").String()))
-			}
+		// The string form ("48h") is a fixed duration and stays discrete; the
+		// value-spec form is bound by the parser as a ValueSpec.
+		if vs, ok := b.Duration.(ValueSpec); ok {
+			checkValueSpec(vs, path.Field("duration"))
 		}
 
 		var outNames []string

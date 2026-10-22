@@ -415,3 +415,16 @@ func TestCompile_ParamOutputTypes(t *testing.T) {
 	require.Nil(t, compileCEL("true", "$.b", env, []*cel.Type{cel.DoubleType}, errs))
 	require.Equal(t, 3, errs.Len())
 }
+
+func TestLoan_DiscreteDurationValueSpec(t *testing.T) {
+	m := loanModel(t)
+	ok, reasons := m.Discrete()
+	require.True(t, ok, "reasons: %v", reasons)
+	require.Empty(t, reasons)
+
+	m, errs := compileLoanVariant(t, nil, []string{"duration: 48h", "duration: {lognormal: {mu: 10, sigma: 0.5}}"})
+	require.Nil(t, errs)
+	ok, reasons = m.Discrete()
+	require.False(t, ok)
+	require.Equal(t, []string{"$.behaviors.human_review.duration.lognormal: lognormal distribution is continuous"}, reasons)
+}

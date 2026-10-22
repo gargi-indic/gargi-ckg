@@ -16,6 +16,7 @@ type Enumerator struct {
 	done        bool
 	weight      float64
 	currentPath map[string]int
+	started     bool
 }
 
 type choicePath struct {
@@ -39,10 +40,16 @@ func (e *Enumerator) Next() bool {
 		return false
 	}
 
-	if len(e.paths) == 0 {
+	if !e.started {
+		e.started = true
 		e.weight = 1.0
 		// First run: just initialize and let it run to record paths.
 		return true
+	}
+
+	if len(e.paths) == 0 {
+		e.done = true
+		return false
 	}
 
 	// Advance the odometer (last choice first).

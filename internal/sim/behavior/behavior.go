@@ -13,15 +13,15 @@ import (
 )
 
 type compiledBehavior struct {
-	cb model.CompiledBehavior
+	cb        model.CompiledBehavior
+	failClass string
 }
 
 // New returns a sim.Behavior that executes the given compiled behavior model.
 // Evaluates CEL params against `world`, `latent` and `inputs`, then samples in a fixed order with fixed stream names:
 // `<node>/abandon`, `<node>/fail`, `<node>/duration`, `<node>/output/<field>` (fields sorted).
-// `latent/<name>` is used for latents (helper SampleLatents if needed, though this is for node behavior so it may not sample latents directly).
-func New(cb model.CompiledBehavior) sim.Behavior {
-	return &compiledBehavior{cb: cb}
+func New(cb model.CompiledBehavior, failClass string) sim.Behavior {
+	return &compiledBehavior{cb: cb, failClass: failClass}
 }
 
 func (b *compiledBehavior) Sample(_ context.Context, s sim.Sampler, in sim.BehaviorInput) (sim.BehaviorOutcome, error) {
@@ -66,7 +66,7 @@ func (b *compiledBehavior) Sample(_ context.Context, s sim.Sampler, in sim.Behav
 		}
 		if idx == 1 {
 			var e *engine.NodeError
-			switch engine.ErrorClass(b.cb.FailClass) {
+			switch engine.ErrorClass(b.failClass) {
 			case engine.ClassRetryable:
 				e = engine.NewRetryableError(fmt.Errorf("simulated failure"))
 			case engine.ClassCritical:
@@ -259,7 +259,7 @@ func getParam(cv *model.CompiledValue, name string) *model.CompiledParam {
 	return nil
 }
 
-// SampleLatents is a helper to sample latents
+// SampleLatents is a helper to sample latents. It mutates vars["latent"].
 func SampleLatents(m *model.CompiledModel, s sim.Sampler, vars map[string]any) (map[string]any, error) {
 	latents := make(map[string]any)
 	for _, name := range m.LatentOrder {

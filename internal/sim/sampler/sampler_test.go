@@ -93,3 +93,31 @@ func TestEnumerator_LoanBehaviors(t *testing.T) {
 		t.Errorf("expected sum of weights 1.0, got %f", totalWeight)
 	}
 }
+
+func TestEnumerator_EdgeCases(t *testing.T) {
+	e := NewEnumerator()
+
+	d := sim.Distribution{Kind: sim.DistKindNormal, Params: map[string]float64{"mean": 0, "sd": 1}}
+	if _, err := e.Float("s1", d); err != sim.ErrNotDiscrete {
+		t.Errorf("expected ErrNotDiscrete, got %v", err)
+	}
+
+	e.Next()
+	s := e.Sampler()
+	if _, err := s.Choose("stream", []float64{0, 0}); err == nil {
+		t.Errorf("expected error for all zero weights")
+	}
+}
+
+func TestEnumerator_NoChoices(t *testing.T) {
+	e := NewEnumerator()
+
+	iters := 0
+	for e.Next() {
+		iters++
+	}
+
+	if iters != 1 {
+		t.Errorf("expected 1 iteration for an episode making no choices, got %d", iters)
+	}
+}

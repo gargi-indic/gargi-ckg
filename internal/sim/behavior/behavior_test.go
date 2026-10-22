@@ -19,7 +19,7 @@ func TestBehavior_Abandon(t *testing.T) {
 	cb := model.CompiledBehavior{
 		AbandonP: &model.CompiledParam{Source: "world.abandon_p", Program: prog},
 	}
-	b := New(cb)
+	b := New(cb, "")
 
 	s := sampler.NewMonteCarlo(42)
 	in := sim.BehaviorInput{
@@ -41,10 +41,9 @@ func TestBehavior_Fail(t *testing.T) {
 	prog, _ := env.Program(ast)
 
 	cb := model.CompiledBehavior{
-		FailP:     &model.CompiledParam{Source: "world.fail_p", Program: prog},
-		FailClass: string(engine.ClassRetryable),
+		FailP: &model.CompiledParam{Source: "world.fail_p", Program: prog},
 	}
-	b := New(cb)
+	b := New(cb, string(engine.ClassRetryable))
 
 	s := sampler.NewMonteCarlo(42)
 	in := sim.BehaviorInput{
@@ -62,6 +61,32 @@ func TestBehavior_Fail(t *testing.T) {
 	}
 }
 
+func TestBehavior_Fail_Critical(t *testing.T) {
+	env, _ := cel.NewEnv(cel.Variable("world", cel.MapType(cel.StringType, cel.DynType)))
+	ast, _ := env.Compile("world.fail_p")
+	prog, _ := env.Program(ast)
+
+	cb := model.CompiledBehavior{
+		FailP: &model.CompiledParam{Source: "world.fail_p", Program: prog},
+	}
+	b := New(cb, string(engine.ClassCritical))
+
+	s := sampler.NewMonteCarlo(42)
+	in := sim.BehaviorInput{
+		NodeID: "test",
+		World:  sim.World{Params: map[string]any{"fail_p": 1.0}},
+	}
+	out, err := b.Sample(context.Background(), s, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Err == nil {
+		t.Errorf("expected failure error")
+	} else if engine.ClassOf(out.Err) != engine.ClassCritical {
+		t.Errorf("expected critical error, got %v", engine.ClassOf(out.Err))
+	}
+}
+
 func TestBehavior_Duration(t *testing.T) {
 	cb := model.CompiledBehavior{
 		Duration: &model.CompiledValue{
@@ -69,7 +94,7 @@ func TestBehavior_Duration(t *testing.T) {
 			Fixed: "48h",
 		},
 	}
-	b := New(cb)
+	b := New(cb, "")
 
 	s := sampler.NewMonteCarlo(42)
 	in := sim.BehaviorInput{
@@ -95,7 +120,7 @@ func TestBehavior_OutputChoice(t *testing.T) {
 			},
 		},
 	}
-	b := New(cb)
+	b := New(cb, "")
 
 	s := sampler.NewMonteCarlo(42)
 	in := sim.BehaviorInput{
@@ -118,7 +143,7 @@ func TestBehavior_CELError(t *testing.T) {
 	cb := model.CompiledBehavior{
 		Cost: &model.CompiledParam{Source: "world.cost + 'invalid'", Program: prog},
 	}
-	b := New(cb)
+	b := New(cb, "")
 
 	s := sampler.NewMonteCarlo(42)
 	in := sim.BehaviorInput{

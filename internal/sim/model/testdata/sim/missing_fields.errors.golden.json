@@ -1,0 +1,14 @@
+{
+  "errors": [
+    {
+      "path": "$.worlds",
+      "code": "missing_required",
+      "message": "must have at least one world"
+    },
+    {
+      "path": "$.objective.maximize",
+      "code": "invalid_value",
+      "message": "objective.maximize must be 'mean'"
+    }
+  ]
+}

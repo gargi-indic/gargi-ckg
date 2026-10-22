@@ -31,10 +31,10 @@ func NewParser() *Parser {
 // Parse parses a raw byte slice into an engine.GraphDefinition according to the specified format.
 func (p *Parser) Parse(data []byte, format engine.Format) (*engine.GraphDefinition, error) {
 	if len(data) == 0 || len(bytes.TrimSpace(data)) == 0 {
-		return nil, newValidationError("$", engine.CodeInvalidFormat, "input is empty or whitespace only")
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, "input is empty or whitespace only")
 	}
 	if len(data) > MaxDefinitionBytes {
-		return nil, newValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("input exceeds maximum size of %d bytes", MaxDefinitionBytes))
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("input exceeds maximum size of %d bytes", MaxDefinitionBytes))
 	}
 
 	var tree any
@@ -42,11 +42,11 @@ func (p *Parser) Parse(data []byte, format engine.Format) (*engine.GraphDefiniti
 
 	switch format {
 	case engine.FormatJSON:
-		tree, err = decodeJSON(data)
+		tree, err = DecodeJSON(data)
 	case engine.FormatYAML:
-		tree, err = decodeYAML(data)
+		tree, err = DecodeYAML(data)
 	default:
-		return nil, newValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("unsupported format: %s", format))
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("unsupported format: %s", format))
 	}
 
 	if err != nil {
@@ -56,14 +56,15 @@ func (p *Parser) Parse(data []byte, format engine.Format) (*engine.GraphDefiniti
 	return bindDefinition(tree)
 }
 
-func decodeJSON(data []byte) (any, error) {
+// DecodeJSON decodes json.
+func DecodeJSON(data []byte) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 
 	tree, err := parseJSONValue(dec, engine.PathRoot, 0)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, newValidationError("$", engine.CodeInvalidFormat, "unexpected end of JSON input")
+			return nil, NewValidationError("$", engine.CodeInvalidFormat, "unexpected end of JSON input")
 		}
 		return nil, err
 	}
@@ -71,7 +72,7 @@ func decodeJSON(data []byte) (any, error) {
 	// Check for trailing data
 	_, err = dec.Token()
 	if err != io.EOF {
-		return nil, newValidationError("$", engine.CodeInvalidFormat, "trailing data after JSON document")
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, "trailing data after JSON document")
 	}
 
 	return tree, nil
@@ -79,16 +80,16 @@ func decodeJSON(data []byte) (any, error) {
 
 func parseJSONValue(dec *json.Decoder, path engine.Path, depth int) (any, error) {
 	if depth > MaxDefinitionDepth {
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("maximum nesting depth of %d exceeded", MaxDefinitionDepth))
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("maximum nesting depth of %d exceeded", MaxDefinitionDepth))
 	}
 
 	t, err := dec.Token()
 	if err != nil {
 		var syntaxErr *json.SyntaxError
 		if errors.As(err, &syntaxErr) {
-			return nil, newValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("JSON syntax error at offset %d: %v", syntaxErr.Offset, err))
+			return nil, NewValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("JSON syntax error at offset %d: %v", syntaxErr.Offset, err))
 		}
-		return nil, newValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("JSON decode error: %v", err))
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("JSON decode error: %v", err))
 	}
 
 	switch v := t.(type) {
@@ -99,20 +100,20 @@ func parseJSONValue(dec *json.Decoder, path engine.Path, depth int) (any, error)
 		case '[':
 			return parseJSONArray(dec, path, depth+1)
 		}
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("unexpected JSON delimiter: %v", v))
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("unexpected JSON delimiter: %v", v))
 	case json.Number:
 		f, err := v.Float64()
 		if err != nil {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("invalid number format: %v", v))
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("invalid number format: %v", v))
 		}
 		if math.IsNaN(f) || math.IsInf(f, 0) {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, "non-finite float values are not allowed")
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, "non-finite float values are not allowed")
 		}
 		return f, nil
 	case string, bool, nil:
 		return v, nil
 	default:
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("unexpected JSON token type: %T", v))
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("unexpected JSON token type: %T", v))
 	}
 }
 
@@ -121,16 +122,16 @@ func parseJSONObject(dec *json.Decoder, path engine.Path, depth int) (map[string
 	for dec.More() {
 		t, err := dec.Token()
 		if err != nil {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("error reading JSON object key: %v", err))
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("error reading JSON object key: %v", err))
 		}
 		key, ok := t.(string)
 		if !ok {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, "JSON object key must be a string")
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, "JSON object key must be a string")
 		}
 
 		fieldPath := path.Field(key)
 		if _, exists := obj[key]; exists {
-			return nil, newValidationError(string(fieldPath), engine.CodeInvalidFormat, fmt.Sprintf("duplicate key '%s'", key))
+			return nil, NewValidationError(string(fieldPath), engine.CodeInvalidFormat, fmt.Sprintf("duplicate key '%s'", key))
 		}
 
 		val, err := parseJSONValue(dec, fieldPath, depth)
@@ -142,7 +143,7 @@ func parseJSONObject(dec *json.Decoder, path engine.Path, depth int) (map[string
 	// Consume closing '}'
 	_, err := dec.Token()
 	if err != nil {
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("error reading JSON object close: %v", err))
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("error reading JSON object close: %v", err))
 	}
 	return obj, nil
 }
@@ -161,22 +162,23 @@ func parseJSONArray(dec *json.Decoder, path engine.Path, depth int) ([]any, erro
 	// Consume closing ']'
 	_, err := dec.Token()
 	if err != nil {
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("error reading JSON array close: %v", err))
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("error reading JSON array close: %v", err))
 	}
 	return arr, nil
 }
 
-func decodeYAML(data []byte) (any, error) {
+// DecodeYAML decodes yaml.
+func DecodeYAML(data []byte) (any, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var root yaml.Node
 	if err := dec.Decode(&root); err != nil {
-		return nil, newValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("YAML decode error: %v", err))
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, fmt.Sprintf("YAML decode error: %v", err))
 	}
 
 	// Check for multiple documents
 	var extra yaml.Node
 	if err := dec.Decode(&extra); err != io.EOF {
-		return nil, newValidationError("$", engine.CodeInvalidFormat, "multiple YAML documents are not allowed")
+		return nil, NewValidationError("$", engine.CodeInvalidFormat, "multiple YAML documents are not allowed")
 	}
 
 	if len(root.Content) == 0 {
@@ -188,7 +190,7 @@ func decodeYAML(data []byte) (any, error) {
 
 func normalizeYAMLNode(node *yaml.Node, path engine.Path, depth int) (any, error) {
 	if depth > MaxDefinitionDepth {
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("maximum nesting depth of %d exceeded", MaxDefinitionDepth))
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("maximum nesting depth of %d exceeded", MaxDefinitionDepth))
 	}
 
 	switch node.Kind {
@@ -204,9 +206,9 @@ func normalizeYAMLNode(node *yaml.Node, path engine.Path, depth int) (any, error
 	case yaml.ScalarNode:
 		return normalizeYAMLScalar(node, path)
 	case yaml.AliasNode:
-		return nil, newValidationError(string(path), engine.CodeInvalidFormat, "YAML aliases are not supported")
+		return nil, NewValidationError(string(path), engine.CodeInvalidFormat, "YAML aliases are not supported")
 	default:
-		return nil, newValidationError(string(path), engine.CodeInvalidType, fmt.Sprintf("unsupported YAML node kind: %v", node.Kind))
+		return nil, NewValidationError(string(path), engine.CodeInvalidType, fmt.Sprintf("unsupported YAML node kind: %v", node.Kind))
 	}
 }
 
@@ -217,7 +219,7 @@ func normalizeYAMLMapping(node *yaml.Node, path engine.Path, depth int) (map[str
 		valNode := node.Content[i+1]
 
 		if keyNode.Kind != yaml.ScalarNode || (keyNode.Tag != "!!str" && keyNode.Tag != "") {
-			return nil, newValidationError(string(path), engine.CodeInvalidType, "YAML object keys must be strings")
+			return nil, NewValidationError(string(path), engine.CodeInvalidType, "YAML object keys must be strings")
 		}
 		key := keyNode.Value
 		fieldPath := path.Field(key)
@@ -226,7 +228,7 @@ func normalizeYAMLMapping(node *yaml.Node, path engine.Path, depth int) (map[str
 			// duplicate keys might be caught by yaml.v3, but we double-check just in case.
 			// Currently yaml.v3 throws an error on duplicate keys by default in strict mode, but we parse generic trees.
 			// Let's enforce it here if it slips through.
-			return nil, newValidationError(string(fieldPath), engine.CodeInvalidFormat, fmt.Sprintf("duplicate key '%s'", key))
+			return nil, NewValidationError(string(fieldPath), engine.CodeInvalidFormat, fmt.Sprintf("duplicate key '%s'", key))
 		}
 
 		val, err := normalizeYAMLNode(valNode, fieldPath, depth)
@@ -259,29 +261,29 @@ func normalizeYAMLScalar(node *yaml.Node, path engine.Path) (any, error) {
 		// Use yaml unmarshal into float64 to parse correctly and handle nans/infs
 		err := node.Decode(&f)
 		if err != nil {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("invalid number format: %v", node.Value))
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("invalid number format: %v", node.Value))
 		}
 		if math.IsNaN(f) || math.IsInf(f, 0) {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, "non-finite float values are not allowed")
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, "non-finite float values are not allowed")
 		}
 		return f, nil
 	case "!!bool":
 		var b bool
 		err := node.Decode(&b)
 		if err != nil {
-			return nil, newValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("invalid boolean format: %v", node.Value))
+			return nil, NewValidationError(string(path), engine.CodeInvalidFormat, fmt.Sprintf("invalid boolean format: %v", node.Value))
 		}
 		return b, nil
 	case "!!null":
 		return nil, nil
 	default:
 		// Any other tags like timestamp, binary, etc.
-		return nil, newValidationError(string(path), engine.CodeInvalidType, fmt.Sprintf("unsupported YAML scalar tag: %s", node.Tag))
+		return nil, NewValidationError(string(path), engine.CodeInvalidType, fmt.Sprintf("unsupported YAML scalar tag: %s", node.Tag))
 	}
 }
 
-// helper to create a ValidationErrors containing one issue.
-func newValidationError(path string, code engine.ErrorCode, message string) error {
+// NewValidationError helper to create a ValidationErrors containing one issue.
+func NewValidationError(path string, code engine.ErrorCode, message string) error {
 	errs := &engine.ValidationErrors{}
 	errs.Add(path, code, message)
 	return errs

@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "path": "$['objective.value']",
+      "code": "invalid_type",
+      "message": "expected string, got number"
+    }
+  ]
+}

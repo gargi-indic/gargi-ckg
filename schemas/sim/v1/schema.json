@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gargi-flow:schema:sim:v1",
+  "title": "Gargi Flow Simulation Definition",
+  "description": "Version 1 Simulation Definition Schema for Gargi Flow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "id",
+    "graph",
+    "worlds",
+    "objective"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "sim/v1",
+      "description": "API Version for the simulation schema definition"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "description": "The unique identifier of the simulation definition"
+    },
+    "graph": {
+      "type": "string",
+      "description": "Path relative to the sim file"
+    },
+    "worlds": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["number", "string", "boolean"]
+          }
+        }
+      },
+      "minProperties": 1,
+      "description": "Map name -> params map, min 1"
+    },
+    "latents": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "$ref": "#/$defs/ValueSpec"
+        }
+      }
+    },
+    "behaviors": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "$ref": "#/$defs/Behavior"
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capacity": {
+              "type": "integer"
+            }
+          },
+          "required": ["capacity"]
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "maximize": {
+          "type": "string",
+          "enum": ["mean"]
+        },
+        "constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": ["name", "value", "maximize"]
+    }
+  },
+  "$defs": {
+    "NumberOrCEL": {
+      "type": ["number", "string"]
+    },
+    "ValueSpec": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["fixed"],
+          "properties": {
+            "fixed": {
+              "$ref": "#/$defs/NumberOrCEL"
+            }
+          }
+        },
+        {
+          "required": ["choice"],
+          "properties": {
+            "choice": {
+              "type": "object",
+              "additionalProperties": false,
+              "patternProperties": {
+                "^[a-zA-Z0-9_-]+$": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                }
+              }
+            }
+          }
+        },
+        {
+          "required": ["bernoulli"],
+          "properties": {
+            "bernoulli": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "p": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                }
+              },
+              "required": ["p"]
+            }
+          }
+        },
+        {
+          "required": ["normal"],
+          "properties": {
+            "normal": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mean": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                },
+                "sd": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                }
+              },
+              "required": ["mean", "sd"]
+            }
+          }
+        },
+        {
+          "required": ["lognormal"],
+          "properties": {
+            "lognormal": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mu": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                },
+                "sigma": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                }
+              },
+              "required": ["mu", "sigma"]
+            }
+          }
+        },
+        {
+          "required": ["uniform"],
+          "properties": {
+            "uniform": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "min": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                },
+                "max": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                }
+              },
+              "required": ["min", "max"]
+            }
+          }
+        },
+        {
+          "required": ["triangular"],
+          "properties": {
+            "triangular": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "min": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                },
+                "mode": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                },
+                "max": {
+                  "$ref": "#/$defs/NumberOrCEL"
+                }
+              },
+              "required": ["min", "mode", "max"]
+            }
+          }
+        },
+        {
+          "required": ["empirical"],
+          "properties": {
+            "empirical": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "required": ["expr"],
+          "properties": {
+            "expr": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "Behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/NumberOrCEL"
+        },
+        "duration": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]+(ms|s|m|h)$"
+            },
+            {
+              "$ref": "#/$defs/ValueSpec"
+            }
+          ]
+        },
+        "abandon": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "p": {
+              "$ref": "#/$defs/NumberOrCEL"
+            }
+          },
+          "required": ["p"]
+        },
+        "fail": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "p": {
+              "$ref": "#/$defs/NumberOrCEL"
+            },
+            "class": {
+              "type": "string",
+              "enum": ["retryable", "non_retryable", "critical"]
+            }
+          },
+          "required": ["p", "class"]
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "$ref": "#/$defs/ValueSpec"
+            }
+          }
+        }
+      }
+    }
+  }
+}

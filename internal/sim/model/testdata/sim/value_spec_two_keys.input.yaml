@@ -1,0 +1,13 @@
+apiVersion: sim/v1
+id: example-sim
+graph: ./graph.yaml
+worlds:
+  base: {p: 0.5}
+latents:
+  my_latent:
+    choice: {a: 1}
+    normal: {mean: 0, sd: 1}
+objective:
+  name: my_objective
+  value: "100.0"
+  maximize: mean

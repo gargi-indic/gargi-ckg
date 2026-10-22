@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:gargi-flow:schema:policy:v1",
+  "title": "Gargi Flow Policy Definition",
+  "description": "Version 1 Policy Definition Schema for Gargi Flow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "id",
+    "version",
+    "decisions"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "policy/v1",
+      "description": "API Version for the policy schema definition"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "object",
+          "oneOf": [
+            {
+              "required": [
+                "rules"
+              ],
+              "properties": {
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "oneOf": [
+                      {
+                        "required": [
+                          "when",
+                          "choose"
+                        ],
+                        "properties": {
+                          "when": {
+                            "type": "string"
+                          },
+                          "choose": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "required": [
+                          "else"
+                        ],
+                        "properties": {
+                          "else": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "required": [
+                "table",
+                "default"
+              ],
+              "properties": {
+                "table": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "observed": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "patternProperties": {
+                          "^[a-zA-Z0-9_\\.-]+$": {
+                            "type": [
+                              "string",
+                              "number",
+                              "boolean"
+                            ]
+                          }
+                        }
+                      },
+                      "choose": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "observed",
+                      "choose"
+                    ]
+                  }
+                },
+                "default": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

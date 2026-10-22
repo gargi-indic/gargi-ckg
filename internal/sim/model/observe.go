@@ -10,6 +10,8 @@ import (
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
 
+// ValidateDecisions checks all decisions for matching options configurations mapping the correct rules references.
+// ValidateDecisions checks all decisions for matching options configurations mapping the correct rules references.
 func ValidateDecisions(m *CompiledModel, errs *engine.ValidationErrors) {
 	var nodes []*engine.Node
 	var edges []*engine.Edge
@@ -105,6 +107,8 @@ func ValidateDecisions(m *CompiledModel, errs *engine.ValidationErrors) {
 	}
 }
 
+// Discrete maps output states over defined behavior observations returns the constraint list and truth value.
+// Discrete maps output states over defined behavior observations returns the constraint list and truth value.
 func (m *CompiledModel) Discrete() (bool, []string) {
 	var reasons []string
 
@@ -226,6 +230,8 @@ func (m *CompiledModel) observedSupportHelper(keys []string) []any {
 	return res
 }
 
+// ObservedSupport evaluates the choices mapped mapped output fields logic options.
+// ObservedSupport evaluates the choices mapped mapped output fields logic options.
 func (m *CompiledModel) ObservedSupport(path string) ([]any, bool) {
 	parts := strings.Split(path, ".")
 	if len(parts) < 2 {

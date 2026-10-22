@@ -2,6 +2,7 @@ package sim
 
 import "github.com/gargi-indic/gargi-flow/pkg/engine"
 
+// Simulation Engine codes represent public evaluation identifiers for engine checks.
 const (
 	CodeInvalidObservePath        engine.ErrorCode = "invalid_observe_path"
 	CodeObservesNonAncestor       engine.ErrorCode = "observes_non_ancestor"

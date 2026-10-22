@@ -25,6 +25,8 @@ type CompiledModel struct {
 	CompiledBehaviors   map[string]CompiledBehavior
 }
 
+// CompiledBehavior represents the evaluated conditions governing the execution constraints of a behavior action block.
+// CompiledBehavior represents the evaluated conditions governing the execution constraints of a behavior action block.
 type CompiledBehavior struct {
 	Cost     cel.Program
 	AbandonP cel.Program

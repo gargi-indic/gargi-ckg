@@ -12,6 +12,7 @@ import (
 	"github.com/google/cel-go/common/ast"
 )
 
+// runtimePolicy implements sim.Policy interface.
 type runtimePolicy struct {
 	id          string
 	description string
@@ -45,7 +46,7 @@ func (p *runtimePolicy) Describe() string {
 	return p.description
 }
 
-func (p *runtimePolicy) Choose(ctx context.Context, decision engine.NodeID, obs sim.Observation, options []string) (string, error) {
+func (p *runtimePolicy) Choose(ctx context.Context, decision engine.NodeID, obs sim.Observation, _ []string) (string, error) {
 	nodeID := string(decision)
 	d, ok := p.decisions[nodeID]
 	if !ok {
@@ -75,7 +76,35 @@ func (p *runtimePolicy) Choose(ctx context.Context, decision engine.NodeID, obs 
 			match := true
 			for k, v := range row.Observed {
 				if infoVal, exists := obs[k]; exists {
-					if infoVal != v && !(infoVal == nil && v == nil) {
+					// Normalize numeric types to float64
+					normInfoVal := infoVal
+					normV := v
+
+					if f, ok := infoVal.(float64); ok {
+						normInfoVal = f
+					} else if f, ok := infoVal.(float32); ok {
+						normInfoVal = float64(f)
+					} else if i, ok := infoVal.(int); ok {
+						normInfoVal = float64(i)
+					} else if i, ok := infoVal.(int64); ok {
+						normInfoVal = float64(i)
+					} else if i, ok := infoVal.(int32); ok {
+						normInfoVal = float64(i)
+					}
+
+					if f, ok := v.(float64); ok {
+						normV = f
+					} else if f, ok := v.(float32); ok {
+						normV = float64(f)
+					} else if i, ok := v.(int); ok {
+						normV = float64(i)
+					} else if i, ok := v.(int64); ok {
+						normV = float64(i)
+					} else if i, ok := v.(int32); ok {
+						normV = float64(i)
+					}
+
+					if normInfoVal != normV {
 						match = false
 						break
 					}
@@ -126,6 +155,7 @@ func getSelectPath(expr ast.Expr) string {
 	return ""
 }
 
+// CompilePolicy compiles the definitions rules for dynamic decision evaluations into an executable policy.
 func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}
 	if p == nil {
@@ -222,10 +252,7 @@ func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationE
 						errs.Add(rowPath.Field("observed").Field(k).String(), sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference %q", k))
 					}
 				}
-				cd.Table = append(cd.Table, compiledTableRow{
-					Observed: row.Observed,
-					Choose:   row.Choose,
-				})
+				cd.Table = append(cd.Table, compiledTableRow(row))
 			}
 		} else {
 			var oIDs []string
@@ -291,7 +318,7 @@ func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationE
 	return rp, nil
 }
 
-func walkNativeAST(env *cel.Env, celAst *cel.Ast, allowed map[string]bool, path string, errs *engine.ValidationErrors) {
+func walkNativeAST(_ *cel.Env, celAst *cel.Ast, allowed map[string]bool, path string, errs *engine.ValidationErrors) {
 	if celAst == nil {
 		return
 	}
@@ -310,7 +337,7 @@ func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.V
 		if p != "" {
 			valid := false
 			for a := range allowed {
-				if strings.HasPrefix(p, a) {
+				if p == a || strings.HasPrefix(p, a+".") {
 					valid = true
 					break
 				}
@@ -325,7 +352,7 @@ func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.V
 		ident := expr.AsIdent()
 		valid := false
 		for a := range allowed {
-			if strings.HasPrefix(ident, a) {
+			if ident == a || strings.HasPrefix(ident, a+".") {
 				valid = true
 				break
 			}

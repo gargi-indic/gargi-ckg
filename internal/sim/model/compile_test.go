@@ -15,7 +15,7 @@ import (
 
 type dummyChooser struct{}
 
-func (dummyChooser) Choose(_ context.Context, decision engine.NodeID, obs map[string]any, options []string) (string, error) {
+func (dummyChooser) Choose(_ context.Context, _ engine.NodeID, _ map[string]any, _ []string) (string, error) {
 	return "", nil
 }
 

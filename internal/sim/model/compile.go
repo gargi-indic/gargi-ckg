@@ -108,6 +108,8 @@ type CompiledBehavior struct {
 	AbandonP *CompiledParam
 	// FailP is the probability that the node fails.
 	FailP *CompiledParam
+	// FailClass is the error classification if it fails.
+	FailClass string
 	// Outputs maps each output field to its compiled value spec.
 	Outputs map[string]CompiledValue
 }
@@ -447,6 +449,7 @@ func compileBehavior(b Behavior, base engine.Path, env *cel.Env, errs *engine.Va
 	}
 	if b.Fail != nil {
 		cb.FailP = compileParamPtr(b.Fail.P, base.Field("fail").Field("p").String(), env, errs)
+		cb.FailClass = b.Fail.Class
 	}
 	for _, name := range sortedKeys(b.Output) {
 		cb.Outputs[name] = compileValue(b.Output[name], base.Field("output").Field(name), env, errs)

@@ -32,6 +32,25 @@ linters:
               desc: "domain packages must not import internal/orchestrator"
             - pkg: "github.com/gargi-indic/gargi-flow/internal/store"
               desc: "domain packages must not import internal/store"
+        simulation:
+          files:
+            - "**/pkg/sim/**"
+            - "**/internal/sim/**"
+          deny:
+            - pkg: "github.com/gargi-indic/gargi-flow/internal/api"
+              desc: "simulation packages must not import internal/api"
+            - pkg: "github.com/gargi-indic/gargi-flow/internal/orchestrator"
+              desc: "simulation packages must not import internal/orchestrator"
+            - pkg: "github.com/gargi-indic/gargi-flow/internal/store"
+              desc: "simulation packages must not import internal/store"
+            - pkg: "go.temporal.io"
+              desc: "simulation packages must not import Temporal"
+        sim_contracts:
+          files:
+            - "**/pkg/sim/**"
+          deny:
+            - pkg: "github.com/gargi-indic/gargi-flow/internal"
+              desc: "pkg/sim must not import internal packages"
 issues:
   exclude-rules:
     - path: "web/.*"

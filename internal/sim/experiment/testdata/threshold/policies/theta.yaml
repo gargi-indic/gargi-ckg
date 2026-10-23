@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+id: threshold
+version: theta
+params:
+  theta: {min: 0, max: 1, step: 0.05}
+decisions:
+  act:
+    rules:
+      - when: "signal.output.score >= params.theta"
+        choose: accept
+      - else: reject

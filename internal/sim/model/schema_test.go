@@ -291,6 +291,7 @@ func TestSchema_Examples(t *testing.T) {
 			docs: []string{
 				"../../../schemas/policy/v1/example.yaml",
 				"../../../examples/simulation/loan/policies/recession-v1.yaml",
+				"../experiment/testdata/threshold/policies/theta.yaml",
 			},
 		},
 		{
@@ -298,6 +299,7 @@ func TestSchema_Examples(t *testing.T) {
 			docs: []string{
 				"../../../schemas/experiment/v1/example.yaml",
 				"../../../examples/simulation/loan/experiment.yaml",
+				"../experiment/testdata/threshold/experiment.yaml",
 			},
 		},
 	}

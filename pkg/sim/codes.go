@@ -19,4 +19,10 @@ const (
 	// remember the earlier decisions of the episode, which the exact
 	// (backward-induction) policy search requires.
 	CodeNotPerfectRecall engine.ErrorCode = "not_perfect_recall"
+	// CodePolicyUnknownParam reports a reference to, or a binding of, a
+	// policy param that the policy does not declare.
+	CodePolicyUnknownParam engine.ErrorCode = "policy_unknown_param"
+	// CodeParamOutOfRange reports a param value outside the param's
+	// [min, max] range or not one of its values.
+	CodeParamOutOfRange engine.ErrorCode = "param_out_of_range"
 )

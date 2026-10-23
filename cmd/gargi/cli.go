@@ -392,7 +392,7 @@ func emitBestPolicies(dir string, report *experiment.Report, policies []sim.Poli
 			return fmt.Errorf("world %q: best policy %q not found", name, bestID)
 		}
 		if _, ok := p.(*experiment.TablePolicy); !ok {
-			return fmt.Errorf("world %q: --emit-best supports policies from policies.search: exhaustive or exact only; policy %q is loaded from a file", name, bestID)
+			return fmt.Errorf("world %q: --emit-best supports policies from policies.search: exhaustive or exact only; policy %q is not a table policy", name, bestID)
 		}
 		if err := writePolicyFile(filepath.Join(dir, name+".policy.yaml"), p); err != nil {
 			return fmt.Errorf("world %q: %w", name, err)

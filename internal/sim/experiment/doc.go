@@ -75,4 +75,21 @@
 // information set, the probability of reaching it, the chosen option and
 // the conditional value of every option. With evaluator exact or both, the
 // exact evaluator's mean of the solved policy equals the solution's EV.
+//
+// # Grid and random search
+//
+// GridSource (policies: {search: grid, policy: FILE}) and RandomSource
+// (policies: {search: random, policy: FILE, samples: N, seed: S}) vary the
+// params of one parameterized policy/v1 document, which Compile parses and
+// compiles once into CompiledExperiment.Policy. Every candidate is
+// model.Parameterized.WithParams of that template, so the CEL programs are
+// compiled once and shared. Grid search takes the Cartesian product of the
+// params in name order (last name fastest; ranges need a step, values are
+// rounded to 12 significant digits and capped at max) and is capped by
+// max_policies. Random search draws N candidates from a PCG generator seeded
+// with S (default: the experiment seed), dropping candidates whose ID was
+// already drawn. Candidates are evaluated by Run like any other policies,
+// so they share common random numbers, and PolicyResult.Params reports each
+// candidate's bound values. Later optimizers plug in the same way: a
+// PolicySource over model.Parameterized candidates.
 package experiment

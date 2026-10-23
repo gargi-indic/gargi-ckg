@@ -423,12 +423,72 @@ func bindPolicy(tree any) (*Policy, error) {
 		}
 	}
 
-	checkUnknownFields(m, []string{"apiVersion", "id", "version", "decisions"}, "$", errs)
+	if params, ok := m["params"]; ok {
+		if pm, ok := params.(map[string]any); ok {
+			pol.Params = make(map[string]ParamSpec, len(pm))
+			for k, v := range pm {
+				pol.Params[k] = bindParamSpec(v, "$.params."+k, errs)
+			}
+		} else {
+			errs.Add("$.params", engine.CodeInvalidType, "expected object")
+		}
+	}
+
+	checkUnknownFields(m, []string{"apiVersion", "id", "version", "params", "decisions"}, "$", errs)
 
 	if errs.Len() > 0 {
 		return &pol, errs
 	}
 	return &pol, nil
+}
+
+// bindParamSpec binds one entry of a policy's params. Type problems are
+// reported here; the range/values rules are checked by validateParams.
+func bindParamSpec(val any, path string, errs *engine.ValidationErrors) ParamSpec {
+	var ps ParamSpec
+	m, ok := val.(map[string]any)
+	if !ok {
+		errs.Add(path, engine.CodeInvalidType, "expected object")
+		return ps
+	}
+	number := func(field string) *float64 {
+		v, ok := m[field]
+		if !ok {
+			return nil
+		}
+		f, ok := getFloat(v)
+		if !ok {
+			errs.Add(path+"."+field, engine.CodeInvalidType, "expected number")
+			return nil
+		}
+		return &f
+	}
+	ps.Min = number("min")
+	ps.Max = number("max")
+	ps.Step = number("step")
+	if values, ok := m["values"]; ok {
+		if arr, ok := values.([]any); ok {
+			ps.Values = make([]any, 0, len(arr))
+			for i, v := range arr {
+				if isNumberOrCEL(v) {
+					ps.Values = append(ps.Values, v)
+				} else {
+					errs.Add(fmt.Sprintf("%s.values[%d]", path, i), engine.CodeInvalidType, "expected number or string")
+				}
+			}
+		} else {
+			errs.Add(path+".values", engine.CodeInvalidType, "expected array")
+		}
+	}
+	if def, ok := m["default"]; ok {
+		if isNumberOrCEL(def) {
+			ps.Default = def
+		} else {
+			errs.Add(path+".default", engine.CodeInvalidType, "expected number or string")
+		}
+	}
+	checkUnknownFields(m, []string{"min", "max", "step", "values", "default"}, path, errs)
+	return ps
 }
 
 func bindDecision(val any, path string, errs *engine.ValidationErrors) Decision {
@@ -551,7 +611,33 @@ func bindExperiment(tree any) (*Experiment, error) {
 					errs.Add("$.policies.files", engine.CodeInvalidType, "expected array")
 				}
 			}
-			checkUnknownFields(pm, []string{"search", "files"}, "$.policies", errs)
+			if v, ok := pm["policy"]; ok {
+				if s, ok := v.(string); ok {
+					exp.Policies.Policy = s
+				} else {
+					errs.Add("$.policies.policy", engine.CodeInvalidType, "expected string")
+				}
+			}
+			if v, ok := pm["samples"]; ok {
+				if c, ok := getInt(v); ok {
+					exp.Policies.Samples = c
+				} else {
+					errs.Add("$.policies.samples", engine.CodeInvalidType, "expected integer")
+				}
+			}
+			if v, ok := pm["seed"]; ok {
+				c, ok := getInt(v)
+				switch {
+				case !ok:
+					errs.Add("$.policies.seed", engine.CodeInvalidType, "expected integer")
+				case c < 0:
+					errs.Add("$.policies.seed", engine.CodeInvalidValue, "seed must be >= 0")
+				default:
+					seed := uint64(c)
+					exp.Policies.Seed = &seed
+				}
+			}
+			checkUnknownFields(pm, []string{"search", "files", "policy", "samples", "seed"}, "$.policies", errs)
 		} else {
 			errs.Add("$.policies", engine.CodeInvalidType, "expected object")
 		}

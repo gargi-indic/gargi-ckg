@@ -27,6 +27,9 @@ type CompiledExperiment struct {
 	// document order, or every world of the model sorted by id when
 	// Def.Worlds is empty.
 	Worlds []sim.World
+	// Policy is the compiled policies.policy document, the template of
+	// grid and random search. It is nil for other searches and files.
+	Policy model.Parameterized
 }
 
 // formatFor returns the document format implied by the extension of path.
@@ -76,7 +79,11 @@ func readDocument(baseDir, path string, at engine.Path, errs *engine.ValidationE
 
 // Compile loads and compiles the sim/v1 model referenced by def (relative to
 // baseDir) with model.Compile and resolves the experiment's worlds. Issues of
-// the model document are reported with paths prefixed by "$.model:". It
+// the model document are reported with paths prefixed by "$.model:". When
+// policies.policy is set (grid and random search), that policy/v1 document
+// is read relative to baseDir, parsed and compiled against the model into
+// CompiledExperiment.Policy; its issues are prefixed by
+// "$.policies.policy:". It
 // returns nil errors on success; on failure it returns every problem found,
 // sorted by path, code and message.
 func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*CompiledExperiment, *engine.ValidationErrors) {
@@ -127,10 +134,41 @@ func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*Comp
 	if len(exp.Worlds) == 0 && errs.Len() == 0 {
 		errs.Add(engine.PathRoot.Field("worlds").String(), engine.CodeMissingRequired, "the experiment has no worlds")
 	}
+	if def.Policies.Policy != "" {
+		exp.Policy = compilePolicyFile(baseDir, def.Policies.Policy, m, errs)
+	}
 	if errs.Len() > 0 {
 		return nil, sortIssues(errs)
 	}
 	return exp, nil
+}
+
+// compilePolicyFile reads, parses and compiles the policies.policy document
+// at file (relative to baseDir) against m. Problems are reported at
+// $.policies.policy, or for issues inside the document at
+// "$.policies.policy:" followed by the path within the policy document.
+func compilePolicyFile(baseDir, file string, m *model.CompiledModel, errs *engine.ValidationErrors) model.Parameterized {
+	at := engine.PathRoot.Field("policies").Field("policy")
+	_, data, format, ok := readDocument(baseDir, file, at, errs)
+	if !ok {
+		return nil
+	}
+	def, err := model.ParsePolicy(data, format)
+	if err != nil {
+		addPrefixed(errs, at.String(), err, engine.CodeInvalidFormat)
+		return nil
+	}
+	p, perrs := model.CompilePolicy(def, m)
+	if perrs.Len() > 0 {
+		addPrefixed(errs, at.String(), perrs, engine.CodeInvalidValue)
+		return nil
+	}
+	pp, ok := p.(model.Parameterized)
+	if !ok {
+		errs.Add(at.String(), engine.CodeInvalidValue, fmt.Sprintf("policy %q is not parameterized", p.ID()))
+		return nil
+	}
+	return pp
 }
 
 // LoadFile reads and parses the experiment/v1 document at path with

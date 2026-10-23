@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gargi-indic/gargi-flow/internal/sim/kernel"
+	"github.com/gargi-indic/gargi-flow/internal/sim/model"
 	"github.com/gargi-indic/gargi-flow/internal/sim/sampler"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
@@ -108,6 +109,10 @@ type PolicyResult struct {
 	PolicyID string `json:"policyId"`
 	// Description is the policy's Describe().
 	Description string `json:"description"`
+	// Params holds the policy's bound param values by name (numbers as
+	// float64, strings as strings). It is only set for a model.Parameterized
+	// policy that declares params, such as a grid or random candidate.
+	Params map[string]any `json:"params,omitempty"`
 	// Objective estimates the objective value; its ConstraintProb maps every
 	// model constraint to the fraction of runs (for exact estimates, the
 	// probability) that satisfied it. It is the exact estimate for the exact
@@ -272,6 +277,11 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 		list := make([]PolicyResult, len(policies))
 		for i, p := range policies {
 			res := PolicyResult{PolicyID: p.ID(), Description: p.Describe()}
+			if pp, ok := p.(model.Parameterized); ok {
+				if params := pp.Params(); len(params) > 0 {
+					res.Params = params
+				}
+			}
 			primary := mcRes
 			if useExact {
 				primary = exactRes

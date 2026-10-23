@@ -26,22 +26,63 @@
     },
     "policies": {
       "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "search": {
+          "type": "string",
+          "enum": ["exhaustive", "exact", "grid", "random"],
+          "description": "exhaustive enumerates every reduced deterministic policy; exact solves each world's optimal table policy by backward induction over information sets (discrete, perfect-recall models); grid evaluates every combination of the params of policy; random evaluates samples random draws of them"
+        },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "policy": {
+          "type": "string",
+          "description": "The parameterized policy/v1 document varied by grid and random search, relative to the experiment; required for those searches and forbidden otherwise"
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of random draws; required for search: random and forbidden otherwise. Draws with an identical policy id are evaluated once"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seed of the random draws of search: random (default: the experiment seed); forbidden otherwise"
+        }
+      },
       "oneOf": [
         {
           "required": ["search"],
-          "properties": {
-            "search": {
-              "enum": ["exhaustive", "exact"],
-              "description": "exhaustive enumerates every reduced deterministic policy; exact solves each world's optimal table policy by backward induction over information sets (discrete, perfect-recall models)"
-            }
-          }
+          "not": { "required": ["files"] }
         },
         {
           "required": ["files"],
-          "properties": {
-            "files": {
-              "type": "array",
-              "items": { "type": "string" }
+          "not": { "required": ["search"] }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["search"],
+            "properties": { "search": { "enum": ["grid", "random"] } }
+          },
+          "then": { "required": ["policy"] },
+          "else": { "not": { "required": ["policy"] } }
+        },
+        {
+          "if": {
+            "required": ["search"],
+            "properties": { "search": { "const": "random" } }
+          },
+          "then": { "required": ["samples"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["samples"] },
+                { "required": ["seed"] }
+              ]
             }
           }
         }
@@ -72,7 +113,7 @@
       "type": "integer",
       "minimum": 1,
       "default": 10000,
-      "description": "Maximum number of policies enumerated by policies.search: exhaustive; ignored by policies.search: exact"
+      "description": "Maximum number of policies enumerated by policies.search: exhaustive and of candidates of policies.search: grid; ignored by policies.search: exact and random"
     }
   }
 }

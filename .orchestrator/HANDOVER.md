@@ -1,6 +1,6 @@
 # Orchestrator Handover: gargi-flow
 
-Snapshot refreshed on **2026-10-22 (23:10 UTC)**, during **Epic #124 (Simulation P0: kernel and loan golden case)**, step 6 of 11.
+Snapshot refreshed on **2026-10-23**, after **Epic #124 (Simulation P0) completed** (11/11 merged, #168–#179). Next: **Epic #136 (Simulation P1)**, starting with #137.
 The **live** state is in issue **#67** (body tables + latest comments) and on `main`. #67 overrides this file wherever they differ.
 
 ---
@@ -27,8 +27,8 @@ The **live** state is in issue **#67** (body tables + latest comments) and on `m
 
 | Epic | Scope | Sub-issues | Status |
 |---|---|---|---|
-| **#124 P0** | kernel + loan golden case | #125–#135 | **active**: 5/11 merged |
-| #136 P1 | solvers, reports, API, MCP, canvas | #137–#147 | ready, starts after P0 |
+| #124 P0 | kernel + loan golden case | #125–#135 | ✅ complete |
+| **#136 P1** | solvers, reports, API, MCP, canvas | #137–#147 | **active**, starts at #137 |
 | #148 P2 | queues/resources, optimizers, agents | #149–#158 | ready |
 | #159 P3 | deploy, outcomes, calibration, drift | #160–#167 | ready |
 
@@ -50,29 +50,11 @@ The **live** state is in issue **#67** (body tables + latest comments) and on `m
 **P0 exit criterion:** `gargi sim run examples/simulation/loan/experiment.yaml --local` reproduces exactly 42 policies, best EV **460.0** (base) and **202.5** (recession), with Monte Carlo (200k runs, seed 42) within 3 SE.
 
 ## 4. Current state and immediate resume steps
-1. **#130 is in Jules' planning phase.** At 23:06 UTC the session was `IN_PROGRESS` with no activities and no plan yet. The previous orchestrator's background wait died with its session, so run: `python3 .orchestrator/jules.py wait 11182749359574682895 2400` (in the background).
-2. **When the #130 plan arrives, require all of the following** (send corrections if any are missing):
-   - Consume #129's compiled types from `internal/sim/model/compile.go`, **never recompile CEL**:
-     - `CompiledModel.LatentOrder` + `CompiledLatents map[string]CompiledValue`;
-     - `CompiledBehaviors map[string]CompiledBehavior{Cost, AbandonP, FailP *CompiledParam; Duration *CompiledValue; Outputs map[string]CompiledValue}`;
-     - `CompiledValue{Kind, Fixed, Choice []CompiledChoiceOption{Value, Weight}, Params map[string]CompiledParam, Empirical, Expr}`;
-     - `CompiledParam{Program, Literal}` with `IsLiteral()`.
-   - **Duration:** `KindFixed` holding a Go duration string such as `"48h"` (parse with `time.ParseDuration`), or a value spec in seconds.
-   - **Fail class:** `CompiledBehavior` has no field for it; read `Def.Behaviors[id].Fail.Class`.
-   - **Packages:** `internal/sim/sampler` (`NewMonteCarlo(seed)` with per-stream PCG seeded from `(seed, fnv64(stream))`; `NewEnumerator()` as an odometer over choice points with weight = product of normalized probabilities, skipping zero branches, and `Float` returning `sim.ErrNotDiscrete`) and `internal/sim/behavior`.
-   - **Stream names, fixed:** `<node>/abandon`, `<node>/fail`, `<node>/duration`, `<node>/output/<field>` (fields sorted), `latent/<name>`.
-   - **Abandon:** `Abandoned: true`; nothing else is sampled.
-   - **Fail:** an engine error of the class (ADR-0003).
-   - **Acceptance tests:**
-     - moment tests (100k draws);
-     - stream independence (a new stream does not perturb existing ones);
-     - loan enumerator branch weights sum to 1 ±1e-12 per world;
-     - abandon, fail per class, CEL-weighted choice, CEL param error path.
-   - **Process:**
-     - **No scratch scripts.**
-     - Run lint and `-race` tests and paste the raw output.
-     - PR title `#130: …` with a body that starts `Closes #130`.
-3. Then continue the per-task loop for #131 → #135 (checklists in §6).
+1. **P0 is done.** Exit criterion verified: `gargi sim run examples/simulation/loan/experiment.yaml --local` gives exact EV 460.0 (base) and 202.5 (recession); Monte Carlo 464.0 / 201.0 within 3 SE. **The full run takes ~13 min on 16 threads and the human explicitly accepted that** (do not shrink the example). `TestLoanGolden` runs in CI (bounded: exact for 42×2, 200k MC only for the top policy per world; 20k under `-race`).
+2. **Next task: #137** (backward-induction exact solver, Claude sub-agent). Epic #136's build-order table is in the #67 body. Claude tasks may run in parallel once dependencies are merged; Jules tasks run one at a time.
+3. **#144 (MCP server) is `needs-discussion`** (SDK dependency): ask the human in #67 before starting it. Other open ones: #152, #153, #158 (later epics).
+4. **Dispatch recipe that worked for `agent/claude` tasks:** spawn an Opus sub-agent (`model: opus`, worktree isolation) with the full issue text plus code pointers; it commits locally and writes the PR body to the scratchpad. Orchestrator then: detached-worktree verify (`go build ./...`, `go test -race -count=1 ./internal/sim/... ./pkg/sim/... ./cmd/gargi/...`, `bin/golangci-lint-v2.14.0 run ./...`, scope via `git diff --stat main`), `git push origin <branch>`, `gh pr create`, wait for 4 green checks, `gh pr merge --squash --delete-branch`, tick the issue boxes, edit the #67 body, post a log comment.
+5. **Tooling gotcha:** `gh issue view` fails with a Projects (classic) deprecation error; use `gh api repos/gargi-indic/gargi-flow/issues/N` (`--jq .body`) and `gh api -X PATCH ... -F body=@file` instead. `source ~/.config/jules/env` in the same shell as `gh`.
 
 ## 5. Decisions recorded (also in the #67 body)
 - **Human (2026-10-22):**
@@ -135,3 +117,6 @@ The **live** state is in issue **#67** (body tables + latest comments) and on `m
 7. **A branch checked out in an agent worktree** cannot be added to another worktree. Use `git worktree add --detach <path> <branch>` to verify it.
 8. **Known flaky tests** (pre-existing; follow-ups): `internal/orchestrator` `TestGraphExecutionWorkflow_Linear_Diamond` ("unknown queryType graph_state") and `cmd/server` `TestRun_Server` (data race, goroutine at `cmd/server/main.go:110`). Rerun before concluding that a PR broke them.
 9. **Before merging, edit the #67 body** (fetch it first): the Current status table plus the build-order row. Then post one comment per event, starting `**YYYY-MM-DD · #N <event>.**`.
+10. **Jules reliability on this epic:** Jules delivered #126, #127, #128, #130 but FAILED #129 (twice), #132 and #134 (sessions ended `FAILED` or produced nothing for hours). Before relying on Jules, send a full spec up front; for spec-heavy tasks prefer a Claude sub-agent. **A mid-work Jules session does not honor "stop"**: it overwrote a sub-agent's fixes on #175 with a later push. Push sub-agent fixes only when the Jules session is `COMPLETED`/`FAILED`; if overwritten, restore the verified tree with a normal follow-up commit (never force-push).
+11. `jules.py wait` returns immediately while the state is `AWAITING_USER_FEEDBACK` even when Jules is still working; use `wait-reply` for long waits. Background waits time out at 40 min while the session is still `IN_PROGRESS`; just restart them.
+12. **Lint is the usual Jules gap** (gofumpt, errcheck) and audit-style tests may be vacuous: always probe them (e.g. add a `time.Now` file and confirm `TestSim_NoWallClockAudit` fails).

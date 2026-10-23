@@ -40,6 +40,7 @@ tools:
 
 build:
 	go build ./...
+	go build -o bin/gargi ./cmd/gargi
 
 test:
 	go test -race -count=1 ./...

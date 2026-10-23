@@ -345,3 +345,90 @@ func TestSimRun_GridSearchErrors(t *testing.T) {
 	require.Equal(t, 1, code)
 	require.Equal(t, "$.policies.search: too_many_policies: grid search has 21 candidates, more than max_policies (5)\n", errOut)
 }
+
+// loanReportsCopy copies the loan model into a temporary directory with an
+// exact experiment that requests the regret, robust and Pareto reports.
+// objectiveExtra is appended to the objective block (requirements).
+func loanReportsCopy(t *testing.T, objectiveExtra string) string {
+	t.Helper()
+	dir := t.TempDir()
+	copyFile(t, filepath.Join(loanDir, "graph.yaml"), filepath.Join(dir, "graph.yaml"))
+	data, err := os.ReadFile(filepath.Join(loanDir, "sim.yaml"))
+	require.NoError(t, err)
+	s := strings.Replace(string(data), "  maximize: mean\n", "  maximize: mean\n"+objectiveExtra, 1)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sim.yaml"), []byte(s), 0o600))
+	exp := "apiVersion: experiment/v1\nmodel: ./sim.yaml\nworlds: [base, recession]\n" +
+		"policies: {search: exhaustive}\nevaluator: exact\nruns: 1\nseed: 42\ntop: 3\n" +
+		"reports: [regret, robust, 'pareto:cost:min,objective']\nworld_prior: {base: 0.7, recession: 0.3}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "experiment.yaml"), []byte(exp), 0o600))
+	return filepath.Join(dir, "experiment.yaml")
+}
+
+func TestSimRun_Reports(t *testing.T) {
+	exp := loanReportsCopy(t, "")
+	code, out, errOut := gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 0, code, errOut)
+	_, reports, ok := strings.Cut(out, "\nRegret (rows: policy tuned for a world; columns: value (regret) in each world)\n")
+	require.True(t, ok, out)
+	require.Regexp(t, `TUNED FOR\s+POLICY\s+BASE\s+RECESSION\s+MAX REGRET\n`, reports)
+	require.Regexp(t, `base\s+\S+\s+460\.0 \(0\.0\)\s+-65\.0 \(267\.5\)\s+267\.5\n`, reports)
+	require.Regexp(t, `recession\s+\S+\s+317\.8 \(142\.2\)\s+202\.5 \(0\.0\)\s+142\.2\n`, reports)
+	require.Contains(t, reports, "\nRobust (prior base=0.70 recession=0.30; CVaR alpha 0.05; 42 eligible policies)\n")
+	require.Regexp(t, `expected value\s+\S+\s+302\.5\s+302\.5\s+-65\.0\s+-5280\.0\n`, reports)
+	require.Regexp(t, `maximin\s+\S+\s+202\.5\s+283\.2\s+202\.5\s+-884\.0\n`, reports)
+	require.Regexp(t, `cvar\s+\S+\s+0\.0\s+0\.0\s+0\.0\s+0\.0\n`, reports)
+	require.Contains(t, reports, "\nPareto frontier, world base (x: cost min, y: objective max)\n")
+	require.Contains(t, reports, "\nPareto frontier, world recession (x: cost min, y: objective max)\n")
+	require.Regexp(t, `\S+\s+20\s+460\n`, reports)
+
+	code, js1, errOut := gargi(t, "sim", "run", exp, "--local", "--json", "--workers", "1")
+	require.Equal(t, 0, code, errOut)
+	code, js8, errOut := gargi(t, "sim", "run", exp, "--local", "--json", "--workers", "8")
+	require.Equal(t, 0, code, errOut)
+	require.Equal(t, js1, js8)
+	var report experiment.Report
+	dec := json.NewDecoder(strings.NewReader(js1))
+	dec.DisallowUnknownFields()
+	require.NoError(t, dec.Decode(&report))
+	require.NotNil(t, report.Reports)
+	require.InDelta(t, 267.525, *report.Reports.Regret.Rows[0].Cells[1].Regret, 1e-9)
+	require.Equal(t, report.Worlds[0].Policies[0].PolicyID, report.Reports.Robust.ExpectedValue.PolicyID)
+	require.Equal(t, report.Worlds[1].Policies[0].PolicyID, report.Reports.Robust.Maximin.PolicyID)
+	require.Len(t, report.Reports.Pareto, 1)
+	require.Contains(t, js1, `"reports": {`)
+	require.Contains(t, js1, `"regret": {`)
+	require.Contains(t, js1, `"robust": {`)
+	require.Contains(t, js1, `"pareto": [`)
+}
+
+func TestSimRun_RequirementsFeasibility(t *testing.T) {
+	// A recession review takes 48h, so the 24h requirement makes the
+	// recession optimum infeasible; the best feasible policy is reported.
+	exp := loanReportsCopy(t, "  requirements:\n    fast: \"p95(duration) <= duration('24h')\"\n")
+	code, out, errOut := gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 0, code, errOut)
+	_, recession, ok := strings.Cut(out, "World recession")
+	require.True(t, ok)
+	require.NotContains(t, recession, "Exact EV: 202.5\n")
+	require.Contains(t, recession, "Best policy: ")
+
+	code, js, errOut := gargi(t, "sim", "run", exp, "--local", "--json")
+	require.Equal(t, 0, code, errOut)
+	var report experiment.Report
+	require.NoError(t, json.Unmarshal([]byte(js), &report))
+	for _, w := range report.Worlds {
+		require.NotNil(t, w.Policies[0].Feasible)
+		require.True(t, *w.Policies[0].Feasible)
+		require.Len(t, w.Policies[0].Requirements, 1)
+	}
+	require.Contains(t, js, `"feasible": true`)
+
+	// No feasible policy at all.
+	exp = loanReportsCopy(t, "  requirements:\n    impossible: \"mean(objective) > 1000\"\n")
+	code, out, errOut = gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 0, code, errOut)
+	require.Equal(t, 2, strings.Count(out, "Best policy: none is feasible (every policy violates a requirement)\n"), out)
+	require.NotContains(t, out, "Exact EV:")
+	require.Contains(t, out, "World base has no feasible policy.\n")
+	require.Regexp(t, `expected value\s+none \(no policy is feasible in every world\)\n`, out)
+}

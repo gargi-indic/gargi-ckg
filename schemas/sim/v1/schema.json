@@ -95,10 +95,32 @@
             "^[a-zA-Z0-9_-]+$": {
               "type": "string"
             }
-          }
+          },
+          "description": "Map name -> per-run boolean CEL expression; estimates report the probability that each holds"
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "string",
+              "pattern": "^\\s*((mean|p50|p95)\\(\\s*[a-z_][a-z0-9_]*\\s*\\)|prob\\(.+\\))\\s*(<=|<|>=|>|==)\\s*\\S.*$"
+            }
+          },
+          "description": "Map name -> aggregate requirement '<agg>(<arg>) <op> <rhs>' evaluated on the estimates of each policy in each world: agg is mean, p50 or p95 of a metric (objective, cost, duration or a declared metric) or prob(<per-run boolean CEL>); op is <=, <, >=, > or ==; rhs is a number or duration('<Go duration>') in seconds. Policies that violate a requirement are infeasible and rank last"
         }
       },
       "required": ["name", "value", "maximize"]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z_][a-z0-9_]*$": {
+          "type": "string"
+        }
+      },
+      "description": "Map name -> numeric CEL expression evaluated once per run with world, latent, nodes and run, estimated like the objective. objective, cost and duration are reserved built-in metrics"
     }
   },
   "$defs": {

@@ -92,4 +92,33 @@
 // so they share common random numbers, and PolicyResult.Params reports each
 // candidate's bound values. Later optimizers plug in the same way: a
 // PolicySource over model.Parameterized candidates.
+//
+// # Metrics and requirements
+//
+// The model's declared metrics (sim/v1 metrics) are aggregated per (world,
+// policy) with the same accumulator as the objective (weighted for exact)
+// and reported in PolicyResult.Metrics (and MonteCarlo.Metrics for
+// evaluator both). The built-in cost metric is aggregated only when a
+// requirement or report reads it. Aggregate requirements
+// (objective.requirements) are evaluated on the primary estimates: mean,
+// P50 or P95 of a metric, or for prob(<CEL>) the weighted fraction of runs
+// whose condition held. A policy violating one is infeasible in that world
+// (PolicyResult.Feasible) and ranks after every feasible policy; without
+// requirements the report is unchanged.
+//
+// # Reports
+//
+// The experiment's reports list (regret, robust,
+// pareto:<x>[:min|max],<y>[:min|max]) is computed after evaluation by
+// package report from the primary estimates and returned in Report.Reports.
+// The robust report's CVaR needs the lower tail of each (world, policy)
+// objective distribution: the prior-weighted mixture's worst alpha mass draws
+// at most the fraction min(1, alpha/prior(w)) of world w. Exact evaluation
+// keeps that tail of its enumerated branches; Monte Carlo cuts it from the
+// sorted retained values (each weighing 1/retained, so the first
+// MaxRetained replications) before releasing them, merging equal values.
+// The extra memory is therefore at most ⌈min(1, alpha/prior(w))·N⌉ atoms per
+// (world, policy) for N retained runs, and usually far less for discrete
+// outcomes (the loan's tails have a handful of atoms); it is only kept when
+// robust is requested.
 package experiment

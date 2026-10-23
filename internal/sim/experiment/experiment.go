@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gargi-indic/gargi-flow/internal/sim/model"
+	"github.com/gargi-indic/gargi-flow/internal/sim/report"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
@@ -30,6 +31,32 @@ type CompiledExperiment struct {
 	// Policy is the compiled policies.policy document, the template of
 	// grid and random search. It is nil for other searches and files.
 	Policy model.Parameterized
+	// Reports lists the parsed reports of Def.Reports, in document order.
+	Reports []report.Spec
+}
+
+// WorldPrior returns the prior probability of every world of Worlds, in
+// order: Def.WorldPrior (worlds it leaves out get 0), or uniform when it is
+// nil.
+func (e *CompiledExperiment) WorldPrior() []float64 {
+	prior := make([]float64, len(e.Worlds))
+	for w, world := range e.Worlds {
+		if e.Def.WorldPrior == nil {
+			prior[w] = 1 / float64(len(e.Worlds))
+		} else {
+			prior[w] = e.Def.WorldPrior[string(world.ID)]
+		}
+	}
+	return prior
+}
+
+// CVaRAlpha returns Def.CVaRAlpha, or model.DefaultCVaRAlpha when it is
+// unset.
+func (e *CompiledExperiment) CVaRAlpha() float64 {
+	if e.Def.CVaRAlpha == 0 {
+		return model.DefaultCVaRAlpha
+	}
+	return e.Def.CVaRAlpha
 }
 
 // formatFor returns the document format implied by the extension of path.
@@ -83,8 +110,9 @@ func readDocument(baseDir, path string, at engine.Path, errs *engine.ValidationE
 // policies.policy is set (grid and random search), that policy/v1 document
 // is read relative to baseDir, parsed and compiled against the model into
 // CompiledExperiment.Policy; its issues are prefixed by
-// "$.policies.policy:". It
-// returns nil errors on success; on failure it returns every problem found,
+// "$.policies.policy:". The reports list is parsed and checked against the
+// worlds and the model's metrics (regret and robust need two worlds), and
+// world_prior and cvar_alpha are validated. It returns nil errors on success; on failure it returns every problem found,
 // sorted by path, code and message.
 func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*CompiledExperiment, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}
@@ -137,6 +165,7 @@ func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*Comp
 	if def.Policies.Policy != "" {
 		exp.Policy = compilePolicyFile(baseDir, def.Policies.Policy, m, errs)
 	}
+	validateReports(exp, errs)
 	if errs.Len() > 0 {
 		return nil, sortIssues(errs)
 	}

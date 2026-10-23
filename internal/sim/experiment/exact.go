@@ -11,6 +11,7 @@ import (
 
 	"github.com/gargi-indic/gargi-flow/internal/sim/kernel"
 	"github.com/gargi-indic/gargi-flow/internal/sim/model"
+	"github.com/gargi-indic/gargi-flow/internal/sim/report"
 	"github.com/gargi-indic/gargi-flow/internal/sim/sampler"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
@@ -48,6 +49,10 @@ type outcome struct {
 	objective float64
 	duration  float64
 	satisfied []bool
+	// metrics holds the tracked metric values (evalSpec.metrics order).
+	metrics []float64
+	// events holds the prob() conditions (evalSpec.events order).
+	events []bool
 }
 
 // evaluateExact enumerates every chance branch of policy p in world w with
@@ -55,24 +60,44 @@ type outcome struct {
 // returns the exact objective (with constraint probabilities) and duration
 // estimates. The summed branch weight must be 1 within weightTolerance.
 func evaluateExact(ctx context.Context, m *model.CompiledModel, w sim.World, p sim.Policy, constraints []string) (sim.Estimate, sim.Estimate, error) {
+	pair, err := evaluateExactPair(ctx, m, w, p, &evalSpec{constraints: constraints}, 0)
+	return pair.objective, pair.duration, err
+}
+
+// evaluateExactPair is evaluateExact with the tracked metrics, the prob()
+// event probabilities and, when cover > 0, the lower tail of the objective
+// distribution covering that fraction of its probability.
+func evaluateExactPair(ctx context.Context, m *model.CompiledModel, w sim.World, p sim.Policy, spec *evalSpec, cover float64) (estimatePair, error) {
 	var outs []outcome
 	enum := sampler.NewEnumerator()
 	for enum.Next() {
 		if err := ctx.Err(); err != nil {
-			return sim.Estimate{}, sim.Estimate{}, err
+			return estimatePair{}, err
 		}
 		rec, err := kernel.RunEpisode(ctx, m, w, p, enum.Sampler(), kernel.Options{})
 		if err != nil {
-			return sim.Estimate{}, sim.Estimate{}, fmt.Errorf("experiment: exact: world %q policy %q branch %d: %w", w.ID, p.ID(), len(outs), err)
+			return estimatePair{}, fmt.Errorf("experiment: exact: world %q policy %q branch %d: %w", w.ID, p.ID(), len(outs), err)
 		}
 		o := outcome{
 			weight:    enum.Weight(),
 			objective: rec.Objective,
 			duration:  rec.Duration.Seconds(),
-			satisfied: make([]bool, len(constraints)),
+			satisfied: make([]bool, len(spec.constraints)),
 		}
-		for i, name := range constraints {
+		for i, name := range spec.constraints {
 			o.satisfied[i] = rec.Constraints[name]
+		}
+		if len(spec.metrics) > 0 {
+			o.metrics = make([]float64, len(spec.metrics))
+			for i := range spec.metrics {
+				o.metrics[i] = spec.metricValue(rec, i)
+			}
+		}
+		if len(spec.events) > 0 {
+			o.events = make([]bool, len(spec.events))
+			for i, name := range spec.events {
+				o.events[i] = rec.Events[name]
+			}
 		}
 		outs = append(outs, o)
 	}
@@ -82,22 +107,42 @@ func evaluateExact(ctx context.Context, m *model.CompiledModel, w sim.World, p s
 		total += o.weight
 	}
 	if math.Abs(total-1) > weightTolerance {
-		return sim.Estimate{}, sim.Estimate{}, fmt.Errorf("experiment: exact: world %q policy %q: branch weights sum to %.17g, want 1", w.ID, p.ID(), total)
+		return estimatePair{}, fmt.Errorf("experiment: exact: world %q policy %q: branch weights sum to %.17g, want 1", w.ID, p.ID(), total)
 	}
 
-	probs := make(map[string]float64, len(constraints))
-	for i, name := range constraints {
+	prob := func(holds func(outcome) bool) float64 {
 		sum := 0.0
 		for _, o := range outs {
-			if o.satisfied[i] {
+			if holds(o) {
 				sum += o.weight
 			}
 		}
-		probs[name] = sum / total
+		return sum / total
 	}
-	obj := exactEstimate(outs, total, func(o outcome) float64 { return o.objective }, probs)
-	dur := exactEstimate(outs, total, func(o outcome) float64 { return o.duration }, nil)
-	return obj, dur, nil
+	probs := make(map[string]float64, len(spec.constraints))
+	for i, name := range spec.constraints {
+		probs[name] = prob(func(o outcome) bool { return o.satisfied[i] })
+	}
+	pair := estimatePair{
+		objective: exactEstimate(outs, total, func(o outcome) float64 { return o.objective }, probs),
+		duration:  exactEstimate(outs, total, func(o outcome) float64 { return o.duration }, nil),
+	}
+	if len(spec.metrics) > 0 {
+		pair.metrics = make([]sim.Estimate, len(spec.metrics))
+		for i := range spec.metrics {
+			pair.metrics[i] = exactEstimate(outs, total, func(o outcome) float64 { return o.metrics[i] }, nil)
+		}
+	}
+	if len(spec.events) > 0 {
+		pair.events = make([]float64, len(spec.events))
+		for i := range spec.events {
+			pair.events[i] = prob(func(o outcome) bool { return o.events[i] })
+		}
+	}
+	if cover > 0 {
+		pair.tail = exactTail(outs, total, cover)
+	}
+	return pair, nil
 }
 
 // weighted is one value of a discrete distribution with its probability mass.
@@ -155,17 +200,26 @@ func weightedPercentile(sorted []weighted, total, p float64) float64 {
 	return sorted[len(sorted)-1].value
 }
 
-// estimatePair holds the objective and duration estimates of one (world,
-// policy) pair, from either evaluator.
+// estimatePair holds the estimates of one (world, policy) pair, from either
+// evaluator.
 type estimatePair struct {
 	objective, duration sim.Estimate
+	// metrics holds the tracked metric estimates (evalSpec.metrics order).
+	metrics []sim.Estimate
+	// events holds the prob() requirement probabilities (evalSpec.events
+	// order).
+	events []float64
+	// tail is the lower tail of the objective distribution for the robust
+	// report's CVaR; nil unless requested.
+	tail []report.Atom
 }
 
 // runExact evaluates every (world, policy) pair exactly on a pool of
 // workers. Results are stored by index, so they do not depend on the worker
 // count. progress, when set, is called after every pair with the number of
 // pairs done and the total number of pairs.
-func runExact(parent context.Context, exp *CompiledExperiment, policies []sim.Policy, constraints []string, workers int, progress func(done, total int)) ([][]estimatePair, error) {
+// covers, when set, holds the CVaR tail cover of each world.
+func runExact(parent context.Context, exp *CompiledExperiment, policies []sim.Policy, spec *evalSpec, covers []float64, workers int, progress func(done, total int)) ([][]estimatePair, error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
@@ -191,7 +245,11 @@ func runExact(parent context.Context, exp *CompiledExperiment, policies []sim.Po
 					return
 				}
 				w, pi := i/np, i%np
-				obj, dur, err := evaluateExact(ctx, exp.Model, exp.Worlds[w], policies[pi], constraints)
+				cover := 0.0
+				if covers != nil {
+					cover = covers[w]
+				}
+				pair, err := evaluateExactPair(ctx, exp.Model, exp.Worlds[w], policies[pi], spec, cover)
 				mu.Lock()
 				if err != nil {
 					if firstErr == nil {
@@ -201,7 +259,7 @@ func runExact(parent context.Context, exp *CompiledExperiment, policies []sim.Po
 					mu.Unlock()
 					return
 				}
-				results[w][pi] = estimatePair{objective: obj, duration: dur}
+				results[w][pi] = pair
 				done++
 				if progress != nil && firstErr == nil {
 					progress(done, jobs)

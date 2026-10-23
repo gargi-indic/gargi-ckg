@@ -590,7 +590,15 @@ func bindExperiment(tree any) (*Experiment, error) {
 		}
 	}
 
-	checkUnknownFields(m, []string{"apiVersion", "model", "worlds", "policies", "evaluator", "runs", "seed", "workers", "top"}, "$", errs)
+	if mp, ok := m["max_policies"]; ok {
+		if c, ok := getInt(mp); ok {
+			exp.MaxPolicies = c
+		} else {
+			errs.Add("$.max_policies", engine.CodeInvalidType, "expected integer")
+		}
+	}
+
+	checkUnknownFields(m, []string{"apiVersion", "model", "worlds", "policies", "evaluator", "runs", "seed", "workers", "top", "max_policies"}, "$", errs)
 
 	if errs.Len() > 0 {
 		return &exp, errs

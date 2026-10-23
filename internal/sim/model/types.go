@@ -127,6 +127,9 @@ type Experiment struct {
 	Seed       uint64   `json:"seed"`
 	Workers    int      `json:"workers,omitempty"`
 	Top        int      `json:"top,omitempty"` // default 5
+	// MaxPolicies caps the number of policies enumerated by search:
+	// exhaustive; 0 selects the default (10,000).
+	MaxPolicies int `json:"max_policies,omitempty"`
 }
 
 // Policies defines how policies are discovered or supplied to an experiment.

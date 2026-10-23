@@ -3,7 +3,6 @@ package experiment
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -349,12 +348,25 @@ func TestRun_Errors(t *testing.T) {
 	require.ErrorAs(t, err, &ve)
 	require.Equal(t, engine.CodeDuplicateID, ve.Issues()[0].Code)
 
-	exact := *exp
-	exactDef := *exp.Def
-	exactDef.Evaluator = "exact"
-	exact.Def = &exactDef
-	_, err = Run(ctx, &exact, src, Options{})
-	require.True(t, errors.Is(err, ErrExactUnsupported))
+	unknown := *exp
+	unknownDef := *exp.Def
+	unknownDef.Evaluator = "bayesian"
+	unknown.Def = &unknownDef
+	_, err = Run(ctx, &unknown, src, Options{})
+	require.ErrorContains(t, err, `unknown evaluator "bayesian"`)
+
+	// Exact evaluation ignores runs; Monte Carlo requires runs >= 1.
+	noRuns := *exp
+	noRunsDef := *exp.Def
+	noRunsDef.Runs = 0
+	noRuns.Def = &noRunsDef
+	_, err = Run(ctx, &noRuns, src, Options{})
+	require.ErrorContains(t, err, "runs must be >= 1")
+	noRunsDef.Evaluator = EvaluatorExact
+	rep, err := Run(ctx, &noRuns, src, Options{})
+	require.NoError(t, err)
+	require.Equal(t, 0, rep.Runs)
+	require.True(t, rep.Worlds[0].Policies[0].Objective.Exact)
 }
 
 // TestRun_LoanRecessionMean checks the Monte Carlo mean of recession-v1 in

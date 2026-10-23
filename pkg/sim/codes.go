@@ -13,4 +13,6 @@ const (
 	CodePolicyUnknownOption       engine.ErrorCode = "policy_unknown_option"
 	CodePolicyMissingDecision     engine.ErrorCode = "policy_missing_decision"
 	CodePolicyUnknownDecision     engine.ErrorCode = "policy_unknown_decision"
+	CodeModelNotDiscrete          engine.ErrorCode = "model_not_discrete"
+	CodeTooManyPolicies           engine.ErrorCode = "too_many_policies"
 )

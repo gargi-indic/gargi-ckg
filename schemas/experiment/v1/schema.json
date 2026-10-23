@@ -64,6 +64,12 @@
     "top": {
       "type": "integer",
       "default": 5
+    },
+    "max_policies": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "Maximum number of policies enumerated by policies.search: exhaustive"
     }
   }
 }

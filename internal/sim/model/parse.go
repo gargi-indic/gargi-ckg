@@ -294,6 +294,9 @@ func validateExperiment(e *Experiment) error {
 	if e.Top < 1 {
 		errs.Add("$.top", engine.CodeInvalidValue, "top must be >= 1")
 	}
+	if e.MaxPolicies < 0 {
+		errs.Add("$.max_policies", engine.CodeInvalidValue, "max_policies must be >= 1")
+	}
 
 	if errs.Len() > 0 {
 		return errs

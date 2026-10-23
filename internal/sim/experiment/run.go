@@ -32,11 +32,15 @@ const (
 	// EvaluatorMonteCarlo is the evaluator name reported for Monte Carlo
 	// estimates.
 	EvaluatorMonteCarlo = "monte_carlo"
-)
 
-// ErrExactUnsupported is returned by Run for an experiment whose evaluator is
-// "exact": only the Monte Carlo evaluator is implemented by this package.
-var ErrExactUnsupported = errors.New("experiment: exact evaluator is not supported by Run")
+	// EvaluatorExact is the evaluator name reported for exact estimates
+	// obtained by enumerating every chance branch.
+	EvaluatorExact = "exact"
+
+	// EvaluatorBoth is the evaluator name reported when exact and Monte
+	// Carlo estimates are reported side by side.
+	EvaluatorBoth = "both"
+)
 
 // Options configures Run.
 type Options struct {
@@ -50,8 +54,11 @@ type Options struct {
 	// All also fills WorldReport.All with every policy result, not only the
 	// top ones.
 	All bool
-	// Progress, when set, is called after each completed chunk with the
-	// number of episodes done and the total number of episodes. Calls are
+	// Progress, when set, is called after each completed unit of work with
+	// the number of units done and the total number of units. A Monte Carlo
+	// unit is one episode (reported per completed chunk); an exact unit is
+	// the enumeration of one (world, policy) pair. With evaluator "both" the
+	// exact units come first and the total covers both. Calls are
 	// serialized, done is non-decreasing, and on success the final call has
 	// done == total.
 	Progress func(done, total int)
@@ -61,9 +68,11 @@ type Options struct {
 type Report struct {
 	// Model is the id of the simulated sim/v1 model.
 	Model string `json:"model"`
-	// Evaluator names the evaluator that produced the estimates.
+	// Evaluator names the evaluator that produced the estimates:
+	// EvaluatorMonteCarlo, EvaluatorExact or EvaluatorBoth.
 	Evaluator string `json:"evaluator"`
-	// Runs is the number of replications per world and policy.
+	// Runs is the number of Monte Carlo replications per world and policy;
+	// it is 0 for the exact evaluator.
 	Runs int `json:"runs"`
 	// Seed is the experiment seed.
 	Seed uint64 `json:"seed"`
@@ -78,7 +87,8 @@ type WorldReport struct {
 	// World is the world id.
 	World sim.WorldID `json:"world"`
 	// Policies lists the best policies, sorted by objective mean descending
-	// then policy id ascending, truncated to Report.Top.
+	// then policy id ascending, truncated to Report.Top. With evaluator
+	// "both" the exact mean is the sort key.
 	Policies []PolicyResult `json:"policies"`
 	// All lists every policy in the same order. It is only set when
 	// Options.All is true.
@@ -92,10 +102,23 @@ type PolicyResult struct {
 	// Description is the policy's Describe().
 	Description string `json:"description"`
 	// Objective estimates the objective value; its ConstraintProb maps every
-	// model constraint to the fraction of runs that satisfied it.
+	// model constraint to the fraction of runs (for exact estimates, the
+	// probability) that satisfied it. It is the exact estimate for the exact
+	// and both evaluators and the Monte Carlo estimate otherwise.
 	Objective sim.Estimate `json:"objective"`
 	// Duration estimates the simulated run duration in seconds; its
-	// ConstraintProb is nil.
+	// ConstraintProb is nil. It comes from the same evaluator as Objective.
+	Duration sim.Estimate `json:"duration"`
+	// MonteCarlo holds the Monte Carlo estimates next to the exact ones in
+	// Objective and Duration. It is only set for evaluator "both".
+	MonteCarlo *Estimates `json:"monteCarlo,omitempty"`
+}
+
+// Estimates pairs the objective and duration estimates of one evaluator.
+type Estimates struct {
+	// Objective estimates the objective value, with constraint probabilities.
+	Objective sim.Estimate `json:"objective"`
+	// Duration estimates the simulated run duration in seconds.
 	Duration sim.Estimate `json:"duration"`
 }
 
@@ -112,13 +135,20 @@ type chunkResult struct {
 	err      error
 }
 
-// Run evaluates every policy of src in every world of exp over exp.Def.Runs
-// replications with the Monte Carlo evaluator and returns the aggregated
-// report. Replication r of world w uses
-// sampler.NewMonteCarlo(sim.Seed(exp.Def.Seed, w, r)), re-created for each
-// policy (common random numbers). Episodes run on a pool of opts.Workers
-// goroutines; the report is identical for any worker count. Run stops
-// promptly when ctx is done and returns ctx.Err().
+// Run evaluates every policy of src in every world of exp with the
+// experiment's evaluator and returns the aggregated report.
+//
+// The Monte Carlo evaluator runs exp.Def.Runs replications: replication r of
+// world w uses sampler.NewMonteCarlo(sim.Seed(exp.Def.Seed, w, r)),
+// re-created for each policy (common random numbers). The exact evaluator
+// enumerates every chance branch with sampler.NewEnumerator and weights each
+// episode by its branch probability; it requires CompiledModel.Discrete and
+// otherwise returns *engine.ValidationErrors listing every reason. Evaluator
+// "both" runs the two and reports them side by side (PolicyResult.MonteCarlo).
+//
+// Work runs on a pool of opts.Workers goroutines; the report is identical
+// for any worker count. Run stops promptly when ctx is done and returns
+// ctx.Err().
 func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Options) (*Report, error) {
 	if exp == nil || exp.Def == nil || exp.Model == nil {
 		return nil, errors.New("experiment: compiled experiment is nil")
@@ -126,11 +156,23 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 	if src == nil {
 		return nil, errors.New("experiment: policy source is nil")
 	}
-	if exp.Def.Evaluator == "exact" {
-		return nil, ErrExactUnsupported
+	evaluator := exp.Def.Evaluator
+	if evaluator == "" {
+		evaluator = EvaluatorMonteCarlo
 	}
-	if exp.Def.Runs < 1 {
+	switch evaluator {
+	case EvaluatorMonteCarlo, EvaluatorExact, EvaluatorBoth:
+	default:
+		return nil, fmt.Errorf("experiment: unknown evaluator %q", evaluator)
+	}
+	useMC, useExact := evaluator != EvaluatorExact, evaluator != EvaluatorMonteCarlo
+	if useMC && exp.Def.Runs < 1 {
 		return nil, fmt.Errorf("experiment: runs must be >= 1, got %d", exp.Def.Runs)
+	}
+	if useExact {
+		if err := requireDiscrete(exp.Model, "the exact evaluator"); err != nil {
+			return nil, err
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -151,18 +193,77 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 		seen[p.ID()] = true
 	}
 
-	r := &runner{
-		exp:         exp,
-		policies:    policies,
-		constraints: sortedKeys(exp.Model.CompiledConstraints),
-		runs:        exp.Def.Runs,
-		chunks:      (exp.Def.Runs + ChunkSize - 1) / ChunkSize,
+	constraints := sortedKeys(exp.Model.CompiledConstraints)
+	workers := workerCount(opts, exp)
+	pairs := len(exp.Worlds) * len(policies)
+	exactTotal, mcTotal := 0, 0
+	if useExact {
+		exactTotal = pairs
 	}
-	results, err := r.run(ctx, workerCount(opts, exp), opts.Progress)
-	if err != nil {
-		return nil, err
+	if useMC {
+		mcTotal = pairs * exp.Def.Runs
 	}
-	return r.report(results, topCount(opts, exp), opts.All), nil
+	progress := func(offset int) func(done, total int) {
+		if opts.Progress == nil {
+			return nil
+		}
+		return func(done, _ int) { opts.Progress(offset+done, exactTotal+mcTotal) }
+	}
+
+	var exactRes, mcRes [][]estimatePair
+	if useExact {
+		if exactRes, err = runExact(ctx, exp, policies, constraints, workers, progress(0)); err != nil {
+			return nil, err
+		}
+	}
+	runs := 0
+	if useMC {
+		r := &runner{
+			exp:         exp,
+			policies:    policies,
+			constraints: constraints,
+			runs:        exp.Def.Runs,
+			chunks:      (exp.Def.Runs + ChunkSize - 1) / ChunkSize,
+		}
+		results, err := r.run(ctx, workers, progress(exactTotal))
+		if err != nil {
+			return nil, err
+		}
+		mcRes = r.estimates(results)
+		runs = exp.Def.Runs
+	}
+
+	top := topCount(opts, exp)
+	rep := &Report{
+		Model:     exp.Model.Def.ID,
+		Evaluator: evaluator,
+		Runs:      runs,
+		Seed:      exp.Def.Seed,
+		Top:       top,
+		Worlds:    make([]WorldReport, 0, len(exp.Worlds)),
+	}
+	for w, world := range exp.Worlds {
+		list := make([]PolicyResult, len(policies))
+		for i, p := range policies {
+			res := PolicyResult{PolicyID: p.ID(), Description: p.Describe()}
+			primary := mcRes
+			if useExact {
+				primary = exactRes
+			}
+			res.Objective, res.Duration = primary[w][i].objective, primary[w][i].duration
+			if useExact && useMC {
+				res.MonteCarlo = &Estimates{Objective: mcRes[w][i].objective, Duration: mcRes[w][i].duration}
+			}
+			list[i] = res
+		}
+		sortResults(list)
+		wr := WorldReport{World: world.ID, Policies: list[:min(top, len(list))]}
+		if opts.All {
+			wr.All = list
+		}
+		rep.Worlds = append(rep.Worlds, wr)
+	}
+	return rep, nil
 }
 
 func workerCount(opts Options, exp *CompiledExperiment) int {
@@ -187,7 +288,8 @@ func topCount(opts Options, exp *CompiledExperiment) int {
 	}
 }
 
-// runner holds the immutable state shared by the workers of one Run.
+// runner holds the immutable state shared by the workers of one Monte Carlo
+// evaluation.
 type runner struct {
 	exp         *CompiledExperiment
 	policies    []sim.Policy
@@ -291,36 +393,23 @@ func (r *runner) runChunk(ctx context.Context, j job) chunkResult {
 	return res
 }
 
-// report merges the chunk summaries in chunk-index order and builds the
-// sorted report.
-func (r *runner) report(results [][]*chunkResult, top int, all bool) *Report {
-	rep := &Report{
-		Model:     r.exp.Model.Def.ID,
-		Evaluator: EvaluatorMonteCarlo,
-		Runs:      r.runs,
-		Seed:      r.exp.Def.Seed,
-		Top:       top,
-		Worlds:    make([]WorldReport, 0, len(r.exp.Worlds)),
-	}
-	for w, world := range r.exp.Worlds {
-		list := make([]PolicyResult, len(r.policies))
-		for i, p := range r.policies {
+// estimates merges the chunk summaries in chunk-index order and returns the
+// Monte Carlo estimates indexed by [world][policy].
+func (r *runner) estimates(results [][]*chunkResult) [][]estimatePair {
+	out := make([][]estimatePair, len(r.exp.Worlds))
+	for w := range r.exp.Worlds {
+		out[w] = make([]estimatePair, len(r.policies))
+		for i := range r.policies {
 			agg := newPolicyStats(len(r.constraints))
 			for _, chunk := range results[w] {
 				agg.merge(chunk.stats[i])
 				chunk.stats[i] = nil // release retained values early
 			}
 			obj, dur := agg.estimates(r.constraints)
-			list[i] = PolicyResult{PolicyID: p.ID(), Description: p.Describe(), Objective: obj, Duration: dur}
+			out[w][i] = estimatePair{objective: obj, duration: dur}
 		}
-		sortResults(list)
-		wr := WorldReport{World: world.ID, Policies: list[:min(top, len(list))]}
-		if all {
-			wr.All = list
-		}
-		rep.Worlds = append(rep.Worlds, wr)
 	}
-	return rep
+	return out
 }
 
 // sortResults orders results by objective mean descending, then policy id

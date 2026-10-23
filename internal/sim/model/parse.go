@@ -216,6 +216,7 @@ func validatePolicy(p *Policy) error {
 	if p.Decisions == nil {
 		errs.Add("$.decisions", engine.CodeMissingRequired, "missing required property decisions")
 	}
+	validateParams(p.Params, errs)
 
 	for dName, d := range p.Decisions {
 		path := fmt.Sprintf("$.decisions.%s", dName)
@@ -285,9 +286,7 @@ func validateExperiment(e *Experiment) error {
 	} else if e.Policies.Search == "" && len(e.Policies.Files) == 0 {
 		errs.Add("$.policies", engine.CodeInvalidValue, "policies must have exactly one of search or files")
 	}
-	if e.Policies.Search != "" && e.Policies.Search != "exhaustive" && e.Policies.Search != "exact" {
-		errs.Add("$.policies.search", engine.CodeInvalidValue, "search must be exhaustive or exact")
-	}
+	validatePolicySearch(e.Policies, errs)
 	if e.Workers < 0 {
 		errs.Add("$.workers", engine.CodeInvalidValue, "workers must be >= 1")
 	}
@@ -302,6 +301,34 @@ func validateExperiment(e *Experiment) error {
 		return errs
 	}
 	return nil
+}
+
+// validatePolicySearch checks policies.search and the fields that depend on
+// it: policy (grid and random only, required there), samples (random only,
+// required, >= 1) and seed (random only).
+func validatePolicySearch(p Policies, errs *engine.ValidationErrors) {
+	search := p.Search
+	switch search {
+	case "", "exhaustive", "exact", "grid", "random":
+	default:
+		errs.Add("$.policies.search", engine.CodeInvalidValue, "search must be exhaustive, exact, grid or random")
+	}
+	parameterized := search == "grid" || search == "random"
+	switch {
+	case parameterized && p.Policy == "":
+		errs.Add("$.policies.policy", engine.CodeMissingRequired, fmt.Sprintf("search: %s requires policy", search))
+	case !parameterized && p.Policy != "":
+		errs.Add("$.policies.policy", engine.CodeInvalidValue, "policy is only allowed with search: grid or random")
+	}
+	switch {
+	case search == "random" && p.Samples < 1:
+		errs.Add("$.policies.samples", engine.CodeInvalidValue, "search: random requires samples >= 1")
+	case search != "random" && p.Samples != 0:
+		errs.Add("$.policies.samples", engine.CodeInvalidValue, "samples is only allowed with search: random")
+	}
+	if search != "random" && p.Seed != nil {
+		errs.Add("$.policies.seed", engine.CodeInvalidValue, "seed is only allowed with search: random")
+	}
 }
 
 func checkValueSpec(vs ValueSpec) int {

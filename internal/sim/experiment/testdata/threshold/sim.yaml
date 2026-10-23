@@ -1,0 +1,19 @@
+# Synthetic threshold model: a signal reveals a uniform score s in [0, 1);
+# accepting pays 100*s - 40, rejecting pays 0. Accepting when s >= theta has
+# EV(theta) = 50(1 - theta^2) - 40(1 - theta), maximised at theta* = 0.4
+# (EV 18).
+apiVersion: sim/v1
+id: threshold
+graph: ./graph.yaml
+worlds:
+  base: {}
+latents:
+  score: {uniform: {min: 0, max: 1}}
+behaviors:
+  signal:
+    output:
+      score: {expr: "latent.score"}
+objective:
+  name: payoff
+  value: "nodes.accept.status == 'Succeeded' ? 100.0 * latent.score - 40.0 : 0.0"
+  maximize: mean

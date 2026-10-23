@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"sort"
 	"strings"
@@ -15,11 +16,19 @@ import (
 	"github.com/google/cel-go/common/ast"
 )
 
-// runtimePolicy implements sim.Policy for a compiled policy/v1 document.
+// runtimePolicy implements sim.Policy and Parameterized for a compiled
+// policy/v1 document. Copies made by WithParams share decisions and specs.
 type runtimePolicy struct {
 	id          string
 	description string
-	decisions   map[string]*compiledDecision
+	// baseID and baseDescription are id and description without params.
+	baseID          string
+	baseDescription string
+	decisions       map[string]*compiledDecision
+	// specs holds the declared params; values their bound values (never
+	// nil, read-only once bound).
+	specs  map[string]ParamSpec
+	values map[string]any
 }
 
 type compiledDecision struct {
@@ -29,6 +38,9 @@ type compiledDecision struct {
 	Table    []compiledTableRow
 	Default  string
 	IsTable  bool
+	// BindsParams reports whether the rule environment declares the params
+	// variable (it does unless an observed node is itself named params).
+	BindsParams bool
 }
 
 type compiledRule struct {
@@ -81,6 +93,9 @@ func (p *runtimePolicy) Choose(ctx context.Context, decision engine.NodeID, obs 
 	}
 
 	activation := buildActivation(d.Observes, obs)
+	if d.BindsParams {
+		activation[paramsVar] = p.values
+	}
 	for i, rule := range d.Rules {
 		if rule.When == nil {
 			if rule.Else != "" {
@@ -225,6 +240,13 @@ func decisionObserves(node *engine.NodeDefinition) []string {
 // must be observed paths, every choice must be one of the decision's options,
 // every decision node must be covered and unknown decisions are rejected. It
 // returns nil errors on success.
+//
+// Declared params are validated (engine.CodeInvalidValue at
+// $.params.<name>) and bound to their defaults. Rule environments also
+// declare params as map(string, dyn): params.<name> is allowed for a
+// declared name and params.<undeclared> is sim.CodePolicyUnknownParam.
+// Params are constants, so they never widen the information set. The
+// returned policy implements Parameterized.
 func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}
 	if p == nil {
@@ -236,10 +258,19 @@ func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationE
 		return nil, sortedIssues(errs)
 	}
 
+	validateParams(p.Params, errs)
+	declared := make(map[string]bool, len(p.Params))
+	defaults := make(map[string]any, len(p.Params))
+	for name, spec := range p.Params {
+		declared[name] = true
+		defaults[name] = spec.DefaultValue()
+	}
+
 	rp := &runtimePolicy{
-		id:          fmt.Sprintf("%s@%s", p.ID, p.Version),
-		description: fmt.Sprintf("policy %s version %s", p.ID, p.Version),
-		decisions:   make(map[string]*compiledDecision, len(p.Decisions)),
+		baseID:          fmt.Sprintf("%s@%s", p.ID, p.Version),
+		baseDescription: fmt.Sprintf("policy %s version %s", p.ID, p.Version),
+		decisions:       make(map[string]*compiledDecision, len(p.Decisions)),
+		specs:           maps.Clone(p.Params),
 	}
 
 	decisionNodes := make(map[string]*engine.NodeDefinition)
@@ -285,7 +316,7 @@ func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationE
 		if cd.IsTable {
 			compileTable(pd, path, observed, checkOption, cd, errs)
 		} else {
-			compileRules(pd, path, cd.Observes, observed, checkOption, cd, errs)
+			compileRules(pd, path, cd.Observes, observed, declared, checkOption, cd, errs)
 		}
 		rp.decisions[id] = cd
 	}
@@ -293,7 +324,7 @@ func CompilePolicy(p *Policy, m *CompiledModel) (sim.Policy, *engine.ValidationE
 	if errs.Len() > 0 {
 		return nil, sortedIssues(errs)
 	}
-	return rp, nil
+	return rp.bind(defaults), nil
 }
 
 func compileTable(pd Decision, path engine.Path, observed map[string]bool, checkOption func(string, engine.Path), cd *compiledDecision, errs *engine.ValidationErrors) {
@@ -317,13 +348,29 @@ func compileTable(pd Decision, path engine.Path, observed map[string]bool, check
 	}
 }
 
-func compileRules(pd Decision, path engine.Path, observes []string, observed map[string]bool, checkOption func(string, engine.Path), cd *compiledDecision, errs *engine.ValidationErrors) {
+func compileRules(pd Decision, path engine.Path, observes []string, observed, declared map[string]bool, checkOption func(string, engine.Path), cd *compiledDecision, errs *engine.ValidationErrors) {
 	idSet := make(map[string]bool)
 	for _, o := range observes {
 		idSet[strings.SplitN(o, ".", 2)[0]] = true
 	}
 	ids := sortedKeys(idSet)
-	env, err := newEnv(ids...)
+	opts := make([]cel.EnvOption, 0, len(ids)+1)
+	for _, id := range ids {
+		opts = append(opts, mapVar(id))
+	}
+	// params is declared unless an observed node has that id, in which case
+	// params.<x> keeps meaning the node's fields.
+	var params map[string]bool
+	if idSet[paramsVar] {
+		if len(declared) > 0 {
+			errs.Add(path.String(), engine.CodeInvalidValue, fmt.Sprintf("decision observes node %q, which shadows the policy params", paramsVar))
+		}
+	} else {
+		cd.BindsParams = true
+		params = declared
+		opts = append(opts, mapVar(paramsVar))
+	}
+	env, err := cel.NewEnv(opts...)
 	if err != nil {
 		errs.Add(path.String(), engine.CodeInvalidValue, fmt.Sprintf("failed to create env for decision: %v", err))
 		return
@@ -343,7 +390,7 @@ func compileRules(pd Decision, path engine.Path, observes []string, observed map
 				errs.Add(whenPath, sim.CodeInvalidExpression, fmt.Sprintf("when must evaluate to bool, got %v", celAst.OutputType()))
 			default:
 				before := errs.Len()
-				walkAST(celAst.NativeRep().Expr(), observed, whenPath, errs)
+				walkAST(celAst.NativeRep().Expr(), observed, params, whenPath, errs)
 				if errs.Len() == before {
 					prog, err := env.Program(celAst, cel.CostLimit(graph.DefaultConditionCostLimit), cel.EvalOptions(cel.OptTrackCost))
 					if err != nil {
@@ -374,8 +421,10 @@ func isAllowedPath(p string, allowed map[string]bool) bool {
 }
 
 // walkAST rejects every reference in expr that is not a field-selection chain
-// starting with an observed path.
-func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.ValidationErrors) {
+// starting with an observed path, or exactly params.<name> for a declared
+// param. params is nil when the rule environment does not declare the params
+// variable; params.<undeclared> is sim.CodePolicyUnknownParam.
+func walkAST(expr ast.Expr, allowed, params map[string]bool, path string, errs *engine.ValidationErrors) {
 	if expr == nil {
 		return
 	}
@@ -396,6 +445,16 @@ func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.V
 			errs.Add(path, sim.CodePolicyUnobservedReference, "complex select or index access not allowed")
 			return
 		}
+		if params != nil && strings.HasPrefix(p, paramsVar+".") {
+			parts := strings.SplitN(p, ".", 3)
+			switch {
+			case !params[parts[1]]:
+				errs.Add(path, sim.CodePolicyUnknownParam, fmt.Sprintf("unknown param %q", parts[1]))
+			case len(parts) > 2:
+				errs.Add(path, sim.CodePolicyUnobservedReference, fmt.Sprintf("params are scalars; %s is not allowed", p))
+			}
+			return
+		}
 		if !isAllowedPath(p, allowed) {
 			errs.Add(path, sim.CodePolicyUnobservedReference, fmt.Sprintf("unobserved reference: %s", p))
 		}
@@ -407,24 +466,24 @@ func walkAST(expr ast.Expr, allowed map[string]bool, path string, errs *engine.V
 	case ast.CallKind:
 		call := expr.AsCall()
 		if call.IsMemberFunction() {
-			walkAST(call.Target(), allowed, path, errs)
+			walkAST(call.Target(), allowed, params, path, errs)
 		}
 		for _, arg := range call.Args() {
-			walkAST(arg, allowed, path, errs)
+			walkAST(arg, allowed, params, path, errs)
 		}
 	case ast.ListKind:
 		for _, e := range expr.AsList().Elements() {
-			walkAST(e, allowed, path, errs)
+			walkAST(e, allowed, params, path, errs)
 		}
 	case ast.MapKind:
 		for _, e := range expr.AsMap().Entries() {
 			me := e.AsMapEntry()
-			walkAST(me.Key(), allowed, path, errs)
-			walkAST(me.Value(), allowed, path, errs)
+			walkAST(me.Key(), allowed, params, path, errs)
+			walkAST(me.Value(), allowed, params, path, errs)
 		}
 	case ast.StructKind:
 		for _, f := range expr.AsStruct().Fields() {
-			walkAST(f.AsStructField().Value(), allowed, path, errs)
+			walkAST(f.AsStructField().Value(), allowed, params, path, errs)
 		}
 	case ast.ComprehensionKind:
 		// Comprehensions introduce iteration variables that cannot be

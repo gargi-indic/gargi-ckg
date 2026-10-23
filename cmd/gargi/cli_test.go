@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -304,4 +305,43 @@ func TestSimRun_InvalidExperiment(t *testing.T) {
 	code, _, errOut := gargi(t, "sim", "run", "--local", path)
 	require.Equal(t, 1, code)
 	require.Contains(t, errOut, "model")
+}
+
+// thresholdExperiment is the synthetic grid-search experiment: theta in
+// {0, 0.05, ..., 1}, analytic optimum 0.4.
+const thresholdExperiment = "../../internal/sim/experiment/testdata/threshold/experiment.yaml"
+
+func TestSimRun_GridSearch(t *testing.T) {
+	code, out, errOut := gargi(t, "sim", "run", thresholdExperiment, "--local")
+	require.Equal(t, 0, code, errOut)
+	m := regexp.MustCompile(`(?m)^Best policy: policy threshold version theta params theta=(\S+)$`).FindStringSubmatch(out)
+	require.NotNil(t, m, out)
+	theta, err := strconv.ParseFloat(m[1], 64)
+	require.NoError(t, err)
+	require.InDelta(t, 0.4, theta, 0.05+1e-12, out)
+	require.Contains(t, out, "threshold@theta[theta="+m[1]+"]")
+
+	code, out, errOut = gargi(t, "sim", "run", thresholdExperiment, "--local", "--json", "--workers", "3")
+	require.Equal(t, 0, code, errOut)
+	var report experiment.Report
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	require.Len(t, report.Worlds[0].Policies, 3)
+	best := report.Worlds[0].Policies[0]
+	require.Equal(t, map[string]any{"theta": theta}, best.Params)
+	require.Contains(t, out, `"params": {`)
+}
+
+func TestSimRun_GridSearchErrors(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Dir(thresholdExperiment)
+	for _, f := range []string{"sim.yaml", "graph.yaml", "policies/theta.yaml"} {
+		copyFile(t, filepath.Join(src, f), filepath.Join(dir, f))
+	}
+	exp := "apiVersion: experiment/v1\nmodel: ./sim.yaml\npolicies: {search: grid, policy: ./policies/theta.yaml}\n" +
+		"runs: 10\nseed: 1\nmax_policies: 5\n"
+	path := filepath.Join(dir, "experiment.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(exp), 0o600))
+	code, _, errOut := gargi(t, "sim", "run", path, "--local")
+	require.Equal(t, 1, code)
+	require.Equal(t, "$.policies.search: too_many_policies: grid search has 21 candidates, more than max_policies (5)\n", errOut)
 }

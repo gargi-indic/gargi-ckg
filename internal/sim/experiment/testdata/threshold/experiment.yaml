@@ -1,0 +1,8 @@
+apiVersion: experiment/v1
+model: ./sim.yaml
+policies:
+  search: grid
+  policy: ./policies/theta.yaml
+runs: 2000
+seed: 7
+top: 3

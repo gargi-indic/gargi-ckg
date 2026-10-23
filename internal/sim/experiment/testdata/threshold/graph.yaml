@@ -1,0 +1,17 @@
+apiVersion: graph/v1
+id: threshold
+nodes:
+  - id: signal
+    type: http_call
+    config: {url: "https://signal.example.internal/v1/score", method: GET}
+  - id: act
+    type: decision
+    config: {options: [accept, reject], observes: [signal.output.score]}
+  - id: accept
+    type: passthrough
+  - id: reject
+    type: passthrough
+edges:
+  - {from: signal, to: act}
+  - {from: act, to: accept, condition: "upstream.output.choice == 'accept'"}
+  - {from: act, to: reject, condition: "upstream.output.choice == 'reject'"}

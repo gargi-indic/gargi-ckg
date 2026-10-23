@@ -364,6 +364,55 @@ the base-tuned policy loses $65 per application in a recession (the $267.5
 regret below). Use `evaluator: monte_carlo` (or `both`) with a `runs` count for
 models that are not discrete.
 
+### Tuning a threshold: `params` with grid and random search
+
+A policy can declare tunable `params` and read them in rules as
+`params.<name>`. Each param is a range (`min`, `max`, optional `step`) or a
+`values` list; `default` (else `min` or the first value) is what a plain
+`policies.files` run uses. Params are constants: rules still see only the
+decision's observed paths.
+
+The synthetic model in
+[`internal/sim/experiment/testdata/threshold`](../../internal/sim/experiment/testdata/threshold)
+reveals a uniform score `s` and pays `100*s - 40` on accept, so accepting
+when `s >= theta` is worth `50(1 - theta²) - 40(1 - theta)`, best at
+`theta = 0.4`:
+
+```yaml
+# policies/theta.yaml
+params:
+  theta: {min: 0, max: 1, step: 0.05}
+decisions:
+  act:
+    rules:
+      - when: "signal.output.score >= params.theta"
+        choose: accept
+      - else: reject
+```
+
+`policies: {search: grid, policy: ./policies/theta.yaml}` evaluates every
+combination of the params (here 21 values of `theta`; more than
+`max_policies` is an error), and
+`policies: {search: random, policy: ..., samples: 50, seed: 7}` evaluates 50
+random draws (`seed` defaults to the experiment seed; identical draws are
+evaluated once). All candidates share common random numbers, and each is
+named `<id>@<version>[name=value,...]`:
+
+```bash
+bin/gargi sim run internal/sim/experiment/testdata/threshold/experiment.yaml --local
+```
+
+```text
+World base (model threshold, evaluator monte_carlo, 2000 runs, seed 7)
+POLICY                       MEAN  CI95          P95 DURATION  EXACT
+threshold@theta[theta=0.4]   18.1  [17.3, 19.0]  0s            -
+threshold@theta[theta=0.35]  18.0  [17.1, 18.9]  0s            -
+threshold@theta[theta=0.45]  18.0  [17.1, 18.9]  0s            -
+Best policy: policy threshold version theta params theta=0.4
+```
+
+With `--json` every policy result also carries `"params": {"theta": 0.4}`.
+
 ## 7. Golden numbers and the prototype
 
 The loan results are locked in CI by `TestLoanGolden`

@@ -23,6 +23,88 @@
     "version": {
       "type": "string"
     },
+    "params": {
+      "type": "object",
+      "description": "Tunable parameters, referenced as params.<name> in rule when expressions. Each is a range (min, max, optional step) or a values list; grid and random search vary them",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z_][a-z0-9_]*$": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": {
+              "type": "number",
+              "description": "Lower bound of a range param (inclusive)"
+            },
+            "max": {
+              "type": "number",
+              "description": "Upper bound of a range param (inclusive), >= min"
+            },
+            "step": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Grid spacing of a range param; required by grid search"
+            },
+            "values": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "description": "Admissible values of a values-list param"
+            },
+            "default": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Initially bound value; defaults to min (range) or values[0]"
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "min",
+                "max"
+              ],
+              "not": {
+                "required": [
+                  "values"
+                ]
+              }
+            },
+            {
+              "required": [
+                "values"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "min"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "max"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "step"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
     "decisions": {
       "type": "object",
       "additionalProperties": false,

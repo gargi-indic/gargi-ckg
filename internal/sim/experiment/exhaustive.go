@@ -58,13 +58,18 @@ func (e *CompiledExperiment) ExhaustiveSource() ExhaustiveSource {
 
 // PolicySource returns the experiment's policy source: an ExhaustiveSource
 // for policies.search: exhaustive, an ExactSource for policies.search:
-// exact, otherwise a FilesSource.
+// exact, a GridSource for grid, a RandomSource for random, otherwise a
+// FilesSource.
 func (e *CompiledExperiment) PolicySource() PolicySource {
 	switch e.Def.Policies.Search {
 	case "exhaustive":
 		return e.ExhaustiveSource()
 	case "exact":
 		return e.ExactSource()
+	case "grid":
+		return e.GridSource()
+	case "random":
+		return e.RandomSource()
 	default:
 		return e.FilesSource()
 	}

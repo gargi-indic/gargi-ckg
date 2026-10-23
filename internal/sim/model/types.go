@@ -90,10 +90,37 @@ type Triangular struct {
 
 // Policy represents a policy definition.
 type Policy struct {
-	APIVersion string              `json:"apiVersion"`
-	ID         string              `json:"id"`
-	Version    string              `json:"version"`
-	Decisions  map[string]Decision `json:"decisions"`
+	APIVersion string `json:"apiVersion"`
+	ID         string `json:"id"`
+	Version    string `json:"version"`
+	// Params declares the policy's tunable parameters by name. Rule when
+	// expressions read them as params.<name>; optimizers (policies.search:
+	// grid or random) bind candidate values through Parameterized.
+	Params    map[string]ParamSpec `json:"params,omitempty"`
+	Decisions map[string]Decision  `json:"decisions"`
+}
+
+// ParamSpec declares one tunable policy parameter. A parameter is either a
+// range (Min and Max set, Min <= Max, optional Step > 0) or a values list
+// (Values non-empty, each a number or a string, no duplicates), never both.
+// Range parameters are bound as CEL doubles; values-list parameters keep
+// their document type (numbers as doubles, strings as strings).
+//
+// Default is the value bound until an optimizer rebinds the parameter. It
+// is optional and defaults to Min (range) or Values[0] (values list); when
+// set it must lie in [Min, Max] (range) or be one of Values.
+type ParamSpec struct {
+	// Min is the lower bound of a range parameter (inclusive).
+	Min *float64 `json:"min,omitempty"`
+	// Max is the upper bound of a range parameter (inclusive).
+	Max *float64 `json:"max,omitempty"`
+	// Step is the grid spacing of a range parameter: grid search evaluates
+	// Min, Min+Step, ... up to Max. Only grid search requires it.
+	Step *float64 `json:"step,omitempty"`
+	// Values lists the admissible values of a values-list parameter.
+	Values []any `json:"values,omitempty"`
+	// Default is the initially bound value.
+	Default any `json:"default,omitempty"`
 }
 
 // Decision contains the rules or table used to make a policy choice.
@@ -128,16 +155,29 @@ type Experiment struct {
 	Workers    int      `json:"workers,omitempty"`
 	Top        int      `json:"top,omitempty"` // default 5
 	// MaxPolicies caps the number of policies enumerated by search:
-	// exhaustive; 0 selects the default (10,000). It does not apply to
-	// search: exact, which never enumerates policies.
+	// exhaustive and the number of candidates of search: grid; 0 selects
+	// the default (10,000). It does not apply to search: exact, which never
+	// enumerates policies, nor to search: random, which samples bounds.
 	MaxPolicies int `json:"max_policies,omitempty"`
 }
 
 // Policies defines how policies are discovered or supplied to an experiment.
 type Policies struct {
-	// Search is "exhaustive" (enumerate every reduced deterministic policy)
-	// or "exact" (solve for each world's optimal policy by backward
-	// induction). Exactly one of Search and Files is set.
+	// Search is "exhaustive" (enumerate every reduced deterministic policy),
+	// "exact" (solve for each world's optimal policy by backward
+	// induction), "grid" (every combination of the params of Policy) or
+	// "random" (Samples random draws of the params of Policy). Exactly one
+	// of Search and Files is set.
 	Search string   `json:"search,omitempty"`
 	Files  []string `json:"files,omitempty"`
+	// Policy is the parameterized policy/v1 document that grid and random
+	// search vary, relative to the experiment. It is required for those
+	// searches and forbidden otherwise.
+	Policy string `json:"policy,omitempty"`
+	// Samples is the number of candidates random search draws (>= 1). It is
+	// required for random search and forbidden otherwise.
+	Samples int `json:"samples,omitempty"`
+	// Seed seeds random search's draws; nil selects the experiment seed. It
+	// is only allowed with random search.
+	Seed *uint64 `json:"seed,omitempty"`
 }

@@ -114,6 +114,32 @@
       "minimum": 1,
       "default": 10000,
       "description": "Maximum number of policies enumerated by policies.search: exhaustive and of candidates of policies.search: grid; ignored by policies.search: exact and random"
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(regret|robust|pareto:[a-z_][a-z0-9_]*(:(min|max))?,[a-z_][a-z0-9_]*(:(min|max))?)$"
+      },
+      "description": "Decision-quality reports: regret (policy tuned for each world evaluated in every world), robust (best by expected value under world_prior, maximin and CVaR), pareto:<metricA>[:min|max],<metricB>[:min|max] (per-world non-dominated set; goals default to max). regret and robust need at least two worlds"
+    },
+    "world_prior": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "description": "Probability of each experiment world for the robust report; values sum to 1, omitted worlds get 0. Absent means uniform over the experiment's worlds"
+    },
+    "cvar_alpha": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "default": 0.05,
+      "description": "Tail mass of the robust report's CVaR criterion"
     }
   }
 }

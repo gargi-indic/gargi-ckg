@@ -10,6 +10,13 @@ type Sim struct {
 	Behaviors  map[string]Behavior       `json:"behaviors,omitempty"`
 	Resources  map[string]Resource       `json:"resources,omitempty"`
 	Objective  Objective                 `json:"objective"`
+	// Metrics maps a metric name to a CEL expression evaluated once per run
+	// in the objective environment (world, latent, nodes, run). The output
+	// is a number (double, or int converted to double). Names match
+	// ^[a-z_][a-z0-9_]*$; the built-in metric names (objective, cost,
+	// duration) are reserved. Metrics are estimated like the objective and
+	// can be referenced by aggregate requirements and Pareto reports.
+	Metrics map[string]string `json:"metrics,omitempty"`
 }
 
 // Resource describes the constraints and capacity of a system resource.
@@ -19,10 +26,24 @@ type Resource struct {
 
 // Objective defines the goal to maximize or minimize and its constraints.
 type Objective struct {
-	Name        string            `json:"name"`
-	Value       string            `json:"value"`
-	Maximize    string            `json:"maximize"` // "mean"
+	Name     string `json:"name"`
+	Value    string `json:"value"`
+	Maximize string `json:"maximize"` // "mean"
+	// Constraints maps a name to a per-run boolean CEL expression; the
+	// estimates report the probability that each holds.
 	Constraints map[string]string `json:"constraints,omitempty"`
+	// Requirements maps a name to an aggregate requirement evaluated on the
+	// estimates of each (policy, world), with the grammar
+	//
+	//	<agg>(<arg>) <op> <rhs>
+	//
+	// agg is mean, p50, p95 (arg is a metric name, built-in or declared) or
+	// prob (arg is a per-run boolean CEL expression in the objective
+	// environment); op is <=, <, >=, > or ==; rhs is a number or
+	// duration('<Go duration>') in seconds. A policy that violates a
+	// requirement in a world is infeasible there and ranks after every
+	// feasible policy.
+	Requirements map[string]string `json:"requirements,omitempty"`
 }
 
 // Behavior specifies the cost, duration, failure rates, and outputs of a node.
@@ -159,7 +180,23 @@ type Experiment struct {
 	// the default (10,000). It does not apply to search: exact, which never
 	// enumerates policies, nor to search: random, which samples bounds.
 	MaxPolicies int `json:"max_policies,omitempty"`
+	// Reports lists the decision-quality reports computed over the
+	// evaluated policies: "regret", "robust" and
+	// "pareto:<metricA>[:min|max],<metricB>[:min|max]". regret and robust
+	// need at least two worlds.
+	Reports []string `json:"reports,omitempty"`
+	// WorldPrior is the probability of each experiment world used by the
+	// robust report. Keys are experiment worlds, values are >= 0 and sum to
+	// 1; worlds left out have probability 0. Nil means uniform over the
+	// experiment's worlds.
+	WorldPrior map[string]float64 `json:"world_prior,omitempty"`
+	// CVaRAlpha is the tail mass of the robust report's CVaR criterion, in
+	// (0, 1]; 0 selects DefaultCVaRAlpha (0.05).
+	CVaRAlpha float64 `json:"cvar_alpha,omitempty"`
 }
+
+// DefaultCVaRAlpha is the CVaR tail mass used when cvar_alpha is unset.
+const DefaultCVaRAlpha = 0.05
 
 // Policies defines how policies are discovered or supplied to an experiment.
 type Policies struct {

@@ -147,7 +147,9 @@ type episode struct {
 // After the episode ends (normally or by abandonment) the objective and every
 // constraint are evaluated on the final state with world, latent, nodes
 // (status, output, errorMessage per node) and run (cost, duration in seconds,
-// path, abandoned). Constraints is always a non-nil map.
+// path, abandoned). Constraints is always a non-nil map. The model's declared
+// metrics are evaluated the same way into Metrics (nil when there are none),
+// and the condition of every prob() requirement into Events.
 func RunEpisode(ctx context.Context, m *model.CompiledModel, w sim.World, p sim.Policy, s sim.Sampler, opts Options) (sim.RunRecord, error) {
 	if m == nil || m.Graph == nil {
 		return sim.RunRecord{}, errors.New("compiled model is nil")
@@ -475,7 +477,8 @@ func (e *episode) abandonCost(cb model.CompiledBehavior, inputs map[string]any) 
 	return toFloat(val.Value())
 }
 
-// evaluate fills Objective and Constraints from the final state.
+// evaluate fills Objective, Constraints, Metrics and Events from the final
+// state.
 func (e *episode) evaluate(vars map[string]any) error {
 	nodeVars := make(map[string]any)
 	for _, ns := range e.state.NodeStates() {
@@ -524,6 +527,39 @@ func (e *episode) evaluate(vars map[string]any) error {
 			return fmt.Errorf("constraint %s must evaluate to bool, got %T", name, val.Value())
 		}
 		e.record.Constraints[name] = b
+	}
+
+	if len(e.m.MetricOrder) > 0 {
+		e.record.Metrics = make(map[string]float64, len(e.m.MetricOrder))
+		for _, name := range e.m.MetricOrder {
+			val, _, err := e.m.CompiledMetrics[name].Eval(vars)
+			if err != nil {
+				return fmt.Errorf("metric %s: %w", name, err)
+			}
+			v, err := toFloat(val.Value())
+			if err != nil {
+				return fmt.Errorf("metric %s: %w", name, err)
+			}
+			e.record.Metrics[name] = v
+		}
+	}
+
+	for _, req := range e.m.Requirements {
+		if req.Event == nil {
+			continue
+		}
+		val, _, err := req.Event.Eval(vars)
+		if err != nil {
+			return fmt.Errorf("requirement %s: %w", req.Name, err)
+		}
+		b, ok := val.Value().(bool)
+		if !ok {
+			return fmt.Errorf("requirement %s: prob() condition must evaluate to bool, got %T", req.Name, val.Value())
+		}
+		if e.record.Events == nil {
+			e.record.Events = make(map[string]bool)
+		}
+		e.record.Events[req.Name] = b
 	}
 	return nil
 }

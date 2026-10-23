@@ -129,6 +129,13 @@ type CompiledModel struct {
 	CompiledObjective cel.Program
 	// CompiledConstraints maps constraint name to its bool program.
 	CompiledConstraints map[string]cel.Program
+	// MetricOrder lists the declared metric names, sorted.
+	MetricOrder []string
+	// CompiledMetrics maps declared metric name to its numeric program
+	// (world, latent, nodes, run).
+	CompiledMetrics map[string]cel.Program
+	// Requirements lists the aggregate requirements sorted by name.
+	Requirements []CompiledRequirement
 	// CompiledBehaviors maps node id to its compiled behavior.
 	CompiledBehaviors map[string]CompiledBehavior
 }
@@ -415,6 +422,7 @@ func Compile(def *Sim, baseDir string, reg *engine.Registry) (*CompiledModel, *e
 			m.CompiledConstraints[name] = prog
 		}
 	}
+	compileMetrics(def, m, objectiveEnv, errs)
 
 	for _, id := range sortedKeys(def.Behaviors) {
 		m.CompiledBehaviors[id] = compileBehavior(def.Behaviors[id], behaviorsPath.Field(id), behaviorEnv, errs)

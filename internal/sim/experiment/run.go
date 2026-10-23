@@ -81,15 +81,20 @@ type Report struct {
 	Top int `json:"top"`
 	// Worlds holds one entry per evaluated world, in experiment order.
 	Worlds []WorldReport `json:"worlds"`
+	// Reports holds the reports requested by the experiment's reports
+	// list, computed from the primary estimates (exact for evaluator both).
+	// It is omitted when no report is requested.
+	Reports *ReportSet `json:"reports,omitempty"`
 }
 
 // WorldReport holds the policy results of one world.
 type WorldReport struct {
 	// World is the world id.
 	World sim.WorldID `json:"world"`
-	// Policies lists the best policies, sorted by objective mean descending
-	// then policy id ascending, truncated to Report.Top. With evaluator
-	// "both" the exact mean is the sort key.
+	// Policies lists the best policies, feasible ones first, then sorted by
+	// objective mean descending and policy id ascending, truncated to
+	// Report.Top. With evaluator "both" the exact estimates are the sort
+	// key.
 	Policies []PolicyResult `json:"policies"`
 	// All lists every policy in the same order. It is only set when
 	// Options.All is true.
@@ -121,9 +126,27 @@ type PolicyResult struct {
 	// Duration estimates the simulated run duration in seconds; its
 	// ConstraintProb is nil. It comes from the same evaluator as Objective.
 	Duration sim.Estimate `json:"duration"`
+	// Metrics estimates every metric declared by the model (sim/v1
+	// metrics) by name, like the objective and from the same evaluator;
+	// their ConstraintProb is nil. It is omitted when the model declares no
+	// metrics.
+	Metrics map[string]sim.Estimate `json:"metrics,omitempty"`
+	// Requirements holds the outcome of every aggregate requirement of the
+	// model (objective.requirements), sorted by name, evaluated on the
+	// estimates above. It is omitted when the model has no requirements.
+	Requirements []RequirementResult `json:"requirements,omitempty"`
+	// Feasible reports whether every requirement is satisfied. It is only
+	// set (true or false) when the model has requirements; use IsFeasible.
+	Feasible *bool `json:"feasible,omitempty"`
 	// MonteCarlo holds the Monte Carlo estimates next to the exact ones in
-	// Objective and Duration. It is only set for evaluator "both".
+	// Objective, Duration and Metrics. It is only set for evaluator "both".
 	MonteCarlo *Estimates `json:"monteCarlo,omitempty"`
+}
+
+// IsFeasible reports whether the policy satisfies every aggregate
+// requirement; it is true when the model has none.
+func (r PolicyResult) IsFeasible() bool {
+	return r.Feasible == nil || *r.Feasible
 }
 
 // Estimates pairs the objective and duration estimates of one evaluator.
@@ -132,6 +155,8 @@ type Estimates struct {
 	Objective sim.Estimate `json:"objective"`
 	// Duration estimates the simulated run duration in seconds.
 	Duration sim.Estimate `json:"duration"`
+	// Metrics estimates the declared metrics; omitted when there are none.
+	Metrics map[string]sim.Estimate `json:"metrics,omitempty"`
 }
 
 // job identifies one chunk of replications of one world.
@@ -164,6 +189,12 @@ type chunkResult struct {
 // experiment's evaluator and reports each world's solution in
 // WorldReport.Solution. Solving is sequential and not counted by
 // Options.Progress.
+//
+// The model's declared metrics are estimated next to the objective, its
+// aggregate requirements are evaluated on each (world, policy)'s primary
+// estimates (infeasible policies rank last), and the reports requested by
+// the experiment (CompiledExperiment.Reports) are computed into
+// Report.Reports once every pair is evaluated.
 //
 // Work runs on a pool of opts.Workers goroutines; the report is identical
 // for any worker count. Run stops promptly when ctx is done and returns
@@ -224,7 +255,8 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 		seen[p.ID()] = true
 	}
 
-	constraints := sortedKeys(exp.Model.CompiledConstraints)
+	spec := newEvalSpec(exp)
+	covers := tailCovers(exp)
 	workers := workerCount(opts, exp)
 	pairs := len(exp.Worlds) * len(policies)
 	exactTotal, mcTotal := 0, 0
@@ -243,18 +275,21 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 
 	var exactRes, mcRes [][]estimatePair
 	if useExact {
-		if exactRes, err = runExact(ctx, exp, policies, constraints, workers, progress(0)); err != nil {
+		if exactRes, err = runExact(ctx, exp, policies, spec, covers, workers, progress(0)); err != nil {
 			return nil, err
 		}
 	}
 	runs := 0
 	if useMC {
 		r := &runner{
-			exp:         exp,
-			policies:    policies,
-			constraints: constraints,
-			runs:        exp.Def.Runs,
-			chunks:      (exp.Def.Runs + ChunkSize - 1) / ChunkSize,
+			exp:      exp,
+			policies: policies,
+			spec:     spec,
+			runs:     exp.Def.Runs,
+			chunks:   (exp.Def.Runs + ChunkSize - 1) / ChunkSize,
+		}
+		if !useExact {
+			r.covers = covers
 		}
 		results, err := r.run(ctx, workers, progress(exactTotal))
 		if err != nil {
@@ -273,8 +308,14 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 		Top:       top,
 		Worlds:    make([]WorldReport, 0, len(exp.Worlds)),
 	}
+	primary := mcRes
+	if useExact {
+		primary = exactRes
+	}
+	feasible := make([][]bool, len(exp.Worlds))
 	for w, world := range exp.Worlds {
 		list := make([]PolicyResult, len(policies))
+		feasible[w] = make([]bool, len(policies))
 		for i, p := range policies {
 			res := PolicyResult{PolicyID: p.ID(), Description: p.Describe()}
 			if pp, ok := p.(model.Parameterized); ok {
@@ -282,13 +323,18 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 					res.Params = params
 				}
 			}
-			primary := mcRes
-			if useExact {
-				primary = exactRes
+			pair := primary[w][i]
+			res.Objective, res.Duration = pair.objective, pair.duration
+			res.Metrics = spec.declaredMetrics(pair)
+			var ok bool
+			res.Requirements, ok = spec.evaluateRequirements(pair)
+			if res.Requirements != nil {
+				res.Feasible = &ok
 			}
-			res.Objective, res.Duration = primary[w][i].objective, primary[w][i].duration
+			feasible[w][i] = ok
 			if useExact && useMC {
-				res.MonteCarlo = &Estimates{Objective: mcRes[w][i].objective, Duration: mcRes[w][i].duration}
+				mc := mcRes[w][i]
+				res.MonteCarlo = &Estimates{Objective: mc.objective, Duration: mc.duration, Metrics: spec.declaredMetrics(mc)}
 			}
 			list[i] = res
 		}
@@ -301,6 +347,9 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 			wr.Solution = &solution.Worlds[w]
 		}
 		rep.Worlds = append(rep.Worlds, wr)
+	}
+	if rep.Reports, err = buildReports(exp, spec, policies, primary, feasible); err != nil {
+		return nil, err
 	}
 	return rep, nil
 }
@@ -330,11 +379,13 @@ func topCount(opts Options, exp *CompiledExperiment) int {
 // runner holds the immutable state shared by the workers of one Monte Carlo
 // evaluation.
 type runner struct {
-	exp         *CompiledExperiment
-	policies    []sim.Policy
-	constraints []string
-	runs        int
-	chunks      int
+	exp      *CompiledExperiment
+	policies []sim.Policy
+	spec     *evalSpec
+	// covers, when set, holds the CVaR tail cover of each world.
+	covers []float64
+	runs   int
+	chunks int
 }
 
 // run evaluates every job on a pool of workers and returns the chunk
@@ -407,7 +458,7 @@ func (r *runner) run(parent context.Context, workers int, progress func(done, to
 func (r *runner) runChunk(ctx context.Context, j job) chunkResult {
 	res := chunkResult{job: j, stats: make([]*policyStats, len(r.policies))}
 	for i := range res.stats {
-		res.stats[i] = newPolicyStats(len(r.constraints))
+		res.stats[i] = newPolicyStats(r.spec)
 	}
 	world := r.exp.Worlds[j.world]
 	first := j.chunk * ChunkSize
@@ -425,7 +476,7 @@ func (r *runner) runChunk(ctx context.Context, j job) chunkResult {
 				res.err = fmt.Errorf("experiment: world %q policy %q replication %d: %w", world.ID, p.ID(), rep, err)
 				return res
 			}
-			res.stats[i].add(rec, r.constraints, retain)
+			res.stats[i].add(rec, r.spec, retain)
 			res.episodes++
 		}
 	}
@@ -433,28 +484,36 @@ func (r *runner) runChunk(ctx context.Context, j job) chunkResult {
 }
 
 // estimates merges the chunk summaries in chunk-index order and returns the
-// Monte Carlo estimates indexed by [world][policy].
+// Monte Carlo estimates indexed by [world][policy]. The retained values of a
+// pair are released as soon as its estimates (and, for the robust report,
+// its lower objective tail) are computed.
 func (r *runner) estimates(results [][]*chunkResult) [][]estimatePair {
 	out := make([][]estimatePair, len(r.exp.Worlds))
 	for w := range r.exp.Worlds {
 		out[w] = make([]estimatePair, len(r.policies))
+		cover := 0.0
+		if r.covers != nil {
+			cover = r.covers[w]
+		}
 		for i := range r.policies {
-			agg := newPolicyStats(len(r.constraints))
+			agg := newPolicyStats(r.spec)
 			for _, chunk := range results[w] {
 				agg.merge(chunk.stats[i])
 				chunk.stats[i] = nil // release retained values early
 			}
-			obj, dur := agg.estimates(r.constraints)
-			out[w][i] = estimatePair{objective: obj, duration: dur}
+			out[w][i] = agg.estimates(r.spec, cover)
 		}
 	}
 	return out
 }
 
-// sortResults orders results by objective mean descending, then policy id
-// ascending.
+// sortResults orders results feasible first, then by objective mean
+// descending, then by policy id ascending.
 func sortResults(list []PolicyResult) {
 	sort.SliceStable(list, func(i, j int) bool {
+		if fi, fj := list[i].IsFeasible(), list[j].IsFeasible(); fi != fj {
+			return fi
+		}
 		if list[i].Objective.Mean != list[j].Objective.Mean {
 			return list[i].Objective.Mean > list[j].Objective.Mean
 		}

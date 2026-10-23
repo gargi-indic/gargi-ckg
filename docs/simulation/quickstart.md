@@ -413,6 +413,71 @@ Best policy: policy threshold version theta params theta=0.4
 
 With `--json` every policy result also carries `"params": {"theta": 0.4}`.
 
+### Metrics, requirements and decision reports
+
+A model can declare extra per-run **metrics** (numeric CEL over `world`,
+`latent`, `nodes` and `run`, like the objective) and aggregate
+**requirements** that a policy must meet in a world to be feasible. Next to
+the per-run `constraints`, which only report a probability, requirements
+change the ranking: feasible policies always come first, and the "Best
+policy" line is the best feasible one.
+
+```yaml
+# sim.yaml (additions)
+objective:
+  # ...
+  requirements:
+    fast: "p95(duration) <= duration('24h')"           # mean | p50 | p95 of a metric
+    approvals: "prob(nodes.approve.status == 'Succeeded') >= 0.5"
+metrics:
+  wait_hours: "run.duration / 3600.0"
+```
+
+`objective`, `cost` and `duration` (seconds) are built-in metrics. Each
+policy result in `--json` then carries `metrics` (one estimate per declared
+metric), `requirements` (`name`, `value`, `op`, `bound`, `satisfied`) and
+`feasible`.
+
+An experiment can ask for decision-quality **reports** over the evaluated
+policies, computed from the primary (exact, when available) estimates:
+
+```yaml
+# experiment.yaml (additions)
+reports: [regret, robust, "pareto:cost:min,objective"]
+world_prior: {base: 0.7, recession: 0.3}   # default: uniform
+cvar_alpha: 0.05                           # default
+```
+
+- `regret`: the policy tuned for each world (its best feasible policy)
+  evaluated in every world, with the regret against each world's best.
+- `robust`: among policies feasible in every world, the best by expected
+  value under `world_prior`, by worst-case mean (maximin), and by CVaR: the
+  mean objective over the worst `cvar_alpha` probability mass of the
+  prior-weighted mixture of the policy's outcomes in all worlds.
+- `pareto:<x>[:min|max],<y>[:min|max]`: per world, the feasible policies
+  not dominated on the means of two metrics (goals default to `max`).
+
+For the loan model with `evaluator: exact`, the text output ends with:
+
+```text
+Regret (rows: policy tuned for a world; columns: value (regret) in each world)
+TUNED FOR  POLICY                                         BASE           RECESSION      MAX REGRET
+base       loan-underwriting@exhaustive-b1b8bd20353bca7f  460.0 (0.0)    -65.0 (267.5)  267.5
+recession  loan-underwriting@exhaustive-6dc3a13c1fed194b  317.8 (142.2)  202.5 (0.0)    142.2
+
+Robust (prior base=0.70 recession=0.30; CVaR alpha 0.05; 42 eligible policies)
+CRITERION       POLICY                                         SCORE  EXPECTED VALUE  WORST CASE  CVAR
+expected value  loan-underwriting@exhaustive-b1b8bd20353bca7f  302.5  302.5           -65.0       -5280.0
+maximin         loan-underwriting@exhaustive-6dc3a13c1fed194b  202.5  283.2           202.5       -884.0
+cvar            loan-underwriting@exhaustive-fcb4fad3e6395701  0.0    0.0             0.0         0.0
+```
+
+The expected-value pick is the base-tuned policy and the worst-case pick the
+recession-tuned one, as in the architecture's case 1. The CVaR pick is
+reject-all (CVaR 0): every other policy loses money on its worst 5% of
+applications (the expected-value pick -5,280, the maximin pick -884). The
+same blocks are in `--json` under `"reports"`.
+
 ## 7. Golden numbers and the prototype
 
 The loan results are locked in CI by `TestLoanGolden`

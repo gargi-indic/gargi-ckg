@@ -17,3 +17,8 @@ objective:
   name: my_objective
   value: "100.0"
   maximize: mean
+  requirements:
+    fast: "p95(duration) <= duration('72h')"
+    reliable: "prob(nodes.my_node.status == 'Succeeded') >= 0.9"
+metrics:
+  wait_hours: "run.duration / 3600.0"

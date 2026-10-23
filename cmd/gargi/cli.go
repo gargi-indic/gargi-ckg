@@ -17,6 +17,7 @@ import (
 	"github.com/gargi-indic/gargi-flow/internal/nodes"
 	"github.com/gargi-indic/gargi-flow/internal/sim/experiment"
 	"github.com/gargi-indic/gargi-flow/internal/sim/model"
+	"github.com/gargi-indic/gargi-flow/internal/sim/report"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
@@ -446,14 +447,98 @@ func printReport(w io.Writer, report *experiment.Report) error {
 			return err
 		}
 		if len(wr.Policies) > 0 {
+			// Policies are ranked feasible first, so the first one is the
+			// best feasible policy if there is any.
 			best := wr.Policies[0]
-			printf(w, "Best policy: %s\n", best.Description)
-			if best.Objective.Exact {
-				printf(w, "Exact EV: %.1f\n", best.Objective.Mean)
+			if best.IsFeasible() {
+				printf(w, "Best policy: %s\n", best.Description)
+				if best.Objective.Exact {
+					printf(w, "Exact EV: %.1f\n", best.Objective.Mean)
+				}
+			} else {
+				printf(w, "%s\n", "Best policy: none is feasible (every policy violates a requirement)")
 			}
 		}
 		if wr.Solution != nil {
 			if err := printSolution(w, wr.Solution); err != nil {
+				return err
+			}
+		}
+	}
+	if report.Reports != nil {
+		return printReports(w, report.Reports)
+	}
+	return nil
+}
+
+// printReports writes one compact table per requested report.
+func printReports(w io.Writer, rs *experiment.ReportSet) error {
+	if r := rs.Regret; r != nil {
+		printf(w, "\n%s\n", "Regret (rows: policy tuned for a world; columns: value (regret) in each world)")
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		header := []string{"TUNED FOR", "POLICY"}
+		for _, world := range r.Worlds {
+			header = append(header, strings.ToUpper(string(world)))
+		}
+		printf(tw, "%s\n", strings.Join(append(header, "MAX REGRET"), "\t"))
+		for _, row := range r.Rows {
+			cells := []string{string(row.TunedFor), row.PolicyID}
+			for _, c := range row.Cells {
+				cell := fmt.Sprintf("%.1f", c.Value)
+				if c.Regret != nil {
+					cell += fmt.Sprintf(" (%.1f)", *c.Regret)
+				}
+				if !c.Feasible {
+					cell += " infeasible"
+				}
+				cells = append(cells, cell)
+			}
+			printf(tw, "%s\n", strings.Join(append(cells, fmt.Sprintf("%.1f", row.MaxRegret)), "\t"))
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		for _, world := range r.NoFeasiblePolicy {
+			printf(w, "World %s has no feasible policy.\n", world)
+		}
+	}
+	if r := rs.Robust; r != nil {
+		worlds := make([]string, 0, len(r.Prior))
+		for world := range r.Prior {
+			worlds = append(worlds, string(world))
+		}
+		sort.Strings(worlds)
+		prior := make([]string, len(worlds))
+		for i, world := range worlds {
+			prior[i] = fmt.Sprintf("%s=%.2f", world, r.Prior[sim.WorldID(world)])
+		}
+		printf(w, "\nRobust (prior %s; CVaR alpha %g; %d eligible policies)\n", strings.Join(prior, " "), r.CVaRAlpha, r.Eligible)
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		printf(tw, "%s\n", "CRITERION\tPOLICY\tSCORE\tEXPECTED VALUE\tWORST CASE\tCVAR")
+		for _, c := range []struct {
+			name string
+			pick *report.RobustPick
+		}{{"expected value", r.ExpectedValue}, {"maximin", r.Maximin}, {"cvar", r.CVaR}} {
+			if c.pick == nil {
+				printf(tw, "%s\t%s\n", c.name, "none (no policy is feasible in every world)")
+				continue
+			}
+			s := c.pick.Scores
+			printf(tw, "%s\t%s\t%.1f\t%.1f\t%.1f\t%.1f\n", c.name, c.pick.PolicyID, c.pick.Score, s.ExpectedValue, s.WorstCase, s.CVaR)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+	}
+	for _, p := range rs.Pareto {
+		for _, pw := range p.Worlds {
+			printf(w, "\nPareto frontier, world %s (x: %s %s, y: %s %s)\n", pw.World, p.X.Metric, p.X.Goal, p.Y.Metric, p.Y.Goal)
+			tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+			printf(tw, "%s\n", "POLICY\tX\tY")
+			for _, pt := range pw.Points {
+				printf(tw, "%s\t%.4g\t%.4g\n", pt.PolicyID, pt.X, pt.Y)
+			}
+			if err := tw.Flush(); err != nil {
 				return err
 			}
 		}

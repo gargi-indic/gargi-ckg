@@ -32,4 +32,14 @@ type RunRecord struct {
 	Constraints map[string]bool `json:"constraints"`
 	// FinalStatus is the overall execution status at the end of the run.
 	FinalStatus engine.Status `json:"finalStatus"`
+	// Metrics maps every metric declared by the model (sim/v1 metrics) to
+	// its value in this run. It is nil when the model declares no metrics.
+	// The built-in metrics (objective, cost, duration) are the fields above.
+	Metrics map[string]float64 `json:"metrics,omitempty"`
+	// Events maps the name of every prob(...) aggregate requirement of the
+	// model (sim/v1 objective.requirements) to whether its per-run condition
+	// held in this run. It is derived data for the requirement's probability
+	// and is not serialized; it is nil when the model has no such
+	// requirement.
+	Events map[string]bool `json:"-"`
 }

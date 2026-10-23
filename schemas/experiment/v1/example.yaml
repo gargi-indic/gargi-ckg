@@ -6,3 +6,6 @@ evaluator: both
 runs: 100
 seed: 42
 top: 5
+reports: ["pareto:cost:min,objective"]
+world_prior: {base: 1}
+cvar_alpha: 0.05

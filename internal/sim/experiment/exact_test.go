@@ -447,6 +447,6 @@ func TestExact_Cancellation(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = runExact(ctx, exp, policies, nil, 4, nil)
+	_, err = runExact(ctx, exp, policies, newEvalSpec(exp), nil, 4, nil)
 	require.ErrorIs(t, err, context.Canceled)
 }

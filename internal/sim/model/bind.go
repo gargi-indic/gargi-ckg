@@ -24,8 +24,11 @@ func bindSim(tree any) (*Sim, error) {
 	bindBehaviors(m["behaviors"], "$.behaviors", &sim, errs)
 	bindResources(m["resources"], "$.resources", &sim, errs)
 	bindObjective(m["objective"], "$.objective", &sim, errs)
+	if metrics, ok := m["metrics"]; ok {
+		sim.Metrics = bindStringMap(metrics, "$.metrics", errs)
+	}
 
-	checkUnknownFields(m, []string{"apiVersion", "id", "graph", "worlds", "latents", "behaviors", "resources", "objective"}, "$", errs)
+	checkUnknownFields(m, []string{"apiVersion", "id", "graph", "worlds", "latents", "behaviors", "resources", "objective", "metrics"}, "$", errs)
 
 	if errs.Len() > 0 {
 		return &sim, errs
@@ -210,21 +213,31 @@ func bindObjective(val any, path string, sim *Sim, errs *engine.ValidationErrors
 		o.Maximize = maxVal
 	}
 	if cons, ok := m["constraints"]; ok {
-		if cm, ok := cons.(map[string]any); ok {
-			o.Constraints = make(map[string]string)
-			for ck, cv := range cm {
-				if s, ok := cv.(string); ok {
-					o.Constraints[ck] = s
-				} else {
-					errs.Add(path+".constraints."+ck, engine.CodeInvalidType, "expected string")
-				}
-			}
+		o.Constraints = bindStringMap(cons, path+".constraints", errs)
+	}
+	if reqs, ok := m["requirements"]; ok {
+		o.Requirements = bindStringMap(reqs, path+".requirements", errs)
+	}
+	checkUnknownFields(m, []string{"name", "value", "maximize", "constraints", "requirements"}, path, errs)
+	sim.Objective = o
+}
+
+// bindStringMap binds an object whose values are strings.
+func bindStringMap(val any, path string, errs *engine.ValidationErrors) map[string]string {
+	m, ok := val.(map[string]any)
+	if !ok {
+		errs.Add(path, engine.CodeInvalidType, "expected object")
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		if s, ok := v.(string); ok {
+			out[k] = s
 		} else {
-			errs.Add(path+".constraints", engine.CodeInvalidType, "expected object")
+			errs.Add(path+"."+k, engine.CodeInvalidType, "expected string")
 		}
 	}
-	checkUnknownFields(m, []string{"name", "value", "maximize", "constraints"}, path, errs)
-	sim.Objective = o
+	return out
 }
 
 func bindValueSpec(val any, path string, errs *engine.ValidationErrors) ValueSpec {
@@ -684,7 +697,51 @@ func bindExperiment(tree any) (*Experiment, error) {
 		}
 	}
 
-	checkUnknownFields(m, []string{"apiVersion", "model", "worlds", "policies", "evaluator", "runs", "seed", "workers", "top", "max_policies"}, "$", errs)
+	if reports, ok := m["reports"]; ok {
+		if arr, ok := reports.([]any); ok {
+			exp.Reports = make([]string, 0, len(arr))
+			for i, v := range arr {
+				if s, ok := v.(string); ok {
+					exp.Reports = append(exp.Reports, s)
+				} else {
+					errs.Add(fmt.Sprintf("$.reports[%d]", i), engine.CodeInvalidType, "expected string")
+				}
+			}
+		} else {
+			errs.Add("$.reports", engine.CodeInvalidType, "expected array")
+		}
+	}
+	if prior, ok := m["world_prior"]; ok {
+		if pm, ok := prior.(map[string]any); ok {
+			exp.WorldPrior = make(map[string]float64, len(pm))
+			for k, v := range pm {
+				if f, ok := getFloat(v); ok {
+					exp.WorldPrior[k] = f
+				} else {
+					errs.Add("$.world_prior."+k, engine.CodeInvalidType, "expected number")
+				}
+			}
+		} else {
+			errs.Add("$.world_prior", engine.CodeInvalidType, "expected object")
+		}
+	}
+	if alpha, ok := m["cvar_alpha"]; ok {
+		f, ok := getFloat(alpha)
+		switch {
+		case !ok:
+			errs.Add("$.cvar_alpha", engine.CodeInvalidType, "expected number")
+		case !(f > 0 && f <= 1):
+			// 0 would otherwise silently select the default.
+			errs.Add("$.cvar_alpha", engine.CodeInvalidValue, "cvar_alpha must be in (0, 1]")
+		default:
+			exp.CVaRAlpha = f
+		}
+	}
+
+	checkUnknownFields(m, []string{
+		"apiVersion", "model", "worlds", "policies", "evaluator", "runs", "seed", "workers", "top", "max_policies",
+		"reports", "world_prior", "cvar_alpha",
+	}, "$", errs)
 
 	if errs.Len() > 0 {
 		return &exp, errs

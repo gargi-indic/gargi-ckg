@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gargi-indic/gargi-flow/internal/sim/report"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 	"github.com/stretchr/testify/require"
 )
@@ -99,8 +100,8 @@ func TestAccumulator_RetentionCapOnlyAffectsPercentiles(t *testing.T) {
 }
 
 func TestPolicyStats_ConstraintProbAndDuration(t *testing.T) {
-	constraints := []string{"cheap", "fast"}
-	s := newPolicyStats(len(constraints))
+	spec := &evalSpec{constraints: []string{"cheap", "fast"}}
+	s := newPolicyStats(spec)
 	recs := []sim.RunRecord{
 		{Objective: 1, Duration: time.Hour, Constraints: map[string]bool{"cheap": true, "fast": true}},
 		{Objective: 2, Duration: 2 * time.Hour, Constraints: map[string]bool{"cheap": true, "fast": false}},
@@ -108,9 +109,10 @@ func TestPolicyStats_ConstraintProbAndDuration(t *testing.T) {
 		{Objective: 4, Duration: 0, Constraints: nil},
 	}
 	for _, r := range recs {
-		s.add(r, constraints, true)
+		s.add(r, spec, true)
 	}
-	obj, dur := s.estimates(constraints)
+	pair := s.estimates(spec, 0)
+	obj, dur := pair.objective, pair.duration
 	require.Equal(t, map[string]float64{"cheap": 0.5, "fast": 0.25}, obj.ConstraintProb)
 	require.InDelta(t, 2.5, obj.Mean, 1e-12)
 	require.InDelta(t, (3600.0+7200.0)/4, dur.Mean, 1e-9)
@@ -131,4 +133,78 @@ func TestSortResults_MeanDescThenID(t *testing.T) {
 		ids[i] = r.PolicyID
 	}
 	require.Equal(t, []string{"c", "a", "b", "d"}, ids)
+}
+
+func TestSortResults_FeasibleFirst(t *testing.T) {
+	yes, no := true, false
+	list := []PolicyResult{
+		{PolicyID: "a", Objective: sim.Estimate{Mean: 9}, Feasible: &no},
+		{PolicyID: "b", Objective: sim.Estimate{Mean: 1}, Feasible: &yes},
+		{PolicyID: "c", Objective: sim.Estimate{Mean: 5}, Feasible: &no},
+		{PolicyID: "d", Objective: sim.Estimate{Mean: 2}, Feasible: &yes},
+	}
+	sortResults(list)
+	ids := make([]string, len(list))
+	for i, r := range list {
+		ids[i] = r.PolicyID
+	}
+	require.Equal(t, []string{"d", "b", "a", "c"}, ids)
+}
+
+func TestSortedTail(t *testing.T) {
+	sorted := []float64{1, 2, 2, 3, 4, 5, 6, 7, 8, 9}
+	atoms := func(pairs ...float64) []report.Atom {
+		var out []report.Atom
+		for i := 0; i < len(pairs); i += 2 {
+			out = append(out, report.Atom{Value: pairs[i], Weight: pairs[i+1]})
+		}
+		return out
+	}
+	requireAtoms := func(want, got []report.Atom) {
+		t.Helper()
+		require.Len(t, got, len(want))
+		for i := range want {
+			require.Equal(t, want[i].Value, got[i].Value)
+			require.InDelta(t, want[i].Weight, got[i].Weight, 1e-12)
+		}
+	}
+	// 25% of 10 values needs 3: 1, 2, 2.
+	requireAtoms(atoms(1, 0.1, 2, 0.2), sortedTail(sorted, 0.25))
+	// 15% needs 2, and the atom at 2 is completed.
+	requireAtoms(atoms(1, 0.1, 2, 0.2), sortedTail(sorted, 0.15))
+	requireAtoms(atoms(1, 0.1, 2, 0.2, 3, 0.1), sortedTail(sorted, 0.31))
+	require.Len(t, sortedTail(sorted, 1), 9)
+	require.Nil(t, sortedTail(sorted, 0))
+	require.Nil(t, sortedTail(nil, 0.5))
+
+	outs := []outcome{{weight: 0.5, objective: 10}, {weight: 0.3, objective: -5}, {weight: 0.2, objective: 0}}
+	requireAtoms(atoms(-5, 0.3), exactTail(outs, 1, 0.3))
+	requireAtoms(atoms(-5, 0.3, 0, 0.2), exactTail(outs, 1, 0.31))
+	requireAtoms(atoms(-5, 0.3, 0, 0.2, 10, 0.5), exactTail(outs, 1, 1))
+	// Weights are normalized by the total.
+	requireAtoms(atoms(-5, 0.6), exactTail([]outcome{{weight: 0.3, objective: -5}, {weight: 0.2, objective: 0}}, 0.5, 0.1))
+	require.Nil(t, exactTail(outs, 1, 0))
+}
+
+// TestPolicyStats_TailGivesFullCVaR checks that the truncated Monte Carlo
+// tails of two worlds give the same CVaR as the full prior-weighted mixture.
+func TestPolicyStats_TailGivesFullCVaR(t *testing.T) {
+	const alpha = 0.1
+	prior := []float64{0.7, 0.3}
+	spec := &evalSpec{}
+	var mixture, tails []report.Atom
+	for w, n := range []int{997, 1500} {
+		s := newPolicyStats(spec)
+		for i := range n {
+			v := math.Sin(float64(i*(w+3))) * 100 // distinct, unordered values
+			s.add(sim.RunRecord{Objective: v}, spec, true)
+			mixture = append(mixture, report.Atom{Value: v, Weight: prior[w] / float64(n)})
+		}
+		pair := s.estimates(spec, report.TailCover(prior[w], alpha))
+		require.Less(t, len(pair.tail), n/2, "the tail is truncated")
+		for _, a := range pair.tail {
+			tails = append(tails, report.Atom{Value: a.Value, Weight: prior[w] * a.Weight})
+		}
+	}
+	require.InDelta(t, report.CVaR(mixture, alpha), report.CVaR(tails, alpha), 1e-9)
 }

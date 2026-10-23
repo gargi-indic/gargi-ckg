@@ -146,6 +146,43 @@ npx playwright install --with-deps chromium   # once
 npm run test:e2e                              # mocked-API smoke tests
 ```
 
+## gargi CLI
+
+`gargi` is a developer binary that validates simulation models and runs
+simulation experiments in-process (no server, store or Temporal needed).
+
+```bash
+make build                      # also builds bin/gargi (or: go build -o bin/gargi ./cmd/gargi)
+bin/gargi version
+
+# Validate a sim/v1 model: prints OK, or one "path: code: message" line per error (exit 1).
+bin/gargi model validate examples/simulation/loan/sim.yaml
+bin/gargi model validate --json examples/simulation/loan/sim.yaml   # {"errors":[...]}
+
+# Run an experiment locally (server mode arrives in P1, so --local is required).
+bin/gargi sim run examples/simulation/loan/experiment.yaml --local \
+  [--workers N] [--top K] [--json] [--out report.json] [--emit-best DIR]
+```
+
+For every world, `sim run` prints a table of the top K policies (MEAN, CI95,
+P95 DURATION and the EXACT value when the exact evaluator ran) followed by
+the best policy. For the loan example it ends with:
+
+```text
+Best policy: screen=score; route[score,high]=reject; route[score,low]=approve
+Exact EV: 460.0
+...
+Best policy: screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve
+Exact EV: 202.5
+```
+
+The loan experiment uses `evaluator: both` with 200,000 Monte Carlo runs per
+policy and world, so it takes a while; a copy with `evaluator: exact` returns
+the same best policies in about a second. `--json` prints the runner's
+`Report` JSON, `--out` writes it to a file, and `--emit-best DIR` writes each
+world's best policy as `DIR/<world>.policy.yaml` (`policy/v1`; exhaustive
+search only).
+
 ## Makefile Targets
 
 Common development tasks are managed via `make`:

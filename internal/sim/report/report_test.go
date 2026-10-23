@@ -32,7 +32,8 @@ func TestParseSpec(t *testing.T) {
 
 	for in, msg := range map[string]string{
 		"":                         `unknown report ""`,
-		"voi":                      `unknown report "voi"`,
+		"voi":                      "voi needs a node",
+		"tree":                     `unknown report "tree"`,
 		"Regret":                   `unknown report "Regret"`,
 		"regret:x":                 `report "regret" takes no arguments`,
 		"robust:":                  `report "robust" takes no arguments`,

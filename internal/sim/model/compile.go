@@ -360,7 +360,29 @@ func Compile(def *Sim, baseDir string, reg *engine.Registry) (*CompiledModel, *e
 	if gDef == nil {
 		return nil, sortedIssues(errs)
 	}
+	return compileWithGraph(def, gDef, reg, errs)
+}
 
+// CompileGraph compiles def against the already parsed graph g instead of
+// the graph file def.Graph names: g is validated (structure and semantics
+// against reg, issues prefixed by "$.graph:") and the model is compiled as
+// by Compile. The compiled model keeps def and g; callers that derive a
+// model from another (for example a value-of-information variant without
+// some observes paths) pass modified copies and never share them.
+func CompileGraph(def *Sim, g *engine.GraphDefinition, reg *engine.Registry) (*CompiledModel, *engine.ValidationErrors) {
+	errs := &engine.ValidationErrors{}
+	if def == nil || g == nil {
+		errs.Add(engine.PathRoot.String(), engine.CodeMissingRequired, "simulation definition or graph is nil")
+		return nil, sortedIssues(errs)
+	}
+	addGraphIssues(errs, graph.ValidateStructure(g))
+	addGraphIssues(errs, graph.ValidateSemantics(g, reg))
+	return compileWithGraph(def, g, reg, errs)
+}
+
+// compileWithGraph compiles def against the loaded graph gDef, adding to
+// errs (which may already hold graph issues).
+func compileWithGraph(def *Sim, gDef *engine.GraphDefinition, reg *engine.Registry, errs *engine.ValidationErrors) (*CompiledModel, *engine.ValidationErrors) {
 	nodeExists := make(map[string]bool, len(gDef.Nodes))
 	var effectful []string
 	for _, node := range gDef.Nodes {

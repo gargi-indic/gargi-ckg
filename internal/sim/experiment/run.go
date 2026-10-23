@@ -194,7 +194,11 @@ type chunkResult struct {
 // aggregate requirements are evaluated on each (world, policy)'s primary
 // estimates (infeasible policies rank last), and the reports requested by
 // the experiment (CompiledExperiment.Reports) are computed into
-// Report.Reports once every pair is evaluated.
+// Report.Reports once every pair is evaluated. The voi, flip_point and
+// policy_tree reports run the exact solver (reusing the solution when src
+// is a Solver) and path_heatmap traces each world's best policy with the
+// kernel (see buildExplainReports); this work is not counted by
+// Options.Progress.
 //
 // Work runs on a pool of opts.Workers goroutines; the report is identical
 // for any worker count. Run stops promptly when ctx is done and returns
@@ -350,6 +354,12 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 	}
 	if rep.Reports, err = buildReports(exp, spec, policies, primary, feasible); err != nil {
 		return nil, err
+	}
+	if hasExplainReports(exp) {
+		x := &explainer{exp: exp, worlds: rep.Worlds, policies: policies, solution: solution, useExact: useExact, workers: workers}
+		if err := buildExplainReports(ctx, rep.Reports, x); err != nil {
+			return nil, err
+		}
 	}
 	return rep, nil
 }

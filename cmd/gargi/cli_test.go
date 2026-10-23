@@ -432,3 +432,70 @@ func TestSimRun_RequirementsFeasibility(t *testing.T) {
 	require.Contains(t, out, "World base has no feasible policy.\n")
 	require.Regexp(t, `expected value\s+none \(no policy is feasible in every world\)\n`, out)
 }
+
+// loanExplainCopy copies the loan model into a temporary directory with an
+// exact-search experiment that requests the explain reports.
+func loanExplainCopy(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	copyFile(t, filepath.Join(loanDir, "sim.yaml"), filepath.Join(dir, "sim.yaml"))
+	copyFile(t, filepath.Join(loanDir, "graph.yaml"), filepath.Join(dir, "graph.yaml"))
+	exp := "apiVersion: experiment/v1\nmodel: ./sim.yaml\nworlds: [base, recession]\n" +
+		"policies: {search: exact}\nevaluator: exact\nruns: 1\nseed: 42\n" +
+		"reports: [voi:ai_score, flip_point:p_bad, path_heatmap, policy_tree]\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "experiment.yaml"), []byte(exp), 0o600))
+	return filepath.Join(dir, "experiment.yaml")
+}
+
+func TestSimRun_ExplainReports(t *testing.T) {
+	exp := loanExplainCopy(t)
+	code, out, errOut := gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 0, code, errOut)
+	_, reports, ok := strings.Cut(out, "\nValue of information (optimal EV with the node observed minus without it, its cost removed)\n")
+	require.True(t, ok, out)
+	require.Regexp(t, `WORLD\s+NODE\s+WITH\s+WITHOUT\s+VOI\n`, reports)
+	require.Regexp(t, `base\s+ai_score\s+460\.0\s+302\.0\s+158\.0\n`, reports)
+	require.Regexp(t, `recession\s+ai_score\s+202\.5\s+72\.2\s+130\.3\n`, reports)
+	require.Contains(t, reports, "\nFlip points of p_bad (world base, swept from 0.2 to 0.35)\np_bad in [0.2966361, 0.2966362]:\n")
+	require.Contains(t, reports, " (EV 257.1): screen=score; route[score,high]=reject; route[score,low]=approve\n")
+	require.Contains(t, reports, " (EV 257.1): screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve\n")
+	require.Contains(t, reports, "\nPath heatmap, world recession (policy loan-underwriting@exhaustive-")
+	require.Regexp(t, `screen -> ai_score\s+1\.0000\n`, reports)
+	require.Regexp(t, `route -> human_review\s+0\.6900\n`, reports)
+	require.Regexp(t, `\nPolicy tree, world base \(policy \S+, EV 460\.0; optimal path\)\n`+
+		`screen \(reach 1\.0000\) -> score \(460\.0\)\n`+
+		`  route\[score,high\] \(reach 0\.2200\) -> reject \(-20\.0\)\n`+
+		`  route\[score,low\] \(reach 0\.7800\) -> approve \(595\.4\)\n`, reports)
+	require.Regexp(t, `    final\[score,low,pass\] \(reach 0\.\d+\) -> approve \(\S+\)\n`, reports)
+
+	code, js1, errOut := gargi(t, "sim", "run", exp, "--local", "--json", "--workers", "1")
+	require.Equal(t, 0, code, errOut)
+	code, js8, errOut := gargi(t, "sim", "run", exp, "--local", "--json", "--workers", "8")
+	require.Equal(t, 0, code, errOut)
+	require.Equal(t, js1, js8)
+	var report experiment.Report
+	dec := json.NewDecoder(strings.NewReader(js1))
+	dec.DisallowUnknownFields()
+	require.NoError(t, dec.Decode(&report))
+	rs := report.Reports
+	require.NotNil(t, rs)
+	require.Len(t, rs.VOI, 2)
+	require.InDelta(t, 130.275, rs.VOI[1].VOI, 1e-9)
+	require.Len(t, rs.FlipPoints, 1)
+	require.Len(t, rs.FlipPoints[0].Flips, 1)
+	require.Len(t, rs.PathHeatmap, 2)
+	require.Len(t, rs.PolicyTree, 2)
+	require.Equal(t, report.Worlds[0].Solution.PolicyID, rs.PolicyTree[0].PolicyID)
+	for _, key := range []string{`"voi": [`, `"flipPoints": [`, `"pathHeatmap": [`, `"policyTree": [`, `"onPath": false`} {
+		require.Contains(t, js1, key)
+	}
+
+	// Validation errors are reported like any other experiment issue.
+	data, err := os.ReadFile(exp)
+	require.NoError(t, err)
+	bad := strings.Replace(string(data), "voi:ai_score", "voi:approve", 1)
+	require.NoError(t, os.WriteFile(exp, []byte(bad), 0o600))
+	code, _, errOut = gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 1, code)
+	require.Equal(t, `$.reports[0]: invalid_value: voi: node "approve" is not observed by any decision (no observes path starts with "approve.")`+"\n", errOut)
+}

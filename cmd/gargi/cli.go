@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -543,7 +544,79 @@ func printReports(w io.Writer, rs *experiment.ReportSet) error {
 			}
 		}
 	}
+	return printExplainReports(w, rs)
+}
+
+// heatmapTopEdges is the number of edges listed per world by the text
+// rendering of the path heatmap.
+const heatmapTopEdges = 5
+
+// printExplainReports writes the voi, flip_point, path_heatmap and
+// policy_tree reports.
+func printExplainReports(w io.Writer, rs *experiment.ReportSet) error {
+	if len(rs.VOI) > 0 {
+		printf(w, "\n%s\n", "Value of information (optimal EV with the node observed minus without it, its cost removed)")
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		printf(tw, "%s\n", "WORLD\tNODE\tWITH\tWITHOUT\tVOI")
+		for _, v := range rs.VOI {
+			printf(tw, "%s\t%s\t%.1f\t%.1f\t%.1f\n", v.World, v.Node, v.WithObservation.EV, v.WithoutObservation.EV, v.VOI)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+	}
+	for _, fp := range rs.FlipPoints {
+		printf(w, "\nFlip points of %s (world %s, swept from %g to %g)\n", fp.Param, fp.BaseWorld, fp.Lo, fp.Hi)
+		if len(fp.Flips) == 0 && len(fp.Sweep) > 0 {
+			printf(w, "No flip: %s is optimal over the whole range.\n", fp.Sweep[0].PolicyID)
+		}
+		for _, f := range fp.Flips {
+			printf(w, "%s in [%.7g, %.7g]:\n", fp.Param, f.Left.Value, f.Right.Value)
+			printf(w, "  from %s (EV %.1f): %s\n", f.Left.PolicyID, f.Left.EV, f.From)
+			printf(w, "  to   %s (EV %.1f): %s\n", f.Right.PolicyID, f.Right.EV, f.To)
+		}
+	}
+	for _, hm := range rs.PathHeatmap {
+		printf(w, "\nPath heatmap, world %s (policy %s; top edges)\n", hm.World, hm.PolicyID)
+		edges := slices.Clone(hm.Edges)
+		sort.SliceStable(edges, func(i, j int) bool { return edges[i].Mass > edges[j].Mass })
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		printf(tw, "%s\n", "EDGE\tMASS")
+		for i, e := range edges {
+			if i == heatmapTopEdges || e.Mass <= 0 {
+				break
+			}
+			printf(tw, "%s -> %s\t%.4f\n", e.From, e.To, e.Mass)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+	}
+	for _, pt := range rs.PolicyTree {
+		printf(w, "\nPolicy tree, world %s (policy %s, EV %.1f; optimal path)\n", pt.World, pt.PolicyID, pt.EV)
+		for _, n := range pt.Roots {
+			printTreeNode(w, n, 0)
+		}
+	}
 	return nil
+}
+
+// printTreeNode writes the on-path information sets below n, one indented
+// line each: the information set, its reach probability, the choice and its
+// value.
+func printTreeNode(w io.Writer, n report.TreeNode, depth int) {
+	if !n.OnPath {
+		return
+	}
+	for _, a := range n.Actions {
+		if a.Option != n.Choice {
+			continue
+		}
+		printf(w, "%s%s (reach %.4f) -> %s (%.1f)\n", strings.Repeat("  ", depth), n.InfoSet, n.ReachProbability, a.Option, a.Value)
+		for _, c := range a.Children {
+			printTreeNode(w, c, depth+1)
+		}
+	}
 }
 
 // printSolution writes a world's exact solution: the optimal policy, its EV

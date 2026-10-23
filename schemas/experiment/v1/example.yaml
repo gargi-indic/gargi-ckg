@@ -6,6 +6,6 @@ evaluator: both
 runs: 100
 seed: 42
 top: 5
-reports: ["pareto:cost:min,objective"]
+reports: ["pareto:cost:min,objective", path_heatmap, policy_tree]
 world_prior: {base: 1}
 cvar_alpha: 0.05

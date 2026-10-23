@@ -1,5 +1,2 @@
-// Package kernel runs mode A simulation episodes: one case per run, driven
-// through the production reactive.Scheduler on a virtual clock, with
-// behaviors sampled for simulated nodes and policies making decisions. It
-// never reads the wall clock and never performs side effects.
+// Package kernel provides the core reactive graph execution engine for mode A simulation.
 package kernel

@@ -30,7 +30,10 @@
         {
           "required": ["search"],
           "properties": {
-            "search": { "const": "exhaustive" }
+            "search": {
+              "enum": ["exhaustive", "exact"],
+              "description": "exhaustive enumerates every reduced deterministic policy; exact solves each world's optimal table policy by backward induction over information sets (discrete, perfect-recall models)"
+            }
           }
         },
         {
@@ -69,7 +72,7 @@
       "type": "integer",
       "minimum": 1,
       "default": 10000,
-      "description": "Maximum number of policies enumerated by policies.search: exhaustive"
+      "description": "Maximum number of policies enumerated by policies.search: exhaustive; ignored by policies.search: exact"
     }
   }
 }

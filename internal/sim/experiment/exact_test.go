@@ -171,7 +171,7 @@ func TestExhaustive_MaxPolicies(t *testing.T) {
 	require.Equal(t, sim.CodeTooManyPolicies, is.Code)
 	require.Equal(t, "$.policies.search", is.Path)
 	require.Contains(t, is.Message, "more than 41 policies")
-	require.Contains(t, is.Message, "exact solver (P1)")
+	require.Contains(t, is.Message, "exact solver (policies: {search: exact})")
 
 	policies, err := ExhaustiveSource{MaxPolicies: 42}.Policies(exp.Model)
 	require.NoError(t, err)

@@ -89,3 +89,64 @@ Run command:
 ```bash
 bash benchmarks/ghz/grpc_load_test.sh
 ```
+
+---
+
+## 4. Simulation Benchmarks
+
+Recorded 2026-10-23 on:
+
+- **Operating System:** Linux 6.18.54.1-microsoft-standard-WSL2
+- **CPU:** AMD Ryzen 7 4800H with Radeon Graphics (8 cores / 16 threads, `GOMAXPROCS=16`)
+- **Go Version:** go1.26.0 linux/amd64
+
+Run via:
+```bash
+go test -run '^$' -bench 'BenchmarkLoan' -benchmem -count=3 ./internal/sim/experiment/...
+```
+
+Both benchmarks live in `internal/sim/experiment/golden_test.go` and use the
+loan example (`examples/simulation/loan`) with the `recession-v1` policy in
+the `recession` world:
+
+- `BenchmarkLoanEpisode`: one `kernel.RunEpisode` with a Monte Carlo sampler
+  (a fresh seed per iteration).
+- `BenchmarkLoanExperiment`: `experiment.Run` with `evaluator: monte_carlo`,
+  5,000 runs, 1 worker; `ns/episode` is the time per op divided by 5,000.
+
+| Benchmark | Iterations | Latency (`ns/op`) | `ns/episode` | Memory (`B/op`) | Allocs (`allocs/op`) |
+|:---|---:|---:|---:|---:|---:|
+| `BenchmarkLoanEpisode-16` | 3,511 | 303,118 ns (0.30 ms) | - | 152,389 B | 1,707 |
+| `BenchmarkLoanEpisode-16` | 4,027 | 309,696 ns (0.31 ms) | - | 152,442 B | 1,707 |
+| `BenchmarkLoanEpisode-16` | 4,020 | 309,063 ns (0.31 ms) | - | 152,430 B | 1,707 |
+| `BenchmarkLoanExperiment-16` | 1 | 1,588,639,957 ns (1.59 s) | 317,728 | 765,190,808 B | 8,563,061 |
+| `BenchmarkLoanExperiment-16` | 1 | 1,551,504,229 ns (1.55 s) | 310,301 | 765,168,040 B | 8,562,875 |
+| `BenchmarkLoanExperiment-16` | 1 | 1,553,312,596 ns (1.55 s) | 310,663 | 765,166,488 B | 8,562,866 |
+
+### 4.1 Full loan experiment (P0 exit criterion)
+
+`examples/simulation/loan/experiment.yaml` evaluates all 42 policies in 2
+worlds with `evaluator: both` and 200,000 Monte Carlo runs per policy and
+world (16.8 million episodes) plus the exact evaluator:
+
+```bash
+time go run ./cmd/gargi sim run examples/simulation/loan/experiment.yaml --local
+```
+
+| Workers | Wall time | User CPU | Sys CPU |
+|---:|---:|---:|---:|
+| 16 (`GOMAXPROCS`) | 13m21.7s | 152m6.0s | 16m42.5s |
+
+(includes the `go run` compile; the exact evaluator alone takes under a
+second, see the [simulation quickstart](simulation/quickstart.md)).
+
+**Key Takeaways:**
+- One loan episode (graph execution on the virtual clock, CEL expressions,
+  behaviors, sampling) costs about **0.31 ms** and 1,707 allocations on one
+  core; the experiment runner adds no measurable overhead per episode.
+- The full 16.8 million episode run sustains about 21,000 episodes/s on 16
+  threads; allocation volume (about 150 KB per episode) is the main cost to
+  attack before larger P1 experiments.
+- `TestLoanGolden` (exact values of all 84 policy/world pairs plus a 200k run
+  Monte Carlo check of the top policy per world) takes about 40 s without the
+  race detector.

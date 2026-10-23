@@ -2,6 +2,9 @@
 
 > Status: **Draft / proposal.** Nothing here is implemented yet. It extends the
 > existing engine ([SPEC.md](../SPEC.md)) and follows ADR-0002 package boundaries.
+> The P0 slice (mode A kernel, exhaustive search, exact and Monte Carlo
+> evaluators, `gargi model validate` / `gargi sim run --local`) is implemented;
+> see the [simulation quickstart](quickstart.md) to run it.
 
 ## 1. What we are building
 
@@ -350,6 +353,9 @@ is itself a Temporal workflow whose activities are batches of ~10k runs: durabil
 
 ### 9.1 `gargi` CLI
 
+P0 ships `gargi model validate` and `gargi sim run --local`; the
+[quickstart](quickstart.md) walks through them on the loan example.
+
 ```bash
 gargi model init --template loan          # scaffold graph + sim + experiment files
 gargi model validate loan.sim.yaml
@@ -414,6 +420,8 @@ Each case ships as a template (`gargi model init --template <name>`) and as a go
   | base (20% bad, −$4k) | score → low: approve, high: reject | $460.0 |
   | recession (35% bad, −$6k) | score → low: review → pass: approve; high: reject | $202.5 |
 
+  Locked in CI by `TestLoanGolden` (`internal/sim/experiment/testdata/loan_golden.json`;
+  see the [quickstart](quickstart.md#7-golden-numbers-and-the-prototype)).
   Base-tuned policy in a recession: −$65 (regret $267.5). VOI of the score: $158 (base),
   $130 (recession) against a $20 cost. Expected-value pick (70/30 prior) = base policy;
   worst-case pick = recession policy.

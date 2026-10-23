@@ -150,6 +150,9 @@ npm run test:e2e                              # mocked-API smoke tests
 
 `gargi` is a developer binary that validates simulation models and runs
 simulation experiments in-process (no server, store or Temporal needed).
+Start with the [simulation quickstart](docs/simulation/quickstart.md): install,
+validate, run the loan example, read the report, edit a world and write a
+policy.
 
 ```bash
 make build                      # also builds bin/gargi (or: go build -o bin/gargi ./cmd/gargi)

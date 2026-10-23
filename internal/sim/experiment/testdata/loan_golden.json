@@ -1,0 +1,678 @@
+{
+  "model": "loan-underwriting",
+  "regenerate": "go test ./internal/sim/experiment -run TestLoanGolden -update",
+  "entries": [
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=approve",
+      "ev": -19.99999999999983,
+      "approvalRate": 1,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=reject",
+      "ev": -499.99999999999994,
+      "approvalRate": 0.22,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -352.99999999999994,
+      "approvalRate": 0.7840000000000001,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -807.8,
+      "approvalRate": 0.2992,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": -162.20000000000002,
+      "approvalRate": 0.7048,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -616.9999999999999,
+      "approvalRate": 0.22,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=approve",
+      "ev": 460.00000000000017,
+      "approvalRate": 0.78,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=reject",
+      "ev": -20.000000000000004,
+      "approvalRate": 0,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": 126.99999999999993,
+      "approvalRate": 0.5640000000000001,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -327.8,
+      "approvalRate": 0.07919999999999999,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": 317.79999999999995,
+      "approvalRate": 0.4848,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -137,
+      "approvalRate": 0,
+      "meanDurationSeconds": 97459.2,
+      "abandonRate": 0.21600000000000003
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=approve; final[score,high,pass]=approve",
+      "ev": -76.99999999999983,
+      "approvalRate": 0.9760000000000002,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=approve; final[score,high,pass]=reject",
+      "ev": -74.19999999999976,
+      "approvalRate": 0.9088,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=reject; final[score,high,pass]=approve",
+      "ev": 424.2000000000002,
+      "approvalRate": 0.8472000000000002,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=reject; final[score,high,pass]=reject",
+      "ev": 427.00000000000017,
+      "approvalRate": 0.78,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=approve; final[score,high,pass]=approve",
+      "ev": -557,
+      "approvalRate": 0.196,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=approve; final[score,high,pass]=reject",
+      "ev": -554.2,
+      "approvalRate": 0.1288,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=reject; final[score,high,pass]=approve",
+      "ev": -55.8,
+      "approvalRate": 0.06720000000000001,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=reject; final[score,high,pass]=reject",
+      "ev": -53.00000000000001,
+      "approvalRate": 0,
+      "meanDurationSeconds": 33868.799999999996,
+      "abandonRate": 0.024000000000000004
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -409.99999999999994,
+      "approvalRate": 0.7600000000000001,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -864.8,
+      "approvalRate": 0.2752,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": -219.20000000000002,
+      "approvalRate": 0.6808000000000001,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -673.9999999999999,
+      "approvalRate": 0.196,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -407.2,
+      "approvalRate": 0.6928000000000001,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -862,
+      "approvalRate": 0.208,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": -216.4,
+      "approvalRate": 0.6136,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -671.1999999999999,
+      "approvalRate": 0.1288,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": 91.19999999999997,
+      "approvalRate": 0.6312000000000001,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -363.6,
+      "approvalRate": 0.1464,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": 282,
+      "approvalRate": 0.552,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -172.8,
+      "approvalRate": 0.06720000000000001,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": 93.99999999999993,
+      "approvalRate": 0.5640000000000001,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -360.8,
+      "approvalRate": 0.07919999999999999,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": 284.79999999999995,
+      "approvalRate": 0.4848,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -170.00000000000003,
+      "approvalRate": 0,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24000000000000002
+    },
+    {
+      "world": "base",
+      "policy": "screen=skip; route[skip,nil]=approve",
+      "ev": 0,
+      "approvalRate": 1,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "base",
+      "policy": "screen=skip; route[skip,nil]=reject",
+      "ev": 0,
+      "approvalRate": 0,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "base",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=approve; final[skip,nil,pass]=approve",
+      "ev": -390.00000000000017,
+      "approvalRate": 0.76,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24
+    },
+    {
+      "world": "base",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=approve; final[skip,nil,pass]=reject",
+      "ev": -842.0000000000001,
+      "approvalRate": 0.20800000000000002,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24
+    },
+    {
+      "world": "base",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=reject; final[skip,nil,pass]=approve",
+      "ev": 301.99999999999994,
+      "approvalRate": 0.5519999999999999,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24
+    },
+    {
+      "world": "base",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=reject; final[skip,nil,pass]=reject",
+      "ev": -150,
+      "approvalRate": 0,
+      "meanDurationSeconds": 131328,
+      "abandonRate": 0.24
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=approve",
+      "ev": -1469.9999999999995,
+      "approvalRate": 1,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=reject",
+      "ev": -1424.9999999999995,
+      "approvalRate": 0.3099999999999999,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -1749,
+      "approvalRate": 0.8245,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -2075.0249999999996,
+      "approvalRate": 0.424975,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": -1202.475,
+      "approvalRate": 0.709525,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=approve; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -1528.5,
+      "approvalRate": 0.30999999999999994,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=approve",
+      "ev": -64.99999999999987,
+      "approvalRate": 0.69,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=reject",
+      "ev": -20,
+      "approvalRate": 0,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -344,
+      "approvalRate": 0.5145,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -670.025,
+      "approvalRate": 0.11497500000000001,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": 202.52500000000003,
+      "approvalRate": 0.399525,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -123.50000000000001,
+      "approvalRate": 0,
+      "meanDurationSeconds": 88905.6,
+      "abandonRate": 0.17550000000000002
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=approve; final[score,high,pass]=approve",
+      "ev": -1535.9999999999998,
+      "approvalRate": 0.9804999999999999,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=approve; final[score,high,pass]=reject",
+      "ev": -1432.225,
+      "approvalRate": 0.9127750000000001,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=reject; final[score,high,pass]=approve",
+      "ev": -215.27499999999998,
+      "approvalRate": 0.757725,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=approve; final[score,high,fail]=reject; final[score,high,pass]=reject",
+      "ev": -111.49999999999989,
+      "approvalRate": 0.6900000000000001,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=approve; final[score,high,pass]=approve",
+      "ev": -1490.9999999999998,
+      "approvalRate": 0.2905,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=approve; final[score,high,pass]=reject",
+      "ev": -1387.2249999999997,
+      "approvalRate": 0.22277499999999997,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=reject; final[score,high,pass]=approve",
+      "ev": -170.27499999999998,
+      "approvalRate": 0.067725,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=reject; final[score,high,fail]=reject; final[score,high,pass]=reject",
+      "ev": -66.49999999999999,
+      "approvalRate": 0,
+      "meanDurationSeconds": 50198.399999999994,
+      "abandonRate": 0.0195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -1815,
+      "approvalRate": 0.8049999999999999,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -2141.0249999999996,
+      "approvalRate": 0.40547500000000003,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": -1268.475,
+      "approvalRate": 0.6900249999999999,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -1594.5,
+      "approvalRate": 0.2905,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -1711.225,
+      "approvalRate": 0.7372749999999999,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -2037.25,
+      "approvalRate": 0.33775,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": -1164.7,
+      "approvalRate": 0.6223,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=approve; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -1490.7250000000001,
+      "approvalRate": 0.22277499999999997,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -494.27500000000003,
+      "approvalRate": 0.582225,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -820.3000000000001,
+      "approvalRate": 0.1827,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": 52.25000000000004,
+      "approvalRate": 0.46725000000000005,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=approve; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -273.77500000000003,
+      "approvalRate": 0.067725,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=approve",
+      "ev": -390.50000000000006,
+      "approvalRate": 0.5145,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=approve; final[score,low,pass]=reject",
+      "ev": -716.525,
+      "approvalRate": 0.11497500000000001,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=approve",
+      "ev": 156.02500000000003,
+      "approvalRate": 0.399525,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=score; route[score,high]=review; route[score,low]=review; final[score,high,fail]=reject; final[score,high,pass]=reject; final[score,low,fail]=reject; final[score,low,pass]=reject",
+      "ev": -170,
+      "approvalRate": 0,
+      "meanDurationSeconds": 139104,
+      "abandonRate": 0.195
+    },
+    {
+      "world": "recession",
+      "policy": "screen=skip; route[skip,nil]=approve",
+      "ev": -1450,
+      "approvalRate": 1,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "recession",
+      "policy": "screen=skip; route[skip,nil]=reject",
+      "ev": 0,
+      "approvalRate": 0,
+      "meanDurationSeconds": 0,
+      "abandonRate": 0
+    },
+    {
+      "world": "recession",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=approve; final[skip,nil,pass]=approve",
+      "ev": -1795.0000000000002,
+      "approvalRate": 0.8050000000000002,
+      "meanDurationSeconds": 139104.00000000003,
+      "abandonRate": 0.19500000000000003
+    },
+    {
+      "world": "recession",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=approve; final[skip,nil,pass]=reject",
+      "ev": -2017.2500000000002,
+      "approvalRate": 0.33775000000000005,
+      "meanDurationSeconds": 139104.00000000003,
+      "abandonRate": 0.19500000000000003
+    },
+    {
+      "world": "recession",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=reject; final[skip,nil,pass]=approve",
+      "ev": 72.24999999999999,
+      "approvalRate": 0.46725,
+      "meanDurationSeconds": 139104.00000000003,
+      "abandonRate": 0.19500000000000003
+    },
+    {
+      "world": "recession",
+      "policy": "screen=skip; route[skip,nil]=review; final[skip,nil,fail]=reject; final[skip,nil,pass]=reject",
+      "ev": -150.00000000000003,
+      "approvalRate": 0,
+      "meanDurationSeconds": 139104.00000000003,
+      "abandonRate": 0.19500000000000003
+    }
+  ]
+}

@@ -36,7 +36,7 @@ func (stubChooser) Choose(_ context.Context, _ engine.NodeID, _ map[string]any, 
 	return options[0], nil
 }
 
-func registry(t *testing.T) *engine.Registry {
+func registry(t testing.TB) *engine.Registry {
 	t.Helper()
 	reg := engine.NewRegistry()
 	require.NoError(t, nodes.RegisterDefaults(reg, nodes.Dependencies{}))
@@ -45,7 +45,7 @@ func registry(t *testing.T) *engine.Registry {
 }
 
 // loanExperiment compiles an experiment over the real loan model.
-func loanExperiment(t *testing.T, baseDir string, runs int, worlds ...string) *CompiledExperiment {
+func loanExperiment(t testing.TB, baseDir string, runs int, worlds ...string) *CompiledExperiment {
 	t.Helper()
 	def := &model.Experiment{
 		APIVersion: "experiment/v1",
@@ -64,14 +64,14 @@ func loanExperiment(t *testing.T, baseDir string, runs int, worlds ...string) *C
 	return exp
 }
 
-func writeFile(t *testing.T, dir, name, content string) string {
+func writeFile(t testing.TB, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
 }
 
-func readLoan(t *testing.T, name string) string {
+func readLoan(t testing.TB, name string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(loanDir, name))
 	require.NoError(t, err)

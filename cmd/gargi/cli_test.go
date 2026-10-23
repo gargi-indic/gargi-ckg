@@ -157,6 +157,79 @@ func TestSimRun_Loan(t *testing.T) {
 	}
 }
 
+// loanExactCopy copies the loan model into a temporary directory with an
+// experiment that solves it (policies: {search: exact}, evaluator: exact).
+// graphEdit, when set, rewrites the graph.
+func loanExactCopy(t *testing.T, graphEdit func(string) string) string {
+	t.Helper()
+	dir := t.TempDir()
+	copyFile(t, filepath.Join(loanDir, "sim.yaml"), filepath.Join(dir, "sim.yaml"))
+	copyFile(t, filepath.Join(loanDir, "graph.yaml"), filepath.Join(dir, "graph.yaml"))
+	if graphEdit != nil {
+		data, err := os.ReadFile(filepath.Join(dir, "graph.yaml"))
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "graph.yaml"), []byte(graphEdit(string(data))), 0o600))
+	}
+	exp := "apiVersion: experiment/v1\nmodel: ./sim.yaml\nworlds: [base, recession]\n" +
+		"policies: {search: exact}\nevaluator: exact\nruns: 1\nseed: 42\ntop: 5\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "experiment.yaml"), []byte(exp), 0o600))
+	return filepath.Join(dir, "experiment.yaml")
+}
+
+func TestSimRun_ExactSearch(t *testing.T) {
+	exp := loanExactCopy(t, nil)
+	code, out, errOut := gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 0, code, errOut)
+	base, recession, ok := strings.Cut(out, "World recession")
+	require.True(t, ok)
+	require.Contains(t, base, "Optimal policy (exact solver, 39 histories): screen=score; route[score,high]=reject; route[score,low]=approve\nOptimal EV: 460.0\n")
+	require.Contains(t, base, "Exact EV: 460.0\n")
+	require.Contains(t, recession, "Optimal policy (exact solver, 39 histories): screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve\nOptimal EV: 202.5\n")
+	require.Contains(t, recession, "Exact EV: 202.5\n")
+	require.Regexp(t, `INFORMATION SET\s+REACH\s+CHOICE\s+ACTION VALUES\n`, base)
+	require.Regexp(t, `screen\s+1\.0000\s+score\s+score=460\.0 skip=302\.0\n`, base)
+	require.Regexp(t, `route\[score,low\]\s+0\.7800\s+approve\s+approve=595\.4 reject=-20\.0 review=413\.1\n`, base)
+	require.NotContains(t, base, "final[", "the base optimum never reviews")
+	require.Regexp(t, `final\[score,low,pass\]\s+0\.3995\s+approve\s+approve=646\.0 reject=-170\.0\n`, recession)
+
+	// --json carries the solution with the action values; the output does
+	// not depend on the worker count.
+	dir := t.TempDir()
+	code, js1, errOut := gargi(t, "sim", "run", exp, "--local", "--json", "--workers", "1", "--emit-best", dir)
+	require.Equal(t, 0, code, errOut)
+	code, js8, errOut := gargi(t, "sim", "run", exp, "--local", "--json", "--workers", "8")
+	require.Equal(t, 0, code, errOut)
+	require.Equal(t, js1, js8)
+	var report experiment.Report
+	require.NoError(t, json.Unmarshal([]byte(js1), &report))
+	want := map[string]float64{"base": 460.0, "recession": 202.525}
+	for _, w := range report.Worlds {
+		require.NotNil(t, w.Solution, w.World)
+		require.InDelta(t, want[string(w.World)], w.Solution.EV, 1e-9)
+		require.Equal(t, w.Solution.PolicyID, w.Policies[0].PolicyID)
+		require.InDelta(t, w.Solution.EV, w.Policies[0].Objective.Mean, 1e-9)
+		require.Len(t, w.Solution.InformationSets, 10)
+		require.NotEmpty(t, w.Solution.InformationSets[0].Actions)
+
+		// --emit-best writes the solved policy.
+		data, err := os.ReadFile(filepath.Join(dir, string(w.World)+".policy.yaml"))
+		require.NoError(t, err)
+		require.Contains(t, string(data), "# "+w.Solution.Description+"\n")
+	}
+	require.Contains(t, js1, `"informationSets": [`)
+	require.Contains(t, js1, `"actions": [`)
+}
+
+func TestSimRun_ExactSearchRejectsImperfectRecall(t *testing.T) {
+	exp := loanExactCopy(t, func(g string) string {
+		return strings.Replace(g, "observes: [screen.output.choice, ai_score.output.band]}", "observes: []}", 1)
+	})
+	code, out, errOut := gargi(t, "sim", "run", exp, "--local")
+	require.Equal(t, 1, code)
+	require.Empty(t, out)
+	require.True(t, strings.HasPrefix(errOut, "$.model:$.graph:$.nodes[2].config.observes: not_perfect_recall: decision \"route\" does not have perfect recall"), errOut)
+}
+
 func TestSimRun_TopFlag(t *testing.T) {
 	code, out, errOut := gargi(t, "sim", "run", "--local", "--top", "2", "--json", loanCopy(t))
 	require.Equal(t, 0, code, errOut)

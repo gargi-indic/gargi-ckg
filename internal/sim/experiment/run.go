@@ -93,6 +93,13 @@ type WorldReport struct {
 	// All lists every policy in the same order. It is only set when
 	// Options.All is true.
 	All []PolicyResult `json:"all,omitempty"`
+	// Solution is the world's exact solution (optimal policy, its exact EV
+	// and the action values of every information set). It is only set when
+	// the policy source is a Solver (policies: {search: exact}); the
+	// solution's policy is then also listed in Policies, usually first (with
+	// evaluator monte_carlo, sampling noise can rank another world's optimum
+	// above it).
+	Solution *WorldSolution `json:"solution,omitempty"`
 }
 
 // PolicyResult holds the estimates of one policy in one world.
@@ -146,6 +153,13 @@ type chunkResult struct {
 // otherwise returns *engine.ValidationErrors listing every reason. Evaluator
 // "both" runs the two and reports them side by side (PolicyResult.MonteCarlo).
 //
+// When src is a Solver (ExactSource, policies: {search: exact}), Run calls
+// its Solve with the experiment's worlds before evaluating anything, then
+// evaluates the distinct solved policies in every world with the
+// experiment's evaluator and reports each world's solution in
+// WorldReport.Solution. Solving is sequential and not counted by
+// Options.Progress.
+//
 // Work runs on a pool of opts.Workers goroutines; the report is identical
 // for any worker count. Run stops promptly when ctx is done and returns
 // ctx.Err().
@@ -178,7 +192,19 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 		return nil, err
 	}
 
-	policies, err := src.Policies(exp.Model)
+	var (
+		policies []sim.Policy
+		solution *Solution
+		err      error
+	)
+	if solver, ok := src.(Solver); ok {
+		if solution, err = solver.Solve(ctx, exp.Model, exp.Worlds); err != nil {
+			return nil, err
+		}
+		policies, err = solution.Policies(exp.Model)
+	} else {
+		policies, err = src.Policies(exp.Model)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -260,6 +286,9 @@ func Run(ctx context.Context, exp *CompiledExperiment, src PolicySource, opts Op
 		wr := WorldReport{World: world.ID, Policies: list[:min(top, len(list))]}
 		if opts.All {
 			wr.All = list
+		}
+		if solution != nil {
+			wr.Solution = &solution.Worlds[w]
 		}
 		rep.Worlds = append(rep.Worlds, wr)
 	}

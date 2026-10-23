@@ -57,12 +57,17 @@ func (e *CompiledExperiment) ExhaustiveSource() ExhaustiveSource {
 }
 
 // PolicySource returns the experiment's policy source: an ExhaustiveSource
-// for policies.search: exhaustive, otherwise a FilesSource.
+// for policies.search: exhaustive, an ExactSource for policies.search:
+// exact, otherwise a FilesSource.
 func (e *CompiledExperiment) PolicySource() PolicySource {
-	if e.Def.Policies.Search == "exhaustive" {
+	switch e.Def.Policies.Search {
+	case "exhaustive":
 		return e.ExhaustiveSource()
+	case "exact":
+		return e.ExactSource()
+	default:
+		return e.FilesSource()
 	}
-	return e.FilesSource()
 }
 
 // Policies enumerates the reduced deterministic policies of m. A model that
@@ -79,9 +84,7 @@ func (s ExhaustiveSource) Policies(m *model.CompiledModel) ([]sim.Policy, error)
 	}
 	worlds := s.Worlds
 	if len(worlds) == 0 {
-		for _, id := range sortedKeys(m.Def.Worlds) {
-			worlds = append(worlds, sim.World{ID: sim.WorldID(id), Params: m.Def.Worlds[id]})
-		}
+		worlds = modelWorlds(m)
 	}
 	limit := s.MaxPolicies
 	if limit <= 0 {
@@ -102,9 +105,20 @@ func (s ExhaustiveSource) Policies(m *model.CompiledModel) ([]sim.Policy, error)
 	return st.policies, nil
 }
 
+// modelWorlds returns every world of m, sorted by id.
+func modelWorlds(m *model.CompiledModel) []sim.World {
+	worlds := make([]sim.World, 0, len(m.Def.Worlds))
+	for _, id := range sortedKeys(m.Def.Worlds) {
+		worlds = append(worlds, sim.World{ID: sim.WorldID(id), Params: m.Def.Worlds[id]})
+	}
+	return worlds
+}
+
 // decisionInfo describes one decision node of the model graph.
 type decisionInfo struct {
 	id string
+	// node is the index of the decision in the model graph's nodes.
+	node int
 	// observes lists the observed paths in graph order.
 	observes []string
 	// options lists the options in graph order.
@@ -120,11 +134,11 @@ type searchSpace struct {
 
 func newSearchSpace(m *model.CompiledModel) *searchSpace {
 	sp := &searchSpace{m: m, index: map[string]int{}}
-	for _, n := range m.Graph.Nodes {
+	for i, n := range m.Graph.Nodes {
 		if n.Type != "decision" {
 			continue
 		}
-		d := decisionInfo{id: string(n.ID)}
+		d := decisionInfo{id: string(n.ID), node: i}
 		obs, _ := n.Config["observes"].([]any)
 		for _, o := range obs {
 			if s, ok := o.(string); ok {
@@ -299,14 +313,19 @@ func (st *searchState) probe(ctx context.Context) (*infoSet, error) {
 		enum := sampler.NewEnumerator()
 		for enum.Next() {
 			pp := &probePolicy{space: st.space, assigned: st.assigned}
-			if _, err := kernel.RunEpisode(ctx, st.space.m, w, pp, enum.Sampler(), kernel.Options{}); err != nil {
-				return nil, fmt.Errorf("experiment: exhaustive search: world %q: %w", w.ID, err)
-			}
+			_, err := kernel.RunEpisode(ctx, st.space.m, w, pp, enum.Sampler(), kernel.Options{})
 			if pp.err != nil {
 				return nil, pp.err
 			}
+			// An unassigned decision fails its node, so the rest of the
+			// episode (for example an objective that reads that decision's
+			// output) may fail too; the missing information set is what
+			// counts.
 			if pp.missing != nil {
 				return pp.missing, nil
+			}
+			if err != nil {
+				return nil, fmt.Errorf("experiment: exhaustive search: world %q: %w", w.ID, err)
 			}
 		}
 	}
@@ -324,7 +343,7 @@ func (st *searchState) explore(ctx context.Context) error {
 		if len(st.policies) >= st.limit {
 			errs := &engine.ValidationErrors{}
 			errs.Add(engine.PathRoot.Field("policies").Field("search").String(), sim.CodeTooManyPolicies,
-				fmt.Sprintf("exhaustive search found more than %d policies (max_policies %d); use the backward-induction exact solver (P1) for policy spaces this large, or raise max_policies",
+				fmt.Sprintf("exhaustive search found more than %d policies (max_policies %d); use the backward-induction exact solver (policies: {search: exact}) for policy spaces this large, or raise max_policies",
 					st.limit, st.limit))
 			return errs
 		}
@@ -350,7 +369,8 @@ func (st *searchState) explore(ctx context.Context) error {
 	return nil
 }
 
-// TablePolicy is a deterministic policy enumerated by ExhaustiveSource. It
+// TablePolicy is a deterministic policy enumerated by ExhaustiveSource or
+// solved by ExactSource. It
 // is compiled with model.CompilePolicy from a policy/v1 document of table
 // decisions (EmitPolicy writes that document), so it behaves exactly like
 // the same document loaded from a file.
@@ -363,7 +383,8 @@ type TablePolicy struct {
 var _ sim.Policy = (*TablePolicy)(nil)
 
 // ID returns "<model id>@exhaustive-<hash>", where hash is derived from
-// Describe, so equal assignments always get the same id.
+// Describe, so equal assignments always get the same id, whichever search
+// (exhaustive or exact) found them.
 func (p *TablePolicy) ID() string { return p.policy.ID() }
 
 // Describe lists the option of every reachable information set, decisions
@@ -484,11 +505,12 @@ type emitTableRow struct {
 // EmitPolicy writes p as a policy/v1 YAML document, preceded by a comment
 // holding p.Describe(). The document parses with model.ParsePolicy and
 // compiles with model.CompilePolicy to a policy with the same ID that makes
-// the same choices. p must be a *TablePolicy from ExhaustiveSource.
+// the same choices. p must be a *TablePolicy from ExhaustiveSource or
+// ExactSource.
 func EmitPolicy(p sim.Policy, w io.Writer) error {
 	tp, ok := p.(*TablePolicy)
 	if !ok || tp == nil || tp.def == nil {
-		return fmt.Errorf("experiment: EmitPolicy supports policies enumerated by ExhaustiveSource, got %T", p)
+		return fmt.Errorf("experiment: EmitPolicy supports policies enumerated by ExhaustiveSource or solved by ExactSource, got %T", p)
 	}
 	doc := emitDocument{
 		APIVersion: tp.def.APIVersion,

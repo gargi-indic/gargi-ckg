@@ -285,8 +285,8 @@ func validateExperiment(e *Experiment) error {
 	} else if e.Policies.Search == "" && len(e.Policies.Files) == 0 {
 		errs.Add("$.policies", engine.CodeInvalidValue, "policies must have exactly one of search or files")
 	}
-	if e.Policies.Search != "" && e.Policies.Search != "exhaustive" {
-		errs.Add("$.policies.search", engine.CodeInvalidValue, "search must be exhaustive")
+	if e.Policies.Search != "" && e.Policies.Search != "exhaustive" && e.Policies.Search != "exact" {
+		errs.Add("$.policies.search", engine.CodeInvalidValue, "search must be exhaustive or exact")
 	}
 	if e.Workers < 0 {
 		errs.Add("$.workers", engine.CodeInvalidValue, "workers must be >= 1")

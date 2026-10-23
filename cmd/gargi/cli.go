@@ -298,12 +298,31 @@ func simRun(args []string, stdout, stderr io.Writer) int {
 		printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
 		return exitError
 	}
-	policies, err := exp.PolicySource().Policies(exp.Model)
+	ctx := context.Background()
+	// Enumerate or solve once; the policies are kept for --emit-best. A
+	// solution (policies: {search: exact}) is passed to Run as is, so the
+	// report carries each world's solution.
+	var src experiment.PolicySource
+	if solver, ok := exp.PolicySource().(experiment.Solver); ok {
+		sol, err := solver.Solve(ctx, exp.Model, exp.Worlds)
+		if err != nil {
+			printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
+			return exitError
+		}
+		src = sol
+	}
+	var policies []sim.Policy
+	if src != nil {
+		policies, err = src.Policies(exp.Model)
+	} else {
+		policies, err = exp.PolicySource().Policies(exp.Model)
+		src = policyList(policies)
+	}
 	if err != nil {
 		printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
 		return exitError
 	}
-	report, err := experiment.Run(context.Background(), exp, policyList(policies), experiment.Options{Workers: *workers, Top: *top})
+	report, err := experiment.Run(ctx, exp, src, experiment.Options{Workers: *workers, Top: *top})
 	if err != nil {
 		printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
 		return exitError
@@ -346,7 +365,8 @@ func writeReportFile(path string, report *experiment.Report) error {
 }
 
 // emitBestPolicies writes <world>.policy.yaml into dir for the best policy
-// of every world of report.
+// of every world of report: the solved optimum when the world has a
+// solution, otherwise the top-ranked policy.
 func emitBestPolicies(dir string, report *experiment.Report, policies []sim.Policy) error {
 	byID := make(map[string]sim.Policy, len(policies))
 	for _, p := range policies {
@@ -363,13 +383,16 @@ func emitBestPolicies(dir string, report *experiment.Report, policies []sim.Poli
 		if name == "" || name != filepath.Base(name) || name == "." || name == ".." {
 			return fmt.Errorf("world id %q is not a valid file name", name)
 		}
-		best := w.Policies[0]
-		p, ok := byID[best.PolicyID]
+		bestID := w.Policies[0].PolicyID
+		if w.Solution != nil {
+			bestID = w.Solution.PolicyID
+		}
+		p, ok := byID[bestID]
 		if !ok {
-			return fmt.Errorf("world %q: best policy %q not found", name, best.PolicyID)
+			return fmt.Errorf("world %q: best policy %q not found", name, bestID)
 		}
 		if _, ok := p.(*experiment.TablePolicy); !ok {
-			return fmt.Errorf("world %q: --emit-best supports policies from policies.search: exhaustive only; policy %q is loaded from a file", name, best.PolicyID)
+			return fmt.Errorf("world %q: --emit-best supports policies from policies.search: exhaustive or exact only; policy %q is loaded from a file", name, bestID)
 		}
 		if err := writePolicyFile(filepath.Join(dir, name+".policy.yaml"), p); err != nil {
 			return fmt.Errorf("world %q: %w", name, err)
@@ -429,8 +452,34 @@ func printReport(w io.Writer, report *experiment.Report) error {
 				printf(w, "Exact EV: %.1f\n", best.Objective.Mean)
 			}
 		}
+		if wr.Solution != nil {
+			if err := printSolution(w, wr.Solution); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+// printSolution writes a world's exact solution: the optimal policy, its EV
+// and the action values of every information set the optimal policy reaches
+// (the JSON report lists every information set).
+func printSolution(w io.Writer, s *experiment.WorldSolution) error {
+	printf(w, "Optimal policy (exact solver, %d histories): %s\n", s.Histories, s.Description)
+	printf(w, "Optimal EV: %.1f\n", s.EV)
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	printf(tw, "%s\n", "INFORMATION SET\tREACH\tCHOICE\tACTION VALUES")
+	for _, is := range s.InformationSets {
+		if is.ReachProbability <= 0 {
+			continue
+		}
+		values := make([]string, len(is.Actions))
+		for i, a := range is.Actions {
+			values[i] = fmt.Sprintf("%s=%.1f", a.Option, a.Value)
+		}
+		printf(tw, "%s\t%.4f\t%s\t%s\n", is.InfoSet, is.ReachProbability, is.Choice, strings.Join(values, " "))
+	}
+	return tw.Flush()
 }
 
 // formatSeconds formats a duration in seconds, rounded to the second.

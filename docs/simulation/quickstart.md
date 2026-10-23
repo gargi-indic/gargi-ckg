@@ -151,6 +151,54 @@ including standard deviation, min/max, P50/P95 and constraint probabilities),
 `--out report.json` writes it to a file, and `--workers N` sets the worker
 pool size (the report does not depend on it).
 
+### Solving instead of enumerating: `search: exact`
+
+Exhaustive search scores every policy, which stops scaling quickly (it is
+capped at `max_policies`, 10,000 by default). `policies: {search: exact}`
+instead solves each world's optimal policy by backward induction over the
+information sets. Its cost grows with the number of chance/decision
+histories (39 for the loan), not with the number of policies, so a model
+with 10^18 policies still solves in under a second. It needs a discrete model
+in which every decision observes what earlier decisions observed and chose
+(perfect recall); otherwise it reports a `not_perfect_recall` error for each
+decision that forgets. `max_policies` does not apply to it.
+
+```bash
+sed -i 's/^policies: {search: exhaustive}$/policies: {search: exact}/' /tmp/loan-quick/experiment.yaml
+bin/gargi sim run /tmp/loan-quick/experiment.yaml --local
+```
+
+```text
+World base (model loan-underwriting, evaluator exact)
+POLICY                                         MEAN   CI95            P95 DURATION  EXACT
+loan-underwriting@exhaustive-b1b8bd20353bca7f  460.0  [460.0, 460.0]  0s            460.0
+loan-underwriting@exhaustive-6dc3a13c1fed194b  317.8  [317.8, 317.8]  48h0m0s       317.8
+Best policy: screen=score; route[score,high]=reject; route[score,low]=approve
+Exact EV: 460.0
+Optimal policy (exact solver, 39 histories): screen=score; route[score,high]=reject; route[score,low]=approve
+Optimal EV: 460.0
+INFORMATION SET    REACH   CHOICE   ACTION VALUES
+screen             1.0000  score    score=460.0 skip=302.0
+route[score,high]  0.2200  reject   approve=-2201.8 reject=-20.0 review=-170.0
+route[score,low]   0.7800  approve  approve=595.4 reject=-20.0 review=413.1
+
+World recession (model loan-underwriting, evaluator exact)
+...
+Optimal EV: 202.5
+...
+```
+
+The policy table lists every world's optimum evaluated in each world (here
+the base optimum loses $65 in a recession). Below it, each information set
+the optimal policy reaches shows its probability and the value of every
+option there: the expected profit given that point is reached, the option is
+taken and the optimal policy is followed afterwards. `--json` adds a
+`solution` object per world with these values for every information set
+(including the ones the optimum never reaches), and `--emit-best` writes the
+solved policy. Undo the change with
+`sed -i 's/^policies: {search: exact}$/policies: {search: exhaustive}/' /tmp/loan-quick/experiment.yaml`
+before following the next sections.
+
 ## 5. Editing a world
 
 Worlds are named parameter sets in `sim.yaml`:
@@ -205,7 +253,7 @@ policies.
 
 Start from the best policy the search found: `--emit-best DIR` writes each
 world's best policy as `DIR/<world>.policy.yaml` (it works with
-`policies: {search: exhaustive}`):
+`policies: {search: exhaustive}` and `{search: exact}`):
 
 ```bash
 cp examples/simulation/loan/sim.yaml /tmp/loan-quick/sim.yaml   # undo the world edit

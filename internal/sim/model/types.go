@@ -128,12 +128,16 @@ type Experiment struct {
 	Workers    int      `json:"workers,omitempty"`
 	Top        int      `json:"top,omitempty"` // default 5
 	// MaxPolicies caps the number of policies enumerated by search:
-	// exhaustive; 0 selects the default (10,000).
+	// exhaustive; 0 selects the default (10,000). It does not apply to
+	// search: exact, which never enumerates policies.
 	MaxPolicies int `json:"max_policies,omitempty"`
 }
 
 // Policies defines how policies are discovered or supplied to an experiment.
 type Policies struct {
+	// Search is "exhaustive" (enumerate every reduced deterministic policy)
+	// or "exact" (solve for each world's optimal policy by backward
+	// induction). Exactly one of Search and Files is set.
 	Search string   `json:"search,omitempty"`
 	Files  []string `json:"files,omitempty"`
 }

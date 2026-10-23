@@ -15,4 +15,8 @@ const (
 	CodePolicyUnknownDecision     engine.ErrorCode = "policy_unknown_decision"
 	CodeModelNotDiscrete          engine.ErrorCode = "model_not_discrete"
 	CodeTooManyPolicies           engine.ErrorCode = "too_many_policies"
+	// CodeNotPerfectRecall reports a decision whose information sets do not
+	// remember the earlier decisions of the episode, which the exact
+	// (backward-induction) policy search requires.
+	CodeNotPerfectRecall engine.ErrorCode = "not_perfect_recall"
 )

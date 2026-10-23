@@ -51,5 +51,28 @@
 // on unreachable information sets once. Each policy is a *TablePolicy with a
 // stable id and Describe; EmitPolicy writes it as a policy/v1 document. More
 // than max_policies (DefaultMaxPolicies) policies is an error that points to
-// the P1 backward-induction solver.
+// the exact search below.
+//
+// # Exact search
+//
+// ExactSource (policies: {search: exact}) finds each world's optimal table
+// policy by backward induction over the same information sets, without
+// enumerating policies, so models with millions of policies solve in
+// seconds. For each world it explores the tree of chance outcomes and
+// decision options once (one kernel episode per history), then solves the
+// information sets deepest first, picking for each the option with the
+// highest Σ P(h)·V(h,a) over its histories h, later choices already fixed.
+// It requires a discrete model with perfect recall (every history of an
+// information set passed through the same earlier information sets and
+// choices) and reports violations as *engine.ValidationErrors
+// (sim.CodeModelNotDiscrete, sim.CodeNotPerfectRecall). Ties within
+// TieTolerance go to the option listed first; max_policies does not apply.
+//
+// ExactSource is a Solver: Run solves first, evaluates the distinct optimal
+// policies of all worlds in every world with the experiment's evaluator (so
+// each world's report also shows how the other worlds' optima do there) and
+// sets WorldReport.Solution: the optimal policy, its exact EV and, per
+// information set, the probability of reaching it, the chosen option and
+// the conditional value of every option. With evaluator exact or both, the
+// exact evaluator's mean of the solved policy equals the solution's EV.
 package experiment

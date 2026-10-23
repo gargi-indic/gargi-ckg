@@ -11,6 +11,12 @@
 // of experiment/v1 reports; new report kinds plug into it and into
 // experiment.ReportSet.
 //
+// The reports that explain why a policy wins (voi, flip_point, path_heatmap
+// and policy_tree) need the exact solver or the kernel, so
+// internal/sim/experiment computes them; this package holds their JSON
+// types (VOI, FlipPoint, PathHeatmap, PolicyTree) and assembles the policy
+// tree from the solver's information sets (NewPolicyTree).
+//
 // Every result is deterministic: worlds keep experiment order, ties between
 // policies go to the lower policy id, and Pareto points are sorted best X
 // first, then by policy id.

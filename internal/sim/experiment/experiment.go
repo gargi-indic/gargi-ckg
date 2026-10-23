@@ -111,8 +111,10 @@ func readDocument(baseDir, path string, at engine.Path, errs *engine.ValidationE
 // is read relative to baseDir, parsed and compiled against the model into
 // CompiledExperiment.Policy; its issues are prefixed by
 // "$.policies.policy:". The reports list is parsed and checked against the
-// worlds and the model's metrics (regret and robust need two worlds), and
-// world_prior and cvar_alpha are validated. It returns nil errors on success; on failure it returns every problem found,
+// worlds and the model's metrics (regret and robust need two worlds; voi
+// needs an observed node, flip_point a numeric world param, and voi,
+// flip_point and policy_tree a discrete model), and world_prior and
+// cvar_alpha are validated. It returns nil errors on success; on failure it returns every problem found,
 // sorted by path, code and message.
 func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*CompiledExperiment, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}

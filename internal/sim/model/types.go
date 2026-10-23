@@ -181,9 +181,11 @@ type Experiment struct {
 	// enumerates policies, nor to search: random, which samples bounds.
 	MaxPolicies int `json:"max_policies,omitempty"`
 	// Reports lists the decision-quality reports computed over the
-	// evaluated policies: "regret", "robust" and
-	// "pareto:<metricA>[:min|max],<metricB>[:min|max]". regret and robust
-	// need at least two worlds.
+	// evaluated policies: "regret", "robust",
+	// "pareto:<metricA>[:min|max],<metricB>[:min|max]", "voi:<node>",
+	// "flip_point:<param>[:<lo>,<hi>]", "path_heatmap" and "policy_tree".
+	// regret and robust need at least two worlds; voi, flip_point and
+	// policy_tree need a discrete model.
 	Reports []string `json:"reports,omitempty"`
 	// WorldPrior is the probability of each experiment world used by the
 	// robust report. Keys are experiment worlds, values are >= 0 and sum to

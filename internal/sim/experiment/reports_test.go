@@ -484,7 +484,7 @@ func TestCompile_ReportsValidation(t *testing.T) {
 		want   []engine.ValidationIssue
 	}{
 		{"reports", func(d *model.Experiment) {
-			d.Reports = []string{"regret", "bogus", "pareto:cost,ghost", "regret", "pareto:cost:min,objective", "pareto:cost:min,objective", "voi:ai_score"}
+			d.Reports = []string{"regret", "bogus", "pareto:cost,ghost", "regret", "pareto:cost:min,objective", "pareto:cost:min,objective", "voi:"}
 		}, []engine.ValidationIssue{
 			{Path: "$.reports[1]", Code: engine.CodeInvalidValue},
 			{Path: "$.reports[2]", Code: engine.CodeUnresolvedReference},

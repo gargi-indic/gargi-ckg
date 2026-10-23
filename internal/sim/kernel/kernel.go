@@ -36,6 +36,17 @@ type Options struct {
 	// event. It defaults to DefaultExecutionID(p.ID(), w.ID) so that the
 	// event stream of an episode is reproducible.
 	ExecutionID engine.ExecutionID
+
+	// Trace records the nodes that start and the edges they start through
+	// in RunRecord.Started and RunRecord.Edges (indexes into the model
+	// graph's nodes and edges lists). When a node starts, each of its
+	// incoming edges whose source has succeeded and whose condition holds,
+	// evaluated on the graph state the scheduler made the node ready in, is
+	// traversed; for an all_of join that is every incoming edge, for an
+	// any_of join the satisfied ones. Edges are recorded per started node in
+	// graph edge order. Tracing re-evaluates edge conditions, so it is off
+	// by default.
+	Trace bool
 }
 
 // DefaultExecutionID returns the deterministic execution ID used for an
@@ -113,6 +124,53 @@ type episode struct {
 	state   *engine.GraphState
 	pending virtualTimeHeap
 	record  *sim.RunRecord
+
+	// trace is set when Options.Trace is: it maps a node id to its index in
+	// the model graph's nodes and lists its incoming edge indexes.
+	trace map[engine.NodeID]traceNode
+}
+
+// traceNode is a node's index in the model graph and its incoming edges.
+type traceNode struct {
+	index    int
+	incoming []int
+}
+
+// newTrace indexes the nodes and incoming edges of g.
+func newTrace(g *engine.GraphDefinition) map[engine.NodeID]traceNode {
+	t := make(map[engine.NodeID]traceNode, len(g.Nodes))
+	for i, n := range g.Nodes {
+		t[n.ID] = traceNode{index: i}
+	}
+	for i, ed := range g.Edges {
+		tn := t[ed.To]
+		tn.incoming = append(tn.incoming, i)
+		t[ed.To] = tn
+	}
+	return t
+}
+
+// traverse records that nodeID starts and the incoming edges it starts
+// through. It must run before the node leaves Ready, on the state the
+// scheduler made it ready in.
+func (e *episode) traverse(ctx context.Context, nodeID engine.NodeID) error {
+	tn := e.trace[nodeID]
+	e.record.Started = append(e.record.Started, tn.index)
+	for _, i := range tn.incoming {
+		ed := e.m.Graph.Edges[i]
+		up := e.state.NodeState(ed.From)
+		if up == nil || up.Status() != engine.StatusSucceeded {
+			continue
+		}
+		ok, err := cachedConditionEvaluator{}.Evaluate(ctx, ed.Condition, up.Output(), e.state)
+		if err != nil {
+			return fmt.Errorf("edge %s -> %s: %w", ed.From, ed.To, err)
+		}
+		if ok {
+			e.record.Edges = append(e.record.Edges, i)
+		}
+	}
+	return nil
 }
 
 // RunEpisode runs one mode A episode of m in world w, with decisions made by
@@ -208,6 +266,9 @@ func RunEpisode(ctx context.Context, m *model.CompiledModel, w sim.World, p sim.
 	for _, n := range g.Nodes() {
 		e.nodeDefs[n.ID()] = n
 	}
+	if opts.Trace {
+		e.trace = newTrace(m.Graph)
+	}
 	clock := func() time.Time { return e.now }
 	e.emitter = reactive.NewTransitionEmitter(execID, e.seqGen, clock, opts.Events)
 	e.detector = reactive.NewTerminalDetector(g, m.Graph.FailurePolicy, e.emitter)
@@ -249,6 +310,11 @@ func (e *episode) run(ctx context.Context, scheduler *reactive.Scheduler) error 
 		e.state = next
 
 		for i, nodeID := range plan.ReadyNodes {
+			if e.trace != nil {
+				if err := e.traverse(ctx, nodeID); err != nil {
+					return err
+				}
+			}
 			abandoned, err := e.start(ctx, nodeID, plan.ResolvedInputs[nodeID])
 			if err != nil {
 				return err

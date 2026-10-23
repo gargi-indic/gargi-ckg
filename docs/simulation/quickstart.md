@@ -478,6 +478,67 @@ reject-all (CVaR 0): every other policy loses money on its worst 5% of
 applications (the expected-value pick -5,280, the maximin pick -884). The
 same blocks are in `--json` under `"reports"`.
 
+### Reports that explain the winner
+
+Four more reports explain why a policy wins. `voi`, `flip_point` and
+`policy_tree` run the exact solver, so they need a discrete model;
+`path_heatmap` works with any evaluator.
+
+```yaml
+reports: [voi:ai_score, flip_point:p_bad, path_heatmap, policy_tree]
+```
+
+- `voi:<node>`: the value of observing a node, per world. It is the
+  optimal EV of the model minus the optimal EV of a copy in which no
+  decision observes the node (every `observes` path starting with
+  `<node>.` is removed) and running the node is free (its behavior cost is
+  removed; outputs, duration and abandonment stay).
+- `flip_point:<param>[:<lo>,<hi>]`: where the optimal policy of the first
+  experiment world changes as one numeric world param is swept, every other
+  param keeping that world's value. The default range is the param's
+  minimum and maximum across the experiment's worlds. The base world is
+  solved at 21 evenly spaced points (`sweep`, the data for a chart), and
+  every change between neighbours is bisected to a width of 1e-6·(hi − lo)
+  (`flips`: `from`/`to` describe the two policies, `left`/`right` hold the
+  bracketing values, policy ids and EVs).
+- `path_heatmap`: per world, the probability that each node runs (it
+  started, whatever its outcome) and that each edge is taken (its target
+  started through it: the source succeeded and the condition held) under
+  the world's best policy. Exact and both use branch probabilities, Monte
+  Carlo the fraction of the experiment's own replications. The outgoing
+  edges of a decision carry exactly the decision's mass.
+- `policy_tree`: per world, the optimal table policy as a tree. Roots are
+  the first decisions; each information set lists every option with its
+  value and the information sets that follow it, including those the
+  optimal policy never reaches (`onPath: false`).
+
+For the loan model the text output adds (excerpt):
+
+```text
+Value of information (optimal EV with the node observed minus without it, its cost removed)
+WORLD      NODE      WITH   WITHOUT  VOI
+base       ai_score  460.0  302.0    158.0
+recession  ai_score  202.5  72.2     130.3
+
+Flip points of p_bad (world base, swept from 0.2 to 0.35)
+p_bad in [0.2966361, 0.2966362]:
+  from loan-underwriting@exhaustive-b1b8bd20353bca7f (EV 257.1): screen=score; route[score,high]=reject; route[score,low]=approve
+  to   loan-underwriting@exhaustive-6dc3a13c1fed194b (EV 257.1): screen=score; route[score,high]=reject; route[score,low]=review; final[score,low,fail]=reject; final[score,low,pass]=approve
+
+Policy tree, world recession (policy loan-underwriting@exhaustive-6dc3a13c1fed194b, EV 202.5; optimal path)
+screen (reach 1.0000) -> score (202.5)
+  route[score,high] (reach 0.3100) -> reject (-20.0)
+  route[score,low] (reach 0.6900) -> review (302.5)
+    final[score,low,fail] (reach 0.1150) -> reject (-170.0)
+    final[score,low,pass] (reach 0.3995) -> approve (646.0)
+```
+
+The VOI matches the prototype's. With the base world's loss of 4,000,
+reviewing low scores beats approving them once `p_bad` exceeds
+436.5/1471.5 ≈ 0.2966 (the two policies' EVs are 880 − 2100·p and
+443.5 − 628.5·p). The heatmap (top edges per world) is printed too; the
+JSON lists every node and edge in graph order.
+
 ## 7. Golden numbers and the prototype
 
 The loan results are locked in CI by `TestLoanGolden`

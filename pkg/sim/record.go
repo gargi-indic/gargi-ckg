@@ -42,4 +42,15 @@ type RunRecord struct {
 	// and is not serialized; it is nil when the model has no such
 	// requirement.
 	Events map[string]bool `json:"-"`
+	// Started lists the indexes, in the model graph's nodes list, of the
+	// nodes that started (moved to Running) in this run, in start order.
+	// It is derived data for the path heatmap, is not serialized, and is
+	// only recorded when the kernel is asked to trace the run.
+	Started []int `json:"-"`
+	// Edges lists the indexes, in the model graph's edges list, of the
+	// edges traversed in this run: when a node started, every incoming edge
+	// whose source had succeeded and whose condition held. It is derived
+	// data for the path heatmap, is not serialized, and is only recorded
+	// when the kernel is asked to trace the run.
+	Edges []int `json:"-"`
 }

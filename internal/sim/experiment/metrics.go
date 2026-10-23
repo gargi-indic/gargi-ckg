@@ -40,6 +40,16 @@ type ReportSet struct {
 	Robust *report.Robust `json:"robust,omitempty"`
 	// Pareto holds one entry per requested pareto report, in request order.
 	Pareto []report.Pareto `json:"pareto,omitempty"`
+	// VOI holds, per requested voi report (in request order), one entry
+	// per world (in experiment order).
+	VOI []report.VOI `json:"voi,omitempty"`
+	// FlipPoints holds one entry per requested flip_point report, in
+	// request order.
+	FlipPoints []report.FlipPoint `json:"flipPoints,omitempty"`
+	// PathHeatmap holds one entry per world, in experiment order.
+	PathHeatmap []report.PathHeatmap `json:"pathHeatmap,omitempty"`
+	// PolicyTree holds one entry per world, in experiment order.
+	PolicyTree []report.PolicyTree `json:"policyTree,omitempty"`
 }
 
 // evalSpec lists what is extracted from every run record of an
@@ -227,6 +237,7 @@ func validateReports(exp *CompiledExperiment, errs *engine.ValidationErrors) {
 	def := exp.Def
 	reportsAt := engine.PathRoot.Field("reports")
 	seen := make(map[report.Spec]bool, len(def.Reports))
+	notDiscrete := map[report.Kind]bool{}
 	for i, raw := range def.Reports {
 		at := reportsAt.Index(i).String()
 		spec, err := report.ParseSpec(raw)
@@ -249,6 +260,9 @@ func validateReports(exp *CompiledExperiment, errs *engine.ValidationErrors) {
 				errs.Add(at, engine.CodeUnresolvedReference, fmt.Sprintf("unknown metric %q: want objective, cost, duration or a declared metric", name))
 				bad = true
 			}
+		}
+		if !validateExplainReport(exp, &spec, at, errs, notDiscrete) {
+			bad = true
 		}
 		if !bad {
 			exp.Reports = append(exp.Reports, spec)

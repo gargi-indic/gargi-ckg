@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"fmt"
+	"io/fs"
 	"sort"
 
 	"github.com/gargi-indic/gargi-flow/internal/sim/model"
@@ -23,6 +24,9 @@ type PolicySource interface {
 type FilesSource struct {
 	// BaseDir is the directory relative file paths are resolved against.
 	BaseDir string
+	// FS is the file system the files are read from (slash-separated
+	// paths); nil means the operating system's.
+	FS fs.FS
 	// Files lists the policy/v1 documents to load (.yaml, .yml or .json).
 	Files []string
 }
@@ -49,7 +53,7 @@ func (s FilesSource) Policies(m *model.CompiledModel) ([]sim.Policy, error) {
 	seen := make(map[string]int, len(s.Files))
 	for i, file := range s.Files {
 		at := filesAt.Index(i)
-		_, data, format, ok := readDocument(s.BaseDir, file, at, errs)
+		_, data, format, ok := readDocument(docSource{fsys: s.FS}, s.BaseDir, file, at, errs)
 		if !ok {
 			continue
 		}

@@ -3,7 +3,9 @@ package experiment
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -22,6 +24,9 @@ type CompiledExperiment struct {
 	// BaseDir is the directory the experiment's relative paths (model and
 	// policy files) are resolved against.
 	BaseDir string
+	// FS is the file system relative paths are read from (with
+	// slash-separated paths); nil means the operating system's.
+	FS fs.FS
 	// Model is the compiled sim/v1 model referenced by Def.Model.
 	Model *model.CompiledModel
 	// Worlds lists the evaluated worlds in report order: Def.Worlds in
@@ -85,23 +90,56 @@ func addPrefixed(errs *engine.ValidationErrors, prefix string, err error, code e
 	errs.Add(prefix, code, err.Error())
 }
 
-// readDocument reads the file at path (resolved against baseDir when
-// relative) and reports read and format problems at at.
-func readDocument(baseDir, path string, at engine.Path, errs *engine.ValidationErrors) (string, []byte, engine.Format, bool) {
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(baseDir, path)
+// docSource reads the documents an experiment references: from the
+// operating system's file system when fsys is nil (paths use filepath
+// semantics and may be absolute), otherwise from fsys (slash-separated
+// paths, as fs.FS requires).
+type docSource struct {
+	fsys fs.FS
+}
+
+// resolve returns p resolved against baseDir.
+func (s docSource) resolve(baseDir, p string) string {
+	if s.fsys == nil {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(baseDir, p)
+		}
+		return p
 	}
-	format, ok := formatFor(path)
+	return path.Join(baseDir, p)
+}
+
+// dir returns the directory of the resolved path p.
+func (s docSource) dir(p string) string {
+	if s.fsys == nil {
+		return filepath.Dir(p)
+	}
+	return path.Dir(p)
+}
+
+// read returns the contents of the resolved path p.
+func (s docSource) read(p string) ([]byte, error) {
+	if s.fsys == nil {
+		return os.ReadFile(p)
+	}
+	return fs.ReadFile(s.fsys, p)
+}
+
+// readDocument reads the file at file (resolved against baseDir when
+// relative) from src and reports read and format problems at at.
+func readDocument(src docSource, baseDir, file string, at engine.Path, errs *engine.ValidationErrors) (string, []byte, engine.Format, bool) {
+	file = src.resolve(baseDir, file)
+	format, ok := formatFor(file)
 	if !ok {
-		errs.Add(at.String(), engine.CodeInvalidFormat, fmt.Sprintf("unsupported file extension %q", filepath.Ext(path)))
-		return path, nil, "", false
+		errs.Add(at.String(), engine.CodeInvalidFormat, fmt.Sprintf("unsupported file extension %q", filepath.Ext(file)))
+		return file, nil, "", false
 	}
-	data, err := os.ReadFile(path)
+	data, err := src.read(file)
 	if err != nil {
 		errs.Add(at.String(), engine.CodeUnresolvedReference, fmt.Sprintf("failed to read file: %v", err))
-		return path, nil, "", false
+		return file, nil, "", false
 	}
-	return path, data, format, true
+	return file, data, format, true
 }
 
 // Compile loads and compiles the sim/v1 model referenced by def (relative to
@@ -117,6 +155,22 @@ func readDocument(baseDir, path string, at engine.Path, errs *engine.ValidationE
 // cvar_alpha are validated. It returns nil errors on success; on failure it returns every problem found,
 // sorted by path, code and message.
 func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*CompiledExperiment, *engine.ValidationErrors) {
+	return compileFrom(def, docSource{}, baseDir, reg)
+}
+
+// CompileFS is Compile with every referenced document (the model, its
+// graph, policies.policy and, when the experiment runs, policies.files)
+// read from fsys instead of the operating system. Relative paths are joined
+// to baseDir with path.Join (slash-separated, as fs.FS requires) and the
+// compiled experiment keeps fsys in CompiledExperiment.FS. Problems are
+// reported exactly as by Compile. A nil fsys reads from the operating
+// system, like Compile.
+func CompileFS(def *model.Experiment, fsys fs.FS, baseDir string, reg *engine.Registry) (*CompiledExperiment, *engine.ValidationErrors) {
+	return compileFrom(def, docSource{fsys: fsys}, baseDir, reg)
+}
+
+// compileFrom implements Compile and CompileFS.
+func compileFrom(def *model.Experiment, src docSource, baseDir string, reg *engine.Registry) (*CompiledExperiment, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}
 	if def == nil {
 		errs.Add(engine.PathRoot.String(), engine.CodeMissingRequired, "experiment definition is nil")
@@ -124,7 +178,7 @@ func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*Comp
 	}
 
 	modelAt := engine.PathRoot.Field("model")
-	modelPath, data, format, ok := readDocument(baseDir, def.Model, modelAt, errs)
+	modelPath, data, format, ok := readDocument(src, baseDir, def.Model, modelAt, errs)
 	if !ok {
 		return nil, sortIssues(errs)
 	}
@@ -133,13 +187,13 @@ func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*Comp
 		addPrefixed(errs, modelAt.String(), err, engine.CodeInvalidFormat)
 		return nil, sortIssues(errs)
 	}
-	m, merrs := model.Compile(simDef, filepath.Dir(modelPath), reg)
+	m, merrs := model.CompileFS(simDef, src.fsys, src.dir(modelPath), reg)
 	if merrs.Len() > 0 {
 		addPrefixed(errs, modelAt.String(), merrs, engine.CodeInvalidValue)
 		return nil, sortIssues(errs)
 	}
 
-	exp := &CompiledExperiment{Def: def, BaseDir: baseDir, Model: m}
+	exp := &CompiledExperiment{Def: def, BaseDir: baseDir, FS: src.fsys, Model: m}
 	if len(def.Worlds) == 0 {
 		for _, id := range sortedKeys(m.Def.Worlds) {
 			exp.Worlds = append(exp.Worlds, sim.World{ID: sim.WorldID(id), Params: m.Def.Worlds[id]})
@@ -165,7 +219,7 @@ func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*Comp
 		errs.Add(engine.PathRoot.Field("worlds").String(), engine.CodeMissingRequired, "the experiment has no worlds")
 	}
 	if def.Policies.Policy != "" {
-		exp.Policy = compilePolicyFile(baseDir, def.Policies.Policy, m, errs)
+		exp.Policy = compilePolicyFile(src, baseDir, def.Policies.Policy, m, errs)
 	}
 	validateReports(exp, errs)
 	if errs.Len() > 0 {
@@ -178,9 +232,9 @@ func Compile(def *model.Experiment, baseDir string, reg *engine.Registry) (*Comp
 // at file (relative to baseDir) against m. Problems are reported at
 // $.policies.policy, or for issues inside the document at
 // "$.policies.policy:" followed by the path within the policy document.
-func compilePolicyFile(baseDir, file string, m *model.CompiledModel, errs *engine.ValidationErrors) model.Parameterized {
+func compilePolicyFile(src docSource, baseDir, file string, m *model.CompiledModel, errs *engine.ValidationErrors) model.Parameterized {
 	at := engine.PathRoot.Field("policies").Field("policy")
-	_, data, format, ok := readDocument(baseDir, file, at, errs)
+	_, data, format, ok := readDocument(src, baseDir, file, at, errs)
 	if !ok {
 		return nil
 	}
@@ -207,8 +261,21 @@ func compilePolicyFile(baseDir, file string, m *model.CompiledModel, errs *engin
 // paths against the directory of path. Errors are *engine.ValidationErrors
 // with sorted issues.
 func LoadFile(path string, reg *engine.Registry) (*CompiledExperiment, error) {
+	return load(docSource{}, path, reg)
+}
+
+// LoadFS is LoadFile with the experiment document at file, and every
+// document it references, read from fsys (see CompileFS). Relative paths
+// resolve against path.Dir(file). A nil fsys reads from the operating
+// system, like LoadFile.
+func LoadFS(fsys fs.FS, file string, reg *engine.Registry) (*CompiledExperiment, error) {
+	return load(docSource{fsys: fsys}, file, reg)
+}
+
+// load implements LoadFile and LoadFS.
+func load(src docSource, file string, reg *engine.Registry) (*CompiledExperiment, error) {
 	errs := &engine.ValidationErrors{}
-	_, data, format, ok := readDocument("", path, engine.PathRoot, errs)
+	_, data, format, ok := readDocument(src, "", file, engine.PathRoot, errs)
 	if !ok {
 		return nil, errs
 	}
@@ -216,7 +283,7 @@ func LoadFile(path string, reg *engine.Registry) (*CompiledExperiment, error) {
 	if err != nil {
 		return nil, err
 	}
-	exp, cerrs := Compile(def, filepath.Dir(path), reg)
+	exp, cerrs := compileFrom(def, src, src.dir(file), reg)
 	if cerrs.Len() > 0 {
 		return nil, cerrs
 	}
@@ -224,7 +291,7 @@ func LoadFile(path string, reg *engine.Registry) (*CompiledExperiment, error) {
 }
 
 // FilesSource returns a FilesSource for the experiment's policies.files,
-// resolved against BaseDir.
+// resolved against BaseDir and read from FS.
 func (e *CompiledExperiment) FilesSource() FilesSource {
-	return FilesSource{BaseDir: e.BaseDir, Files: e.Def.Policies.Files}
+	return FilesSource{BaseDir: e.BaseDir, FS: e.FS, Files: e.Def.Policies.Files}
 }

@@ -15,3 +15,6 @@ plugins:
       - generate_unbound_methods=true
   - local: protoc-gen-openapiv2
     out: gen/openapiv2
+    opt:
+      - allow_merge=true
+      - merge_file_name=gargi/v1/api

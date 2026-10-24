@@ -1,0 +1,362 @@
+syntax = "proto3";
+
+package gargi.v1;
+
+option go_package = "github.com/gargi-indic/gargi-flow/pkg/api/v1;gargiv1";
+
+import "gargi/v1/api.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// ExperimentStatus is the lifecycle state of a simulation experiment job.
+enum ExperimentStatus {
+  EXPERIMENT_STATUS_UNSPECIFIED = 0;
+  EXPERIMENT_STATUS_QUEUED = 1;
+  EXPERIMENT_STATUS_RUNNING = 2;
+  EXPERIMENT_STATUS_SUCCEEDED = 3;
+  EXPERIMENT_STATUS_FAILED = 4;
+  EXPERIMENT_STATUS_CANCELLED = 5;
+}
+
+// ValidationIssue is one validation problem of a submitted document.
+message ValidationIssue {
+  // JSON path of the problem, e.g. "$.behaviors.ai_score.cost" or, inside a
+  // referenced document, "$.graph:$.nodes[0].type".
+  string path = 1;
+  // Stable machine-readable error code, e.g. "missing_required".
+  string code = 2;
+  // Human-readable description.
+  string message = 3;
+}
+
+// ValidationIssues lists every validation problem, sorted by path, code and
+// message. It is attached as an error detail to INVALID_ARGUMENT errors, and
+// the REST gateway renders it as the "errors" list of the error body.
+message ValidationIssues {
+  repeated ValidationIssue errors = 1;
+}
+
+// ValidateModelRequest carries a simulation model inline.
+message ValidateModelRequest {
+  // sim/v1 document.
+  string sim = 1;
+  // graph/v1 document referenced by the sim document's graph field (matched
+  // by base name).
+  string graph = 2;
+  // policy/v1 documents keyed by file base name, e.g. "recession-v1.yaml".
+  map<string, string> policies = 3;
+  // Format of the sim document: "yaml" (default) or "json". Graph and policy
+  // formats follow their file extensions.
+  string format = 4;
+}
+
+// ValidateModelResponse reports whether the model is valid. Validation
+// problems are not an RPC error.
+message ValidateModelResponse {
+  bool valid = 1;
+  // Every problem found, sorted by path, code and message.
+  repeated ValidationIssue errors = 2;
+}
+
+// SaveModelRequest stores a model as the next version of its id.
+message SaveModelRequest {
+  // Model id; defaults to the sim document's id.
+  string id = 1;
+  string sim = 2;
+  string graph = 3;
+  map<string, string> policies = 4;
+  string format = 5;
+}
+
+// Model is one stored version of a simulation model.
+message Model {
+  string id = 1;
+  // Store-assigned version: "1", "2", ...
+  string version = 2;
+  string sim = 3;
+  string graph = 4;
+  map<string, string> policies = 5;
+  string format = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// SaveModelResponse returns the stored model version.
+message SaveModelResponse {
+  Model model = 1;
+}
+
+// GetModelRequest fetches one model version.
+message GetModelRequest {
+  string id = 1;
+  // Version to fetch; empty means the latest.
+  string version = 2;
+}
+
+// GetModelResponse returns the model version.
+message GetModelResponse {
+  Model model = 1;
+}
+
+// ListModelsRequest lists stored models.
+message ListModelsRequest {}
+
+// ModelSummary describes the latest version of a model.
+message ModelSummary {
+  string id = 1;
+  string version = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+// ListModelsResponse lists the latest version of every model, sorted by id.
+message ListModelsResponse {
+  repeated ModelSummary models = 1;
+}
+
+// ModelRef names a model version; an empty version means the latest.
+message ModelRef {
+  string id = 1;
+  string version = 2;
+}
+
+// CreateExperimentRequest submits an experiment for asynchronous execution.
+message CreateExperimentRequest {
+  // Model to evaluate. The experiment document's own model field is ignored.
+  ModelRef model = 1;
+  // experiment/v1 document.
+  string experiment = 2;
+  // Format of the experiment document: "yaml" (default) or "json".
+  string format = 3;
+}
+
+// CreateExperimentResponse returns the queued experiment.
+message CreateExperimentResponse {
+  string id = 1;
+  ExperimentStatus status = 2;
+}
+
+// ExperimentProgress is a progress snapshot of an experiment.
+message ExperimentProgress {
+  // Completed units of work (episodes, or exact (world, policy) pairs).
+  int64 done = 1;
+  // Total units of work; 0 until known.
+  int64 total = 2;
+  // Best policy of the first world, once known.
+  string best = 3;
+  // Objective mean of the best policy.
+  double best_mean = 4;
+  // Width of the best policy's 95% confidence interval (0 when exact).
+  double ci_width = 5;
+}
+
+// WorldBest is the best policy of one world of a finished experiment.
+message WorldBest {
+  string world = 1;
+  string policy_id = 2;
+  double mean = 3;
+  double ci95_low = 4;
+  double ci95_high = 5;
+}
+
+// Experiment is the status and summary of an experiment job.
+message Experiment {
+  string id = 1;
+  // Evaluated model version.
+  ModelRef model = 2;
+  ExperimentStatus status = 3;
+  // Why the experiment failed or was cancelled.
+  string error = 4;
+  ExperimentProgress progress = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp finished_at = 8;
+  // experiment/v1 document as submitted, and its format.
+  string definition = 9;
+  string format = 10;
+  // Report kinds GetReport serves for this experiment: "summary" plus the
+  // kinds the experiment requested. Empty until the experiment succeeds.
+  repeated string report_kinds = 11;
+  // Best policy per world, in experiment order, once the experiment succeeds.
+  repeated WorldBest best = 12;
+}
+
+// GetExperimentRequest fetches an experiment.
+message GetExperimentRequest {
+  string id = 1;
+}
+
+// GetExperimentResponse returns the experiment.
+message GetExperimentResponse {
+  Experiment experiment = 1;
+}
+
+// CancelExperimentRequest cancels a queued or running experiment.
+message CancelExperimentRequest {
+  string id = 1;
+}
+
+// CancelExperimentResponse returns the experiment's status after the request.
+message CancelExperimentResponse {
+  string id = 1;
+  ExperimentStatus status = 2;
+}
+
+// GetReportRequest fetches one report of a finished experiment.
+message GetReportRequest {
+  string id = 1;
+  // "summary" (the full experiment report) or one of regret, robust, pareto,
+  // voi, flipPoints, pathHeatmap, policyTree.
+  string kind = 2;
+}
+
+// GetReportResponse carries the report as JSON. Over REST the body is the
+// report itself.
+message GetReportResponse {
+  string id = 1;
+  string kind = 2;
+  google.protobuf.Value report = 3;
+}
+
+// GetRunRequest replays one simulated run.
+message GetRunRequest {
+  string id = 1;
+  // Replication index, in [0, runs).
+  int32 index = 2;
+  // World to replay; defaults to the experiment's first world.
+  string world = 3;
+  // Policy to replay; defaults to the world's best policy.
+  string policy = 4;
+}
+
+// RunRecord summarizes one simulated run.
+message RunRecord {
+  double objective = 1;
+  double cost = 2;
+  google.protobuf.Duration duration = 3;
+  bool abandoned = 4;
+  // Nodes executed, in order.
+  repeated string path = 5;
+  // Option chosen at every decision node.
+  map<string, string> decisions = 6;
+  // Whether every per-run constraint held.
+  map<string, bool> constraints = 7;
+  // Declared metric values.
+  map<string, double> metrics = 8;
+  // Final graph status, e.g. "Succeeded".
+  string final_status = 9;
+}
+
+// GetRunResponse is one replayed run as the engine event stream a production
+// execution would emit (virtual-clock timestamps from 1970-01-01T00:00:00Z).
+message GetRunResponse {
+  string id = 1;
+  string world = 2;
+  string policy_id = 3;
+  int32 index = 4;
+  // Sampler seed of the replication.
+  uint64 seed = 5;
+  // Events in the shape of StreamExecutionUpdates.
+  repeated StreamExecutionUpdatesResponse events = 6;
+  RunRecord record = 7;
+}
+
+// StreamExperimentProgressRequest subscribes to an experiment's progress.
+message StreamExperimentProgressRequest {
+  string id = 1;
+}
+
+// StreamExperimentProgressResponse is one progress event. event_type is
+// "progress" for every update and "done" once the experiment reaches a
+// terminal status; the stream ends after "done".
+message StreamExperimentProgressResponse {
+  string id = 1;
+  uint64 sequence = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  string event_type = 4;
+  ExperimentStatus status = 5;
+  ExperimentProgress progress = 6;
+  string error = 7;
+}
+
+// SimulationService exposes simulation models and experiments over gRPC and
+// REST.
+service SimulationService {
+  // ValidateModel validates a model without storing it.
+  rpc ValidateModel(ValidateModelRequest) returns (ValidateModelResponse) {
+    option (google.api.http) = {
+      post: "/v1/models:validate"
+      body: "*"
+    };
+  }
+
+  // SaveModel validates a model and stores it as the next version of its id.
+  rpc SaveModel(SaveModelRequest) returns (SaveModelResponse) {
+    option (google.api.http) = {
+      post: "/v1/models"
+      body: "*"
+    };
+  }
+
+  // GetModel fetches one model version (the latest by default).
+  rpc GetModel(GetModelRequest) returns (GetModelResponse) {
+    option (google.api.http) = {
+      get: "/v1/models/{id}"
+    };
+  }
+
+  // ListModels lists the latest version of every model.
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse) {
+    option (google.api.http) = {
+      get: "/v1/models"
+    };
+  }
+
+  // CreateExperiment validates and queues an experiment; it runs
+  // asynchronously.
+  rpc CreateExperiment(CreateExperimentRequest) returns (CreateExperimentResponse) {
+    option (google.api.http) = {
+      post: "/v1/experiments"
+      body: "*"
+    };
+  }
+
+  // GetExperiment returns an experiment's status and summary.
+  rpc GetExperiment(GetExperimentRequest) returns (GetExperimentResponse) {
+    option (google.api.http) = {
+      get: "/v1/experiments/{id}"
+    };
+  }
+
+  // CancelExperiment cancels a queued or running experiment.
+  rpc CancelExperiment(CancelExperimentRequest) returns (CancelExperimentResponse) {
+    option (google.api.http) = {
+      post: "/v1/experiments/{id}:cancel"
+      body: "*"
+    };
+  }
+
+  // GetReport returns one report of a finished experiment.
+  rpc GetReport(GetReportRequest) returns (GetReportResponse) {
+    option (google.api.http) = {
+      get: "/v1/experiments/{id}/reports/{kind}"
+      response_body: "report"
+    };
+  }
+
+  // GetRun replays one simulated run as an engine event stream.
+  rpc GetRun(GetRunRequest) returns (GetRunResponse) {
+    option (google.api.http) = {
+      get: "/v1/experiments/{id}/runs/{index}"
+    };
+  }
+
+  // StreamExperimentProgress streams progress events until the experiment
+  // finishes. Over REST, use the Server-Sent Events endpoint
+  // GET /v1/experiments/{id}/events.
+  rpc StreamExperimentProgress(StreamExperimentProgressRequest) returns (stream StreamExperimentProgressResponse) {
+    option (google.api.http) = {
+      get: "/v1/experiments/{id}/stream"
+    };
+  }
+}

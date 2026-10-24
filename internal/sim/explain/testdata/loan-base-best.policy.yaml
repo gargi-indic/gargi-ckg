@@ -1,0 +1,22 @@
+# screen=score; route[score,high]=reject; route[score,low]=approve
+apiVersion: policy/v1
+id: loan-underwriting
+version: exhaustive-b1b8bd20353bca7f
+decisions:
+  final:
+    rules:
+      - else: approve
+  route:
+    table:
+      - observed:
+          ai_score.output.band: high
+          screen.output.choice: score
+        choose: reject
+      - observed:
+          ai_score.output.band: low
+          screen.output.choice: score
+        choose: approve
+    default: approve
+  screen:
+    rules:
+      - else: score

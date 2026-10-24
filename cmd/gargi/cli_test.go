@@ -499,3 +499,49 @@ func TestSimRun_ExplainReports(t *testing.T) {
 	require.Equal(t, 1, code)
 	require.Equal(t, `$.reports[0]: invalid_value: voi: node "approve" is not observed by any decision (no observes path starts with "approve.")`+"\n", errOut)
 }
+
+func TestPolicyExplain_Golden(t *testing.T) {
+	for _, name := range []string{"recession-v1", "loan-base-best"} {
+		dir := filepath.Join("..", "..", "internal", "sim", "explain", "testdata")
+		want, err := os.ReadFile(filepath.Join(dir, name+".golden"))
+		require.NoError(t, err)
+		code, out, errOut := gargi(t, "policy", "explain", filepath.Join(dir, name+".policy.yaml"))
+		require.Equal(t, 0, code, errOut)
+		require.Equal(t, string(want), out, name)
+	}
+}
+
+func TestPolicyExplain_JSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "p.json")
+	doc := `{"apiVersion":"policy/v1","id":"x","version":"1","decisions":{"d":{"rules":[{"else":"a"}]}}}`
+	require.NoError(t, os.WriteFile(path, []byte(doc), 0o600))
+	code, out, errOut := gargi(t, "policy", "explain", path)
+	require.Equal(t, 0, code, errOut)
+	require.Equal(t, "Policy x, version 1\n\nDecision d\n  Always choose a.\n", out)
+}
+
+func TestPolicyExplain_Errors(t *testing.T) {
+	code, out, errOut := gargi(t, "policy", "explain", filepath.Join(t.TempDir(), "missing.yaml"))
+	require.Equal(t, 1, code)
+	require.Empty(t, out)
+	require.True(t, strings.HasPrefix(errOut, "gargi policy explain: "), errOut)
+
+	bad := filepath.Join(t.TempDir(), "bad.yaml")
+	require.NoError(t, os.WriteFile(bad, []byte("apiVersion: nope\n"), 0o600))
+	code, _, errOut = gargi(t, "policy", "explain", bad)
+	require.Equal(t, 1, code)
+	require.True(t, strings.HasPrefix(errOut, "gargi policy explain: "), errOut)
+}
+
+func TestPolicyExplain_UsageErrors(t *testing.T) {
+	for _, args := range [][]string{
+		{"policy"},
+		{"policy", "show", "x.yaml"},
+		{"policy", "explain"},
+		{"policy", "explain", "a.yaml", "b.yaml"},
+	} {
+		code, _, errOut := gargi(t, args...)
+		require.Equal(t, 2, code, "args %q", args)
+		require.Contains(t, errOut, "usage", "args %q", args)
+	}
+}

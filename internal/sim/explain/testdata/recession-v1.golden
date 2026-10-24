@@ -1,0 +1,12 @@
+Policy loan-underwriting, version recession-v1
+
+Decision final
+  1. If human_review.output.result is 'pass', choose approve.
+  2. Otherwise, choose reject.
+
+Decision route
+  1. If ai_score.output.band is 'high', choose reject.
+  2. Otherwise, choose review.
+
+Decision screen
+  Always choose score.

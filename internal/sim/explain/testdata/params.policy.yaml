@@ -1,0 +1,36 @@
+apiVersion: policy/v1
+id: synthetic
+version: v1
+params:
+  threshold:
+    min: 0.1
+    max: 0.9
+    step: 0.2
+    default: 0.3
+  budget:
+    min: 1
+    max: 10
+  mode:
+    values: [fast, slow, 5]
+    default: fast
+decisions:
+  gate:
+    rules:
+      - when: "params.threshold>=0.5 && ai.score<=10"
+        choose: escalate
+      - when: "!(flag == true) || ai.band != 'a==b>c' && size > 3"
+        choose: hold
+      - when: "x < 2 && label == \"<&&>\" && !done"
+        choose: skip
+  lookup:
+    table:
+      - observed:
+          region: north
+          tier: 2
+          active: true
+        choose: fast
+      - observed:
+          region: south
+          rate: 0.25
+        choose: slow
+    default: slow

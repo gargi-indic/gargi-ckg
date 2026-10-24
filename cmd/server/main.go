@@ -19,7 +19,6 @@ import (
 	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
 	"github.com/gargi-indic/gargi-flow/internal/sim/jobs"
 	"github.com/gargi-indic/gargi-flow/internal/store"
-	"github.com/gargi-indic/gargi-flow/internal/store/memory"
 	"github.com/gargi-indic/gargi-flow/internal/telemetry"
 	"go.temporal.io/sdk/client"
 )
@@ -93,14 +92,14 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		logger.Warn("Temporal client unavailable; running in degraded mode", "error", err)
 	}
 
-	// Simulation: in-memory experiment store and in-process job runner
-	// (ADR-0004 manual DI; ADR-0009 keeps internal/sim free of store and
-	// API imports).
+	// Simulation: the configured experiment store (store.capabilities.
+	// experiments) and the in-process job runner (ADR-0004 manual DI;
+	// ADR-0009 keeps internal/sim free of store and API imports).
 	simRegistry, err := jobs.NewRegistry()
 	if err != nil {
 		return fmt.Errorf("initializing simulation registry: %w", err)
 	}
-	simStore := memory.NewExperimentStore()
+	simStore := st.Experiments()
 	simRunner, err := jobs.New(simStore, simRegistry, jobs.Options{
 		Now:    func() time.Time { return time.Now().UTC() },
 		Logger: logger,
@@ -111,6 +110,13 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 	// Close is idempotent; this covers the early returns below, the
 	// shutdown path closes the runner before stopping the servers.
 	defer closeRunner(simRunner, logger)
+	// The in-process queue does not survive a restart: fail what a previous
+	// process left queued or running before accepting new submissions.
+	recovered, err := simRunner.Recover(ctx)
+	if err != nil {
+		return fmt.Errorf("recovering interrupted simulation experiments: %w", err)
+	}
+	logger.Info("Recovered interrupted simulation experiments", "count", recovered, "experiments_driver", cfg.Store.EffectiveExperimentsDriver())
 	simService := api.NewSimulationServer(simStore, simRunner, simRegistry, logger)
 
 	grpcServer := api.NewGRPCServer(temporalClient, cfg.Temporal, st, logger)

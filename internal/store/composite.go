@@ -7,7 +7,9 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/gargi-indic/gargi-flow/internal/store/memory"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
 
 // CompositeStore represents a composed storage engine combining multiple capability adapters.
@@ -28,6 +30,10 @@ type CompositeStore interface {
 
 	// Log returns the underlying execution audit log, or nil if not configured.
 	Log() engine.ExecutionLog
+
+	// Experiments returns the simulation experiment store; it is never nil
+	// (an in-memory store when none is configured).
+	Experiments() sim.ExperimentStore
 }
 
 // compositeBase holds common references and implements the getter methods and Closer.
@@ -36,6 +42,7 @@ type compositeBase struct {
 	lock    engine.LockManager
 	events  engine.EventPublisher
 	log     engine.ExecutionLog
+	exps    sim.ExperimentStore
 	closers []func() error
 	closed  atomic.Bool
 }
@@ -44,6 +51,8 @@ func (b *compositeBase) State() engine.StateStore      { return b.state }
 func (b *compositeBase) Lock() engine.LockManager      { return b.lock }
 func (b *compositeBase) Events() engine.EventPublisher { return b.events }
 func (b *compositeBase) Log() engine.ExecutionLog      { return b.log }
+
+func (b *compositeBase) Experiments() sim.ExperimentStore { return b.exps }
 
 func (b *compositeBase) Close() error {
 	if !b.closed.CompareAndSwap(false, true) {
@@ -118,6 +127,7 @@ type compAll struct {
 // If state is nil, NewComposite returns an error.
 // It selectively exposes only the interfaces corresponding to non-nil capability adapters,
 // ensuring type assertions (e.g. store.(engine.LockManager)) accurately reflect availability.
+// The experiment store is a fresh in-memory one; use Builder.WithExperimentStore to inject another.
 func NewComposite(
 	state engine.StateStore,
 	lock engine.LockManager,
@@ -125,8 +135,24 @@ func NewComposite(
 	log engine.ExecutionLog,
 	closers ...func() error,
 ) (CompositeStore, error) {
+	return newComposite(state, lock, events, log, nil, closers...)
+}
+
+// newComposite is NewComposite with an experiment store; nil selects a
+// fresh in-memory one.
+func newComposite(
+	state engine.StateStore,
+	lock engine.LockManager,
+	events engine.EventPublisher,
+	log engine.ExecutionLog,
+	exps sim.ExperimentStore,
+	closers ...func() error,
+) (CompositeStore, error) {
 	if state == nil {
 		return nil, errors.New("composite store: state store is required")
+	}
+	if exps == nil {
+		exps = memory.NewExperimentStore()
 	}
 
 	base := &compositeBase{
@@ -134,6 +160,7 @@ func NewComposite(
 		lock:    lock,
 		events:  events,
 		log:     log,
+		exps:    exps,
 		closers: closers,
 	}
 

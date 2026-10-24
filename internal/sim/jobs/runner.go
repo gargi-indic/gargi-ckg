@@ -36,6 +36,10 @@ const (
 	MsgShutdown  = "cancelled: the runner shut down"
 )
 
+// MsgInterrupted is recorded in ExperimentRecord.Error for experiments that
+// Recover marks failed.
+const MsgInterrupted = "interrupted: server restarted before the experiment finished"
+
 var (
 	// ErrQueueFull is returned by Submit when the bounded queue is full.
 	ErrQueueFull = errors.New("jobs: experiment queue is full")
@@ -299,6 +303,65 @@ func (r *Runner) Close(ctx context.Context) error {
 		<-r.drained
 		return ctx.Err()
 	}
+}
+
+// Recover marks the experiments a previous process left unfinished as
+// failed and returns how many it marked. The in-process queue does not
+// survive a restart, so a stored record that is still queued or running
+// would otherwise never finish. Recover pages through the store's
+// experiments; every record that is not terminal (and not queued or running
+// in this runner) becomes failed with Error MsgInterrupted and FinishedAt
+// Options.Now(). Nothing is re-queued.
+//
+// Call it once at startup, before the runner accepts submissions. It
+// assumes a single server per experiment store: another live process's
+// queued and running experiments would be marked failed too.
+func (r *Runner) Recover(ctx context.Context) (int, error) {
+	var ids []string
+	token := ""
+	for {
+		recs, next, err := r.store.ListExperiments(ctx, sim.ListExperimentsOptions{PageToken: token})
+		if err != nil {
+			return 0, fmt.Errorf("jobs: listing experiments to recover: %w", err)
+		}
+		for _, rec := range recs {
+			if !rec.Status.Terminal() {
+				ids = append(ids, rec.ID)
+			}
+		}
+		if next == "" {
+			break
+		}
+		token = next
+	}
+	n := 0
+	for _, id := range ids {
+		r.mu.Lock()
+		_, active := r.jobs[id]
+		r.mu.Unlock()
+		if active {
+			continue
+		}
+		finishedAt := r.opts.Now()
+		_, err := r.store.UpdateExperiment(ctx, id, func(rec *sim.ExperimentRecord) error {
+			if rec.Status.Terminal() {
+				return errNotActiveInStore
+			}
+			rec.Status = sim.ExperimentFailed
+			rec.Error = MsgInterrupted
+			rec.FinishedAt = finishedAt
+			return nil
+		})
+		switch {
+		case errors.Is(err, errNotActiveInStore), engine.IsStoreNotFound(err):
+			// Finished or removed since it was listed.
+		case err != nil:
+			return n, fmt.Errorf("jobs: recovering experiment %q: %w", id, err)
+		default:
+			n++
+		}
+	}
+	return n, nil
 }
 
 // work runs queued experiments until the runner is closed and the queue

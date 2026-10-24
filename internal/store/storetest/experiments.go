@@ -31,6 +31,7 @@ func RunExperimentStore(t *testing.T, factory ExperimentStoreFactory) {
 		fn   func(t *testing.T, s sim.ExperimentStore)
 	}{
 		{"SaveModelVersions", testSaveModelVersions},
+		{"SaveModelConcurrent", testSaveModelConcurrent},
 		{"SaveModelRequiresID", testSaveModelRequiresID},
 		{"GetModelNotFound", testGetModelNotFound},
 		{"ListModelsLatestSorted", testListModelsLatestSorted},
@@ -139,6 +140,52 @@ func testSaveModelVersions(t *testing.T, s sim.ExperimentStore) {
 		t.Fatalf("GetModel v1: %v", err)
 	}
 	assertBundle(t, first, v1, "1")
+}
+
+// testSaveModelConcurrent saves one model ID from many goroutines at once:
+// every save gets a distinct version and together they are 1..n, with no
+// gaps or duplicates.
+func testSaveModelConcurrent(t *testing.T, s sim.ExperimentStore) {
+	ctx := context.Background()
+	const n = 20
+	var wg sync.WaitGroup
+	versions := make(chan string, n)
+	errs := make(chan error, n)
+	for i := range n {
+		wg.Go(func() {
+			saved, err := s.SaveModel(ctx, testBundle("loan", fmt.Sprintf("v%d", i)))
+			if err != nil {
+				errs <- err
+				return
+			}
+			versions <- saved.Version
+		})
+	}
+	wg.Wait()
+	close(versions)
+	close(errs)
+	for err := range errs {
+		t.Fatalf("concurrent SaveModel: %v", err)
+	}
+	seen := make(map[string]bool, n)
+	for v := range versions {
+		if seen[v] {
+			t.Fatalf("concurrent SaveModel assigned version %q twice", v)
+		}
+		seen[v] = true
+	}
+	for i := 1; i <= n; i++ {
+		if !seen[fmt.Sprint(i)] {
+			t.Fatalf("concurrent SaveModel versions %v miss %d, want 1..%d", seen, i, n)
+		}
+	}
+	latest, err := s.GetModel(ctx, "loan", "")
+	if err != nil {
+		t.Fatalf("GetModel latest: %v", err)
+	}
+	if latest.Version != fmt.Sprint(n) {
+		t.Fatalf("latest version = %q, want %d", latest.Version, n)
+	}
 }
 
 func testSaveModelRequiresID(t *testing.T, s sim.ExperimentStore) {

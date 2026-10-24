@@ -419,8 +419,9 @@ server:
 		t.Errorf("expected effective log driver 'postgres', got '%s'", cfg.Store.EffectiveExecutionLogDriver())
 	}
 
+	// The experiment store defaults to memory unless driver is postgres.
 	drivers := cfg.Store.DriversInUse()
-	if len(drivers) != 2 || drivers[0] != "redis" || drivers[1] != "postgres" {
+	if len(drivers) != 3 || drivers[0] != "redis" || drivers[1] != "postgres" || drivers[2] != "memory" {
 		t.Errorf("unexpected drivers in use: %v", drivers)
 	}
 
@@ -581,6 +582,133 @@ func TestConfig_Tracing(t *testing.T) {
 		}
 		if !cfg.Temporal.TracingEnabled {
 			t.Errorf("expected temporal tracing enabled when tracing is enabled")
+		}
+	})
+}
+
+func TestEffectiveExperimentsDriver(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  StoreConfig
+		want string
+	}{
+		{"zero config", StoreConfig{}, "memory"},
+		{"memory driver", StoreConfig{Driver: "memory"}, "memory"},
+		{"redis driver", StoreConfig{Driver: "redis"}, "memory"},
+		{"neo4j driver", StoreConfig{Driver: "neo4j"}, "memory"},
+		{"postgres driver", StoreConfig{Driver: "postgres"}, "postgres"},
+		{"postgres state capability only", StoreConfig{Capabilities: StoreCapabilitiesConfig{State: "postgres"}}, "memory"},
+		{"explicit postgres", StoreConfig{Driver: "redis", Capabilities: StoreCapabilitiesConfig{Experiments: "postgres"}}, "postgres"},
+		{"explicit memory over postgres driver", StoreConfig{Driver: "postgres", Capabilities: StoreCapabilitiesConfig{Experiments: "memory"}}, "memory"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.EffectiveExperimentsDriver(); got != tc.want {
+				t.Fatalf("EffectiveExperimentsDriver() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_ExperimentsCapability(t *testing.T) {
+	t.Run("yaml", func(t *testing.T) {
+		yamlContent := `
+store:
+  driver: redis
+  capabilities:
+    experiments: postgres
+  redis:
+    addr: localhost:6379
+  postgres:
+    dsn: postgres://user:pass@localhost:5432/db
+`
+		configFile := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(configFile, []byte(yamlContent), 0o644); err != nil {
+			t.Fatalf("failed to write test config file: %v", err)
+		}
+		cfg, err := Load(configFile)
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+		if cfg.Store.Capabilities.Experiments != "postgres" || cfg.Store.EffectiveExperimentsDriver() != "postgres" {
+			t.Fatalf("experiments capability = %q (effective %q), want postgres", cfg.Store.Capabilities.Experiments, cfg.Store.EffectiveExperimentsDriver())
+		}
+		drivers := cfg.Store.DriversInUse()
+		if len(drivers) != 2 || drivers[0] != "redis" || drivers[1] != "postgres" {
+			t.Fatalf("unexpected drivers in use: %v", drivers)
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("expected valid config, got: %v", err)
+		}
+	})
+
+	t.Run("env override", func(t *testing.T) {
+		t.Setenv("GARGI_STORE_CAPABILITIES_EXPERIMENTS", "postgres")
+		t.Setenv("GARGI_STORE_POSTGRES_DSN", "postgres://localhost:5432/test")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatalf("failed to load default config: %v", err)
+		}
+		if cfg.Store.Capabilities.Experiments != "postgres" {
+			t.Fatalf("experiments capability = %q, want postgres", cfg.Store.Capabilities.Experiments)
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("expected config to validate, got: %v", err)
+		}
+	})
+}
+
+func TestValidate_ExperimentsCapability(t *testing.T) {
+	baseCfg := func() Config {
+		return Config{
+			Temporal: TemporalConfig{HostPort: "h", Namespace: "n", TaskQueue: "t"},
+			Server:   ServerConfig{HTTPAddress: "h", GRPCAddress: "g"},
+		}
+	}
+	for _, driver := range []string{"redis", "neo4j"} {
+		t.Run(driver+" is not supported", func(t *testing.T) {
+			cfg := baseCfg()
+			cfg.Store.Capabilities.Experiments = driver
+			err := cfg.Validate()
+			want := driver + " does not support capability 'experiments' (allowed: memory, postgres)"
+			if err == nil || err.Error() != want {
+				t.Fatalf("Validate() = %v, want %q", err, want)
+			}
+		})
+	}
+
+	t.Run("unknown driver", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Capabilities.Experiments = "cassandra"
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "invalid store experiments capability driver: cassandra") {
+			t.Fatalf("expected invalid experiments driver error, got: %v", err)
+		}
+	})
+
+	t.Run("postgres requires dsn", func(t *testing.T) {
+		cfg := baseCfg()
+		cfg.Store.Driver = "memory"
+		cfg.Store.Capabilities.Experiments = "postgres"
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "postgres configuration requires dsn") {
+			t.Fatalf("expected postgres dsn error, got: %v", err)
+		}
+		cfg.Store.Postgres = &PostgresConfig{DSN: "postgres://localhost/db"}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("expected valid config, got: %v", err)
+		}
+	})
+
+	t.Run("memory and postgres are valid", func(t *testing.T) {
+		for _, driver := range []string{"memory", ""} {
+			cfg := baseCfg()
+			cfg.Store.Driver = "redis"
+			cfg.Store.Redis = &RedisConfig{Addr: "localhost:6379"}
+			cfg.Store.Capabilities.Experiments = driver
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("experiments %q: expected valid config, got: %v", driver, err)
+			}
 		}
 	})
 }

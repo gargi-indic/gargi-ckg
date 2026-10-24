@@ -7,6 +7,9 @@ store:
   #   lock: redis
   #   events: redis
   #   execution_log: postgres
+  #   # Simulation models, policies, experiments and reports: memory or
+  #   # postgres (default: postgres when driver is postgres, else memory).
+  #   experiments: postgres
   # redis:
   #   addr: "localhost:6379"
   # postgres:

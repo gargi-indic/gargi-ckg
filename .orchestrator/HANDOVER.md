@@ -61,6 +61,11 @@ The **live** state is in issue **#67** (body tables + latest comments) and on `m
   - Build the simulation engine as Epics #124/#136/#148/#159, P0 first.
   - **License deferred**; do not add a LICENSE file.
   - **Jules failure fallback:** if Jules fails a task (session `FAILED`, timeout, or two attempts that miss required functionality), reassign it to an **Opus Claude sub-agent** (`model: opus`, worktree isolation) instead of escalating. Other escalations (needs-discussion, spec/interface changes, destructive actions) still go to the human.
+- **Human (2026-10-24), supersedes the 2026-10-23 "P1 Jules tasks straight to Opus":**
+  - **Jules first,** with large issues split into small sub-issues for early results (#143 → #185/#186/#187).
+  - **Adaptive check-ins** at 5 → 10 → 15 min (never more than 15).
+  - **Fallback:** after **2 consecutive check-ins with no response** from Jules, or a `FAILED` session, reassign to a Claude sub-agent sized to the task: Haiku for mechanical work, Sonnet for moderate single-package work, Opus for spec-heavy or cross-cutting work.
+  - #142 stayed with the Opus sub-agent already working on it.
 - **P0 defaults (orchestrator, open to override; also in ADR-0009 §7):**
   - The `decision` node is registered in the sim registry only; production registration is P3.
   - Abandonment ends the episode.

@@ -35,6 +35,11 @@ All helper commands run from the repo root after `source ~/.config/jules/env`:
 Run waits **in the background** (they take 5–35 min) and react when they finish. Never poll in a tight loop.
 
 ## 2. Per-task loop
+**Dispatch policy (human, 2026-10-24):**
+- **Jules first, small tasks.** Every task goes to Jules first. Split large issues into small GitHub sub-issues (attach them with `gh api -X POST repos/gargi-indic/gargi-flow/issues/<parent>/sub_issues -F sub_issue_id=<id>`; `start` needs the parent link). Append an exact spec to each one.
+- **Adaptive check-ins.** Check 5 min after the start or after any message, then 10 min, then at most 15 min. Run each check as a background `wait`/`wait-reply <session> <secs>` with secs 300 → 600 → 900; it returns early when Jules responds. If a check finds no response, send a short nudge and schedule the next one.
+- **Fallback.** If Jules doesn't respond to **2 consecutive check-ins**, or the session ends `FAILED`, reassign the task to a Claude sub-agent (worktree isolation) sized to the task: `haiku` for mechanical work, `sonnet` for moderate single-package work, `opus` for spec-heavy or cross-cutting work. Log it in #67.
+
 1. **Start:** `start <issue>` (the next ⏳ row in #67's build-order table). Edit the #67 body (row → 🧭 + session link; "Current status" table) and post a log comment.
 2. **Plan review** (state `AWAITING_PLAN_APPROVAL`): read the plan via `activities`.
    - Approve only if it stays **strictly within the issue's scope**, covers **every acceptance criterion**, and is consistent with recorded decisions (HANDOVER §5, #67 "Decisions recorded").
@@ -58,7 +63,7 @@ Run waits **in the background** (they take 5–35 min) and react when they finis
 
 ## 4. Escalate to the human (comment on #67, then stop and wait) when
 - An issue is labelled `needs-discussion` and #67/HANDOVER has no recorded decision (currently undecided: #20, #40, #41, #51).
-- Jules says something can't be done. (If Jules **fails** a task, meaning the session ends `FAILED`, times out, or two attempts miss required functionality, do **not** escalate. Per the human's 2026-10-22 decision, reassign it to an Opus Claude sub-agent; see HANDOVER §5 and §7.6.)
+- Jules says something can't be done. (If Jules **fails** a task, meaning the session ends `FAILED`, times out, or two attempts miss required functionality, do **not** escalate. Reassign it to a Claude sub-agent sized to the task, per the 2026-10-24 dispatch policy in §2; see HANDOVER §5.)
 - A change would alter the spec, another epic's public interfaces, or the Go version, or would add a dependency/service outside the spec's stack.
 - Anything destructive or administrative: force-push, history rewrite, deleting anything other than merged PR branches, repo settings or branch protection, rotating keys, installing software on the human's machine.
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/gargi-indic/gargi-flow/internal/nodes"
 	"github.com/gargi-indic/gargi-flow/internal/sim/experiment"
+	"github.com/gargi-indic/gargi-flow/internal/sim/explain"
 	"github.com/gargi-indic/gargi-flow/internal/sim/model"
 	"github.com/gargi-indic/gargi-flow/internal/sim/report"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
@@ -40,6 +41,7 @@ const errServerMode = "server mode arrives in P1; pass --local"
 const usage = `usage:
   gargi model validate [--json] <sim.yaml>
   gargi sim run <experiment.yaml> --local [--workers N] [--json] [--out report.json] [--emit-best DIR] [--top K]
+  gargi policy explain <policy.yaml|policy.json>
   gargi version
 `
 
@@ -70,6 +72,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return exitUsage
 		}
 		return simRun(args[2:], stdout, stderr)
+	case "policy":
+		if len(args) < 2 || args[1] != "explain" {
+			printf(stderr, "%s", usage)
+			return exitUsage
+		}
+		return policyExplain(args[2:], stdout, stderr)
 	case "help", "-h", "-help", "--help":
 		printf(stdout, "%s", usage)
 		return exitOK
@@ -216,6 +224,33 @@ func validateModel(path string) ([]engine.ValidationIssue, error) {
 		return issuesOf(errs, engine.CodeInvalidValue), nil
 	}
 	return nil, nil
+}
+
+// policyExplain implements gargi policy explain: it prints a plain-language
+// rendering of a policy/v1 document. A .json file parses as JSON; anything
+// else parses as YAML.
+func policyExplain(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		printf(stderr, "%s\n", "usage: gargi policy explain <policy.yaml|policy.json>")
+		return exitUsage
+	}
+	path := args[0]
+	format := engine.FormatYAML
+	if strings.EqualFold(filepath.Ext(path), ".json") {
+		format = engine.FormatJSON
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		printf(stderr, "gargi policy explain: %v\n", err)
+		return exitError
+	}
+	p, err := model.ParsePolicy(data, format)
+	if err != nil {
+		printf(stderr, "gargi policy explain: %v\n", err)
+		return exitError
+	}
+	printf(stdout, "%s", explain.Explain(p))
+	return exitOK
 }
 
 func modelValidate(args []string, stdout, stderr io.Writer) int {

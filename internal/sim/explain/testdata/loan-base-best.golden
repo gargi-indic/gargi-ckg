@@ -1,0 +1,12 @@
+Policy loan-underwriting, version exhaustive-b1b8bd20353bca7f
+
+Decision final
+  Always choose approve.
+
+Decision route
+  1. When ai_score.output.band is 'high' and screen.output.choice is 'score', choose reject.
+  2. When ai_score.output.band is 'low' and screen.output.choice is 'score', choose approve.
+  Otherwise, choose approve.
+
+Decision screen
+  Always choose score.

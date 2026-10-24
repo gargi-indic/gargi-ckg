@@ -1,0 +1,17 @@
+Policy synthetic, version v1
+
+Parameters
+  budget: a number from 1 to 10
+  mode: one of 'fast', 'slow', 5 (default 'fast')
+  threshold: a number from 0.1 to 0.9 in steps of 0.2 (default 0.3)
+
+Decision gate
+  1. If params.threshold is at least 0.5 and ai.score is at most 10, choose escalate.
+  2. If not (flag is true) or ai.band is not 'a==b>c' and size is above 3, choose hold.
+  3. If x is below 2 and label is "<&&>" and not done, choose skip.
+  If no rule matches, the decision fails.
+
+Decision lookup
+  1. When active is true and region is 'north' and tier is 2, choose fast.
+  2. When rate is 0.25 and region is 'south', choose slow.
+  Otherwise, choose slow.

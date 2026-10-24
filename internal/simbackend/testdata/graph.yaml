@@ -1,0 +1,35 @@
+apiVersion: graph/v1
+id: loan-underwriting
+nodes:
+  - id: screen
+    type: decision
+    config: {options: [score, skip], observes: []}
+  - id: ai_score
+    type: http_call
+    config: {url: "https://scoring.example.internal/v1/score", method: POST}
+  - id: route
+    type: decision
+    joinMode: any_of
+    config: {options: [approve, reject, review], observes: [screen.output.choice, ai_score.output.band]}
+  - id: human_review
+    type: wait_for_signal
+    config: {signal: review_done}
+  - id: final
+    type: decision
+    config: {options: [approve, reject], observes: [screen.output.choice, ai_score.output.band, human_review.output.result]}
+  - id: approve
+    type: passthrough
+    joinMode: any_of
+  - id: reject
+    type: passthrough
+    joinMode: any_of
+edges:
+  - {from: screen, to: ai_score, condition: "upstream.output.choice == 'score'"}
+  - {from: screen, to: route, condition: "upstream.output.choice == 'skip'"}
+  - {from: ai_score, to: route}
+  - {from: route, to: human_review, condition: "upstream.output.choice == 'review'"}
+  - {from: human_review, to: final}
+  - {from: route, to: approve, condition: "upstream.output.choice == 'approve'"}
+  - {from: final, to: approve, condition: "upstream.output.choice == 'approve'"}
+  - {from: route, to: reject, condition: "upstream.output.choice == 'reject'"}
+  - {from: final, to: reject, condition: "upstream.output.choice == 'reject'"}

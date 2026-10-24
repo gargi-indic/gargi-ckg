@@ -15,11 +15,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/gargi-indic/gargi-flow/internal/nodes"
 	"github.com/gargi-indic/gargi-flow/internal/sim/experiment"
-	"github.com/gargi-indic/gargi-flow/internal/sim/explain"
-	"github.com/gargi-indic/gargi-flow/internal/sim/model"
 	"github.com/gargi-indic/gargi-flow/internal/sim/report"
+	"github.com/gargi-indic/gargi-flow/internal/simbackend"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
@@ -119,65 +117,6 @@ func parseExit(err error) int {
 	return exitUsage
 }
 
-// registry returns a node registry able to compile simulation models: the
-// default reference nodes plus a decision node whose chooser the kernel
-// replaces with the simulated policy.
-func registry() (*engine.Registry, error) {
-	reg := engine.NewRegistry()
-	if err := nodes.RegisterDefaults(reg, nodes.Dependencies{}); err != nil {
-		return nil, err
-	}
-	if err := nodes.RegisterDecision(reg, firstOption{}); err != nil {
-		return nil, err
-	}
-	return reg, nil
-}
-
-// firstOption is a placeholder decision chooser; simulations never call it.
-type firstOption struct{}
-
-func (firstOption) Choose(_ context.Context, _ engine.NodeID, _ map[string]any, options []string) (string, error) {
-	if len(options) == 0 {
-		return "", errors.New("decision has no options")
-	}
-	return options[0], nil
-}
-
-// formatFor returns the document format of path from its extension.
-func formatFor(path string) (engine.Format, error) {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".yaml", ".yml":
-		return engine.FormatYAML, nil
-	case ".json":
-		return engine.FormatJSON, nil
-	default:
-		return "", fmt.Errorf("unsupported file extension %q", filepath.Ext(path))
-	}
-}
-
-// issuesOf returns err as sorted validation issues. An error that is not
-// *engine.ValidationErrors becomes a single issue at the root path with
-// fallback code.
-func issuesOf(err error, fallback engine.ErrorCode) []engine.ValidationIssue {
-	var ve *engine.ValidationErrors
-	var issues []engine.ValidationIssue
-	if errors.As(err, &ve) && ve != nil && ve.Len() > 0 {
-		issues = ve.Issues()
-	} else {
-		issues = []engine.ValidationIssue{{Path: engine.PathRoot.String(), Code: fallback, Message: err.Error()}}
-	}
-	sort.SliceStable(issues, func(i, j int) bool {
-		if issues[i].Path != issues[j].Path {
-			return issues[i].Path < issues[j].Path
-		}
-		if issues[i].Code != issues[j].Code {
-			return issues[i].Code < issues[j].Code
-		}
-		return issues[i].Message < issues[j].Message
-	})
-	return issues
-}
-
 // printf writes to w. Write errors on the terminal streams are not
 // actionable, so they are ignored; buffered writers report them on Flush.
 func printf(w io.Writer, format string, a ...any) {
@@ -201,31 +140,6 @@ func writeJSON(w io.Writer, v any) error {
 	return err
 }
 
-// validateModel parses and compiles the simulation model at path and
-// returns its validation issues (none when the model is valid).
-func validateModel(path string) ([]engine.ValidationIssue, error) {
-	format, err := formatFor(path)
-	if err != nil {
-		return issuesOf(err, engine.CodeInvalidFormat), nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	def, err := model.ParseSimModel(data, format)
-	if err != nil {
-		return issuesOf(err, engine.CodeInvalidFormat), nil
-	}
-	reg, err := registry()
-	if err != nil {
-		return nil, err
-	}
-	if _, errs := model.Compile(def, filepath.Dir(path), reg); errs.Len() > 0 {
-		return issuesOf(errs, engine.CodeInvalidValue), nil
-	}
-	return nil, nil
-}
-
 // policyExplain implements gargi policy explain: it prints a plain-language
 // rendering of a policy/v1 document. A .json file parses as JSON; anything
 // else parses as YAML.
@@ -234,22 +148,12 @@ func policyExplain(args []string, stdout, stderr io.Writer) int {
 		printf(stderr, "%s\n", "usage: gargi policy explain <policy.yaml|policy.json>")
 		return exitUsage
 	}
-	path := args[0]
-	format := engine.FormatYAML
-	if strings.EqualFold(filepath.Ext(path), ".json") {
-		format = engine.FormatJSON
-	}
-	data, err := os.ReadFile(path)
+	out, err := simbackend.NewLocal().ExplainPolicy(context.Background(), args[0])
 	if err != nil {
 		printf(stderr, "gargi policy explain: %v\n", err)
 		return exitError
 	}
-	p, err := model.ParsePolicy(data, format)
-	if err != nil {
-		printf(stderr, "gargi policy explain: %v\n", err)
-		return exitError
-	}
-	printf(stdout, "%s", explain.Explain(p))
+	printf(stdout, "%s", out)
 	return exitOK
 }
 
@@ -266,7 +170,7 @@ func modelValidate(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	issues, err := validateModel(files[0])
+	issues, err := simbackend.NewLocal().ValidateModel(context.Background(), files[0])
 	if err != nil {
 		printf(stderr, "gargi: %v\n", err)
 		return exitError
@@ -292,12 +196,6 @@ func modelValidate(args []string, stdout, stderr io.Writer) int {
 	}
 	return exitOK
 }
-
-// policyList is a PolicySource over an already enumerated policy list, so
-// the CLI enumerates once and can look the best policies up afterwards.
-type policyList []sim.Policy
-
-func (l policyList) Policies(*model.CompiledModel) ([]sim.Policy, error) { return l, nil }
 
 func simRun(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("gargi sim run", flag.ContinueOnError)
@@ -325,45 +223,17 @@ func simRun(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	reg, err := registry()
+	res, err := simbackend.NewLocal().RunExperiment(context.Background(), files[0], simbackend.RunOptions{Workers: *workers, Top: *top})
 	if err != nil {
-		printf(stderr, "gargi: %v\n", err)
-		return exitError
-	}
-	exp, err := experiment.LoadFile(files[0], reg)
-	if err != nil {
-		printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
-		return exitError
-	}
-	ctx := context.Background()
-	// Enumerate or solve once; the policies are kept for --emit-best. A
-	// solution (policies: {search: exact}) is passed to Run as is, so the
-	// report carries each world's solution.
-	var src experiment.PolicySource
-	if solver, ok := exp.PolicySource().(experiment.Solver); ok {
-		sol, err := solver.Solve(ctx, exp.Model, exp.Worlds)
-		if err != nil {
-			printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
-			return exitError
+		var internal *simbackend.InternalError
+		if errors.As(err, &internal) {
+			printf(stderr, "gargi: %v\n", err)
+		} else {
+			printIssues(stderr, simbackend.IssuesOf(err, engine.CodeInvalidValue))
 		}
-		src = sol
-	}
-	var policies []sim.Policy
-	if src != nil {
-		policies, err = src.Policies(exp.Model)
-	} else {
-		policies, err = exp.PolicySource().Policies(exp.Model)
-		src = policyList(policies)
-	}
-	if err != nil {
-		printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
 		return exitError
 	}
-	report, err := experiment.Run(ctx, exp, src, experiment.Options{Workers: *workers, Top: *top})
-	if err != nil {
-		printIssues(stderr, issuesOf(err, engine.CodeInvalidValue))
-		return exitError
-	}
+	report, policies := res.Report, res.Policies
 
 	if *out != "" {
 		if err := writeReportFile(*out, report); err != nil {

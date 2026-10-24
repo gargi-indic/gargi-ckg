@@ -133,7 +133,7 @@ func TestSimRun_RequiresLocal(t *testing.T) {
 	code, out, errOut := gargi(t, "sim", "run", filepath.Join(loanDir, "experiment.yaml"))
 	require.Equal(t, 2, code)
 	require.Empty(t, out)
-	require.Equal(t, "server mode arrives in P1; pass --local\n", errOut)
+	require.Equal(t, "pass --local or --server URL\n", errOut)
 }
 
 func TestSimRun_Loan(t *testing.T) {

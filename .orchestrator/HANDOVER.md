@@ -19,6 +19,7 @@ The **live** state is in issue **#67** (body tables + latest comments) and on `m
 | Jules helper | `.orchestrator/jules.py` |
 | Resume skill | `.claude/skills/gargi-orchestrator/SKILL.md` |
 | Credentials | `~/.config/jules/env` (`GH_TOKEN`, `JULES_API_KEY`). Run `source` on it in the same shell as `gh`/`jules.py`. **Never** print or commit it. |
+| Jules CLI | `npx @google/jules` (v0.1.42, cached at `~/.npm/_npx/76db0a0f29ffdc9b/node_modules/.bin/jules`; not on PATH). `remote list --session` gives fresher status than the REST feed. `remote pull --session <id> [--apply]` gets the WIP patch for early review in a scratch worktree. It has no approve or message commands, so keep `jules.py` for those. |
 | Claude sub-agent worktrees | `.claude/worktrees/agent-*` (harness-managed, untracked; do not commit) |
 
 ## 3. Backlog map

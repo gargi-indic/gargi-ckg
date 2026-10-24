@@ -11,3 +11,4 @@ This directory contains the Architecture Decision Records for the `gargi-flow` p
 - [0007 - Temporal and StateStore Consistency Model](0007-temporal-and-statestore-consistency-model.md)
 - [0008 - Project Rename: gargi-ckg → gargi-flow](0008-project-rename-gargi-flow.md)
 - [0009 - Simulation Engine Boundaries](0009-simulation-engine.md)
+- [0010 - Model Context Protocol (MCP) Server Go SDK](0010-mcp-go-sdk.md)

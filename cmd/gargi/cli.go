@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,11 +17,13 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/gargi-indic/gargi-flow/internal/mcp"
 	"github.com/gargi-indic/gargi-flow/internal/sim/experiment"
 	"github.com/gargi-indic/gargi-flow/internal/sim/report"
 	"github.com/gargi-indic/gargi-flow/internal/simbackend"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/gargi-indic/gargi-flow/pkg/sim"
+	sdk_mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // version is the gargi version, overridable with
@@ -44,6 +47,7 @@ const usage = `usage:
   gargi sim report <experiment-id> --server URL [--kind summary]
   gargi policy explain <policy.yaml|policy.json>
   gargi policy explain <model-id>[@<version>]:<policy-name> --server URL
+  gargi mcp serve (--stdio | --http ADDR)
   gargi version
 `
 
@@ -77,6 +81,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return simReport(args[2:], stdout, stderr)
 		}
 		return simRun(args[2:], stdout, stderr)
+	case "mcp":
+		if len(args) < 2 || args[1] != "serve" {
+			printf(stderr, "%s", usage)
+			return exitUsage
+		}
+		return mcpServe(args[2:], stdout, stderr)
 	case "policy":
 		if len(args) < 2 || args[1] != "explain" {
 			printf(stderr, "%s", usage)
@@ -631,4 +641,50 @@ func printSolution(w io.Writer, s *experiment.WorldSolution) error {
 // formatSeconds formats a duration in seconds, rounded to the second.
 func formatSeconds(s float64) string {
 	return time.Duration(s * float64(time.Second)).Round(time.Second).String()
+}
+
+func mcpServe(args []string, _, stderr io.Writer) int {
+	fs := flag.NewFlagSet("mcp serve", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	useStdio := fs.Bool("stdio", false, "run over stdio")
+	useHTTP := fs.String("http", "", "run over streamable HTTP at ADDR")
+
+	if err := fs.Parse(args); err != nil {
+		return exitUsage
+	}
+
+	if (*useStdio && *useHTTP != "") || (!*useStdio && *useHTTP == "") {
+		printf(stderr, "gargi mcp serve: exactly one of --stdio or --http ADDR is required\n")
+		return exitUsage
+	}
+
+	backend := simbackend.NewLocal()
+	srv := mcp.NewServer(mcp.Options{
+		Backend: backend,
+		Version: version,
+	})
+
+	ctx := context.Background()
+
+	if *useStdio {
+		// Use stdin/stdout transport
+		// MCP sdk has StdioTransport? Actually we can use NewReaderWriterTransport?
+		transport := &sdk_mcp.StdioTransport{}
+		if err := srv.Run(ctx, transport); err != nil {
+			printf(stderr, "mcp server error: %v\n", err)
+			return exitError
+		}
+		return exitOK
+	}
+
+	// Streamable HTTP
+	handler := sdk_mcp.NewStreamableHTTPHandler(func(*http.Request) *sdk_mcp.Server { return srv }, nil)
+
+	printf(stderr, "Starting MCP streamable HTTP server on %s...\n", *useHTTP)
+	if err := http.ListenAndServe(*useHTTP, handler); err != nil {
+		printf(stderr, "mcp server error: %v\n", err)
+		return exitError
+	}
+
+	return exitOK
 }

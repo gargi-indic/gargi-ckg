@@ -77,4 +77,9 @@ test('playwright spec exact error matching', async ({ page }) => {
   // Verify textarea changes
   await expect(textarea).toHaveValue(/id:\s*gate/);
   await expect(textarea).toHaveValue(/type:\s*decision/);
+
+  // Ensure returning to canvas doesn't leak
+  await page.getByTestId('sim-toggle').click();
+  await expect(page.getByTestId('sim-node-gate')).toBeHidden();
+  await expect(page.getByTestId('sim-node-screen')).toBeHidden();
 });

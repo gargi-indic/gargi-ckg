@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ReactFlow, Handle, Position, MarkerType } from '@xyflow/react';
+import { ReactFlow, Handle, Position, MarkerType, ReactFlowProvider } from '@xyflow/react';
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from '@xyflow/react';
 import dagre from 'dagre';
 import type { GraphNode, GraphEdge } from '../sim/graphDoc';
@@ -160,7 +160,9 @@ export default function SimGraphView({ nodes, edges, nodeErrors, onNodeClick }: 
     });
 
     rfEdges.forEach((edge) => {
-      if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) { dagreGraph.setEdge(edge.source, edge.target); }
+      if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
+        dagreGraph.setEdge(edge.source, edge.target);
+      }
     });
 
     dagre.layout(dagreGraph);
@@ -181,18 +183,20 @@ export default function SimGraphView({ nodes, edges, nodeErrors, onNodeClick }: 
 
   return (
     <div style={{ flex: 1, width: '100%', height: '100%', background: '#fafafa' }}>
-      <ReactFlow
-        nodes={flowNodes}
-        edges={flowEdges}
-        nodeTypes={nodeTypes}
-        fitView
-        onNodeClick={(_, node) => onNodeClick(node.id)}
-        defaultEdgeOptions={{
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-        }}
-      />
+      <ReactFlowProvider>
+        <ReactFlow
+          nodes={flowNodes}
+          edges={flowEdges}
+          nodeTypes={nodeTypes}
+          fitView
+          onNodeClick={(_, node) => onNodeClick(node.id)}
+          defaultEdgeOptions={{
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+            },
+          }}
+        />
+      </ReactFlowProvider>
     </div>
   );
 }

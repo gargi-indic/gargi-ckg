@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	gargiv1 "github.com/gargi-indic/gargi-flow/pkg/api/v1"
+	"github.com/gargi-indic/gargi-flow/pkg/engine"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc/status"
@@ -27,6 +28,10 @@ type APIError struct {
 	Status  string   `json:"status"`
 	Message string   `json:"message"`
 	Details []string `json:"details,omitempty"`
+	// Errors lists validation problems as {path, code, message}, sorted. It
+	// is set for INVALID_ARGUMENT errors that carry a ValidationIssues
+	// detail (SimulationService model and experiment validation).
+	Errors []engine.ValidationIssue `json:"errors,omitempty"`
 }
 
 // CustomErrorHandler transforms gRPC and domain errors into consistent JSON APIError responses.
@@ -52,6 +57,12 @@ func CustomErrorHandler(
 	}
 
 	for _, d := range st.Details() {
+		if issues, ok := d.(*gargiv1.ValidationIssues); ok {
+			for _, is := range issues.GetErrors() {
+				apiErr.Errors = append(apiErr.Errors, engine.ValidationIssue{Path: is.GetPath(), Code: engine.ErrorCode(is.GetCode()), Message: is.GetMessage()})
+			}
+			continue
+		}
 		apiErr.Details = append(apiErr.Details, fmt.Sprintf("%v", d))
 	}
 
@@ -65,6 +76,20 @@ type HTTPServer struct {
 	logger *slog.Logger
 }
 
+// HTTPOption configures optional services of NewHTTPServer.
+type HTTPOption func(*httpOptions)
+
+type httpOptions struct {
+	simulation gargiv1.SimulationServiceServer
+}
+
+// WithSimulationService exposes svc over REST: the SimulationService
+// gateway routes (/v1/models..., /v1/experiments...) and the experiment
+// progress SSE endpoint GET /v1/experiments/{id}/events.
+func WithSimulationService(svc gargiv1.SimulationServiceServer) HTTPOption {
+	return func(o *httpOptions) { o.simulation = svc }
+}
+
 // NewHTTPServer initializes the REST API gateway and HTTP router.
 func NewHTTPServer(
 	ctx context.Context,
@@ -72,9 +97,14 @@ func NewHTTPServer(
 	addr string,
 	allowedOrigins []string,
 	logger *slog.Logger,
+	opts ...HTTPOption,
 ) (*HTTPServer, error) {
 	if logger == nil {
 		logger = slog.Default()
+	}
+	var options httpOptions
+	for _, opt := range opts {
+		opt(&options)
 	}
 
 	gwMux := runtime.NewServeMux(
@@ -83,6 +113,11 @@ func NewHTTPServer(
 
 	if err := gargiv1.RegisterGargiServiceHandlerServer(ctx, gwMux, service); err != nil {
 		return nil, fmt.Errorf("registering grpc-gateway handler: %w", err)
+	}
+	if options.simulation != nil {
+		if err := gargiv1.RegisterSimulationServiceHandlerServer(ctx, gwMux, options.simulation); err != nil {
+			return nil, fmt.Errorf("registering simulation grpc-gateway handler: %w", err)
+		}
 	}
 
 	rootMux := http.NewServeMux()
@@ -129,6 +164,9 @@ func NewHTTPServer(
 	// Server-Sent Events (SSE) streaming endpoint
 	sseHandler := NewSSEHandler(service, logger)
 	rootMux.Handle("GET /v1/executions/{id}/events", sseHandler)
+	if options.simulation != nil {
+		rootMux.Handle("GET /v1/experiments/{id}/events", NewExperimentSSEHandler(options.simulation, logger))
+	}
 
 	// WebSocket streaming endpoints
 	wsHandler := NewWebSocketHandler(service, logger)

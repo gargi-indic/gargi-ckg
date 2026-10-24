@@ -3,7 +3,9 @@ package model
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -305,12 +307,36 @@ func addGraphIssues(errs, src *engine.ValidationErrors) {
 	}
 }
 
-// loadGraph reads, parses and validates the graph referenced by def.
-func loadGraph(def *Sim, baseDir string, reg *engine.Registry, errs *engine.ValidationErrors) *engine.GraphDefinition {
-	graphPath := def.Graph
-	if !filepath.IsAbs(graphPath) {
-		graphPath = filepath.Join(baseDir, graphPath)
+// docSource reads the documents a model references: from the operating
+// system's file system when fsys is nil (paths use filepath semantics and
+// may be absolute), otherwise from fsys (slash-separated paths, as fs.FS
+// requires).
+type docSource struct {
+	fsys fs.FS
+}
+
+// resolve returns p resolved against baseDir.
+func (s docSource) resolve(baseDir, p string) string {
+	if s.fsys == nil {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(baseDir, p)
+		}
+		return p
 	}
+	return path.Join(baseDir, p)
+}
+
+// read returns the contents of the resolved path p.
+func (s docSource) read(p string) ([]byte, error) {
+	if s.fsys == nil {
+		return os.ReadFile(p)
+	}
+	return fs.ReadFile(s.fsys, p)
+}
+
+// loadGraph reads, parses and validates the graph referenced by def.
+func loadGraph(def *Sim, src docSource, baseDir string, reg *engine.Registry, errs *engine.ValidationErrors) *engine.GraphDefinition {
+	graphPath := src.resolve(baseDir, def.Graph)
 
 	var format engine.Format
 	switch strings.ToLower(filepath.Ext(graphPath)) {
@@ -323,7 +349,7 @@ func loadGraph(def *Sim, baseDir string, reg *engine.Registry, errs *engine.Vali
 		return nil
 	}
 
-	data, err := os.ReadFile(graphPath)
+	data, err := src.read(graphPath)
 	if err != nil {
 		errs.Add("$.graph", engine.CodeUnresolvedReference, fmt.Sprintf("failed to read graph file: %v", err))
 		return nil
@@ -350,13 +376,27 @@ func loadGraph(def *Sim, baseDir string, reg *engine.Registry, errs *engine.Vali
 // every CEL expression of the model. It returns nil errors on success; on
 // failure it returns every problem found, sorted.
 func Compile(def *Sim, baseDir string, reg *engine.Registry) (*CompiledModel, *engine.ValidationErrors) {
+	return compileFrom(def, docSource{}, baseDir, reg)
+}
+
+// CompileFS is Compile with the graph read from fsys instead of the
+// operating system: def.Graph is joined to baseDir with path.Join
+// (slash-separated, as fs.FS requires) and read with fs.ReadFile. Problems
+// are reported exactly as by Compile. A nil fsys reads from the operating
+// system, like Compile.
+func CompileFS(def *Sim, fsys fs.FS, baseDir string, reg *engine.Registry) (*CompiledModel, *engine.ValidationErrors) {
+	return compileFrom(def, docSource{fsys: fsys}, baseDir, reg)
+}
+
+// compileFrom implements Compile and CompileFS.
+func compileFrom(def *Sim, src docSource, baseDir string, reg *engine.Registry) (*CompiledModel, *engine.ValidationErrors) {
 	errs := &engine.ValidationErrors{}
 	if def == nil {
 		errs.Add(engine.PathRoot.String(), engine.CodeMissingRequired, "simulation definition is nil")
 		return nil, sortedIssues(errs)
 	}
 
-	gDef := loadGraph(def, baseDir, reg, errs)
+	gDef := loadGraph(def, src, baseDir, reg, errs)
 	if gDef == nil {
 		return nil, sortedIssues(errs)
 	}

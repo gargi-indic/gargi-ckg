@@ -335,52 +335,7 @@ func (b *FanoutBridge) Stream(
 					break
 				}
 
-				resp := &gargiv1.StreamExecutionUpdatesResponse{
-					ExecutionId: string(event.ExecutionID()),
-					Sequence:    event.Sequence(),
-					Timestamp:   timestamppb.New(event.Timestamp()),
-					EventType:   string(event.Type()),
-					NodeId:      string(event.NodeID()),
-				}
-
-				switch p := event.Payload().(type) {
-				case engine.NodeStateChangedPayload:
-					resp.FromStatus = toPBNodeStatus(p.OldStatus)
-					resp.ToStatus = toPBNodeStatus(p.NewStatus)
-					resp.ErrorMessage = p.ErrorMessage
-					lastStatuses[event.NodeID()] = p.NewStatus
-					if len(p.OutputPatch) > 0 {
-						if pbVal, err := structpb.NewValue(p.OutputPatch); err == nil {
-							resp.Payload = pbVal
-						}
-					}
-				case engine.NodeCompletedPayload:
-					resp.EventType = "node_state_changed"
-					if prev, ok := lastStatuses[event.NodeID()]; ok {
-						resp.FromStatus = toPBNodeStatus(prev)
-					}
-					resp.ToStatus = toPBNodeStatus(p.Status)
-					lastStatuses[event.NodeID()] = p.Status
-					if len(p.Output) > 0 {
-						if pbVal, err := structpb.NewValue(p.Output); err == nil {
-							resp.Payload = pbVal
-						}
-					}
-				case engine.NodeFailedPayload:
-					resp.EventType = "node_state_changed"
-					if prev, ok := lastStatuses[event.NodeID()]; ok {
-						resp.FromStatus = toPBNodeStatus(prev)
-					}
-					resp.ToStatus = toPBNodeStatus(p.Status)
-					resp.ErrorMessage = p.ErrorMessage
-					lastStatuses[event.NodeID()] = p.Status
-				default:
-					if p != nil {
-						if pbVal, err := structpb.NewValue(p); err == nil {
-							resp.Payload = pbVal
-						}
-					}
-				}
+				resp := eventToUpdate(event, lastStatuses)
 
 				if err := stream.Send(resp); err != nil {
 					return err
@@ -460,4 +415,58 @@ func (b *FanoutBridge) Stream(
 			}
 		}
 	}
+}
+
+// eventToUpdate converts an engine event into the StreamExecutionUpdates
+// message. Node completion and failure events are reported as
+// node_state_changed transitions; lastStatuses tracks each node's previous
+// status across calls and is updated.
+func eventToUpdate(event *engine.Event, lastStatuses map[engine.NodeID]engine.Status) *gargiv1.StreamExecutionUpdatesResponse {
+	resp := &gargiv1.StreamExecutionUpdatesResponse{
+		ExecutionId: string(event.ExecutionID()),
+		Sequence:    event.Sequence(),
+		Timestamp:   timestamppb.New(event.Timestamp()),
+		EventType:   string(event.Type()),
+		NodeId:      string(event.NodeID()),
+	}
+
+	switch p := event.Payload().(type) {
+	case engine.NodeStateChangedPayload:
+		resp.FromStatus = toPBNodeStatus(p.OldStatus)
+		resp.ToStatus = toPBNodeStatus(p.NewStatus)
+		resp.ErrorMessage = p.ErrorMessage
+		lastStatuses[event.NodeID()] = p.NewStatus
+		if len(p.OutputPatch) > 0 {
+			if pbVal, err := structpb.NewValue(p.OutputPatch); err == nil {
+				resp.Payload = pbVal
+			}
+		}
+	case engine.NodeCompletedPayload:
+		resp.EventType = "node_state_changed"
+		if prev, ok := lastStatuses[event.NodeID()]; ok {
+			resp.FromStatus = toPBNodeStatus(prev)
+		}
+		resp.ToStatus = toPBNodeStatus(p.Status)
+		lastStatuses[event.NodeID()] = p.Status
+		if len(p.Output) > 0 {
+			if pbVal, err := structpb.NewValue(p.Output); err == nil {
+				resp.Payload = pbVal
+			}
+		}
+	case engine.NodeFailedPayload:
+		resp.EventType = "node_state_changed"
+		if prev, ok := lastStatuses[event.NodeID()]; ok {
+			resp.FromStatus = toPBNodeStatus(prev)
+		}
+		resp.ToStatus = toPBNodeStatus(p.Status)
+		resp.ErrorMessage = p.ErrorMessage
+		lastStatuses[event.NodeID()] = p.Status
+	default:
+		if p != nil {
+			if pbVal, err := structpb.NewValue(p); err == nil {
+				resp.Payload = pbVal
+			}
+		}
+	}
+	return resp
 }

@@ -23,6 +23,34 @@ export interface paths {
   "/v1/executions/{executionId}/stream": {
     get: operations["GargiService_StreamExecutionUpdates"];
   };
+  "/v1/experiments": {
+    post: operations["SimulationService_CreateExperiment"];
+  };
+  "/v1/experiments/{id}": {
+    get: operations["SimulationService_GetExperiment"];
+  };
+  "/v1/experiments/{id}/reports/{kind}": {
+    get: operations["SimulationService_GetReport"];
+  };
+  "/v1/experiments/{id}/runs/{index}": {
+    get: operations["SimulationService_GetRun"];
+  };
+  "/v1/experiments/{id}/stream": {
+    get: operations["SimulationService_StreamExperimentProgress"];
+  };
+  "/v1/experiments/{id}:cancel": {
+    post: operations["SimulationService_CancelExperiment"];
+  };
+  "/v1/models": {
+    get: operations["SimulationService_ListModels"];
+    post: operations["SimulationService_SaveModel"];
+  };
+  "/v1/models/{id}": {
+    get: operations["SimulationService_GetModel"];
+  };
+  "/v1/models:validate": {
+    post: operations["SimulationService_ValidateModel"];
+  };
 }
 
 export interface definitions {
@@ -35,6 +63,8 @@ export interface definitions {
     signalName?: string;
     payload?: unknown;
   };
+  /** @description CancelExperimentRequest cancels a queued or running experiment. */
+  SimulationServiceCancelExperimentBody: { [key: string]: unknown };
   protobufAny: {
     "@type"?: string;
   } & { [key: string]: unknown };
@@ -62,6 +92,25 @@ export interface definitions {
     /** Format: date-time */
     cancelledAt?: string;
   };
+  /** @description CancelExperimentResponse returns the experiment's status after the request. */
+  v1CancelExperimentResponse: {
+    id?: string;
+    status?: definitions["v1ExperimentStatus"];
+  };
+  /** @description CreateExperimentRequest submits an experiment for asynchronous execution. */
+  v1CreateExperimentRequest: {
+    /** @description Model to evaluate. The experiment document's own model field is ignored. */
+    model?: definitions["v1ModelRef"];
+    /** @description experiment/v1 document. */
+    experiment?: string;
+    /** @description Format of the experiment document: "yaml" (default) or "json". */
+    format?: string;
+  };
+  /** @description CreateExperimentResponse returns the queued experiment. */
+  v1CreateExperimentResponse: {
+    id?: string;
+    status?: definitions["v1ExperimentStatus"];
+  };
   /**
    * @description ExecutionStatus represents the lifecycle state of a graph execution.
    * @default EXECUTION_STATUS_UNSPECIFIED
@@ -86,6 +135,69 @@ export interface definitions {
     /** Format: date-time */
     updatedAt?: string;
   };
+  /** @description Experiment is the status and summary of an experiment job. */
+  v1Experiment: {
+    id?: string;
+    /** @description Evaluated model version. */
+    model?: definitions["v1ModelRef"];
+    status?: definitions["v1ExperimentStatus"];
+    /** @description Why the experiment failed or was cancelled. */
+    error?: string;
+    progress?: definitions["v1ExperimentProgress"];
+    /** Format: date-time */
+    createdAt?: string;
+    /** Format: date-time */
+    startedAt?: string;
+    /** Format: date-time */
+    finishedAt?: string;
+    /** @description experiment/v1 document as submitted, and its format. */
+    definition?: string;
+    format?: string;
+    /**
+     * @description Report kinds GetReport serves for this experiment: "summary" plus the
+     * kinds the experiment requested. Empty until the experiment succeeds.
+     */
+    reportKinds?: string[];
+    /** @description Best policy per world, in experiment order, once the experiment succeeds. */
+    best?: definitions["v1WorldBest"][];
+  };
+  /** @description ExperimentProgress is a progress snapshot of an experiment. */
+  v1ExperimentProgress: {
+    /**
+     * Format: int64
+     * @description Completed units of work (episodes, or exact (world, policy) pairs).
+     */
+    done?: string;
+    /**
+     * Format: int64
+     * @description Total units of work; 0 until known.
+     */
+    total?: string;
+    /** @description Best policy of the first world, once known. */
+    best?: string;
+    /**
+     * Format: double
+     * @description Objective mean of the best policy.
+     */
+    bestMean?: number;
+    /**
+     * Format: double
+     * @description Width of the best policy's 95% confidence interval (0 when exact).
+     */
+    ciWidth?: number;
+  };
+  /**
+   * @description ExperimentStatus is the lifecycle state of a simulation experiment job.
+   * @default EXPERIMENT_STATUS_UNSPECIFIED
+   * @enum {string}
+   */
+  v1ExperimentStatus:
+    | "EXPERIMENT_STATUS_UNSPECIFIED"
+    | "EXPERIMENT_STATUS_QUEUED"
+    | "EXPERIMENT_STATUS_RUNNING"
+    | "EXPERIMENT_STATUS_SUCCEEDED"
+    | "EXPERIMENT_STATUS_FAILED"
+    | "EXPERIMENT_STATUS_CANCELLED";
   /** @description GetExecutionResponse contains the full execution snapshot. */
   v1GetExecutionResponse: {
     executionId?: string;
@@ -100,14 +212,78 @@ export interface definitions {
     errorMessage?: string;
     metadata?: { [key: string]: string };
   };
+  /** @description GetExperimentResponse returns the experiment. */
+  v1GetExperimentResponse: {
+    experiment?: definitions["v1Experiment"];
+  };
+  /** @description GetModelResponse returns the model version. */
+  v1GetModelResponse: {
+    model?: definitions["v1Model"];
+  };
   /** @description GetNodeStateResponse contains the state of the queried node. */
   v1GetNodeStateResponse: {
     executionId?: string;
     nodeState?: definitions["v1NodeStateDetail"];
   };
+  /**
+   * @description GetReportResponse carries the report as JSON. Over REST the body is the
+   * report itself.
+   */
+  v1GetReportResponse: {
+    id?: string;
+    kind?: string;
+    report?: unknown;
+  };
+  /**
+   * @description GetRunResponse is one replayed run as the engine event stream a production
+   * execution would emit (virtual-clock timestamps from 1970-01-01T00:00:00Z).
+   */
+  v1GetRunResponse: {
+    id?: string;
+    world?: string;
+    policyId?: string;
+    /** Format: int32 */
+    index?: number;
+    /**
+     * Format: uint64
+     * @description Sampler seed of the replication.
+     */
+    seed?: string;
+    /** @description Events in the shape of StreamExecutionUpdates. */
+    events?: definitions["v1StreamExecutionUpdatesResponse"][];
+    record?: definitions["v1RunRecord"];
+  };
   /** @description ListExecutionsResponse returns a list of execution summaries. */
   v1ListExecutionsResponse: {
     executions?: definitions["v1ExecutionSummary"][];
+  };
+  /** @description ListModelsResponse lists the latest version of every model, sorted by id. */
+  v1ListModelsResponse: {
+    models?: definitions["v1ModelSummary"][];
+  };
+  /** @description Model is one stored version of a simulation model. */
+  v1Model: {
+    id?: string;
+    /** @description Store-assigned version: "1", "2", ... */
+    version?: string;
+    sim?: string;
+    graph?: string;
+    policies?: { [key: string]: string };
+    format?: string;
+    /** Format: date-time */
+    createdAt?: string;
+  };
+  /** @description ModelRef names a model version; an empty version means the latest. */
+  v1ModelRef: {
+    id?: string;
+    version?: string;
+  };
+  /** @description ModelSummary describes the latest version of a model. */
+  v1ModelSummary: {
+    id?: string;
+    version?: string;
+    /** Format: date-time */
+    createdAt?: string;
   };
   /** @description NodeStateDetail describes the current snapshot state of an individual graph node. */
   v1NodeStateDetail: {
@@ -138,6 +314,38 @@ export interface definitions {
     | "NODE_STATUS_SKIPPED"
     | "NODE_STATUS_COMPENSATING"
     | "NODE_STATUS_COMPENSATED";
+  /** @description RunRecord summarizes one simulated run. */
+  v1RunRecord: {
+    /** Format: double */
+    objective?: number;
+    /** Format: double */
+    cost?: number;
+    duration?: string;
+    abandoned?: boolean;
+    /** @description Nodes executed, in order. */
+    path?: string[];
+    /** @description Option chosen at every decision node. */
+    decisions?: { [key: string]: string };
+    /** @description Whether every per-run constraint held. */
+    constraints?: { [key: string]: boolean };
+    /** @description Declared metric values. */
+    metrics?: { [key: string]: number };
+    /** @description Final graph status, e.g. "Succeeded". */
+    finalStatus?: string;
+  };
+  /** @description SaveModelRequest stores a model as the next version of its id. */
+  v1SaveModelRequest: {
+    /** @description Model id; defaults to the sim document's id. */
+    id?: string;
+    sim?: string;
+    graph?: string;
+    policies?: { [key: string]: string };
+    format?: string;
+  };
+  /** @description SaveModelResponse returns the stored model version. */
+  v1SaveModelResponse: {
+    model?: definitions["v1Model"];
+  };
   /** @description SignalNodeResponse acknowledges receipt of the signal. */
   v1SignalNodeResponse: {
     accepted?: boolean;
@@ -156,6 +364,22 @@ export interface definitions {
     toStatus?: definitions["v1NodeStatus"];
     payload?: unknown;
     errorMessage?: string;
+  };
+  /**
+   * @description StreamExperimentProgressResponse is one progress event. event_type is
+   * "progress" for every update and "done" once the experiment reaches a
+   * terminal status; the stream ends after "done".
+   */
+  v1StreamExperimentProgressResponse: {
+    id?: string;
+    /** Format: uint64 */
+    sequence?: string;
+    /** Format: date-time */
+    timestamp?: string;
+    eventType?: string;
+    status?: definitions["v1ExperimentStatus"];
+    progress?: definitions["v1ExperimentProgress"];
+    error?: string;
   };
   /** @description SubmitExecutionRequest defines the payload for submitting a graph execution. */
   v1SubmitExecutionRequest: {
@@ -182,6 +406,55 @@ export interface definitions {
     completedAt?: string;
     nodeStates?: { [key: string]: definitions["v1NodeStateDetail"] };
     errorMessage?: string;
+  };
+  /** @description ValidateModelRequest carries a simulation model inline. */
+  v1ValidateModelRequest: {
+    /** @description sim/v1 document. */
+    sim?: string;
+    /**
+     * @description graph/v1 document referenced by the sim document's graph field (matched
+     * by base name).
+     */
+    graph?: string;
+    /** @description policy/v1 documents keyed by file base name, e.g. "recession-v1.yaml". */
+    policies?: { [key: string]: string };
+    /**
+     * @description Format of the sim document: "yaml" (default) or "json". Graph and policy
+     * formats follow their file extensions.
+     */
+    format?: string;
+  };
+  /**
+   * @description ValidateModelResponse reports whether the model is valid. Validation
+   * problems are not an RPC error.
+   */
+  v1ValidateModelResponse: {
+    valid?: boolean;
+    /** @description Every problem found, sorted by path, code and message. */
+    errors?: definitions["v1ValidationIssue"][];
+  };
+  /** @description ValidationIssue is one validation problem of a submitted document. */
+  v1ValidationIssue: {
+    /**
+     * @description JSON path of the problem, e.g. "$.behaviors.ai_score.cost" or, inside a
+     * referenced document, "$.graph:$.nodes[0].type".
+     */
+    path?: string;
+    /** @description Stable machine-readable error code, e.g. "missing_required". */
+    code?: string;
+    /** @description Human-readable description. */
+    message?: string;
+  };
+  /** @description WorldBest is the best policy of one world of a finished experiment. */
+  v1WorldBest: {
+    world?: string;
+    policyId?: string;
+    /** Format: double */
+    mean?: number;
+    /** Format: double */
+    ci95Low?: number;
+    /** Format: double */
+    ci95High?: number;
   };
 }
 
@@ -324,6 +597,196 @@ export interface operations {
           result?: definitions["v1StreamExecutionUpdatesResponse"];
           error?: definitions["rpcStatus"];
         };
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_CreateExperiment: {
+    parameters: {
+      body: {
+        /** CreateExperimentRequest submits an experiment for asynchronous execution. */
+        body: definitions["v1CreateExperimentRequest"];
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1CreateExperimentResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_GetExperiment: {
+    parameters: {
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1GetExperimentResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_GetReport: {
+    parameters: {
+      path: {
+        id: string;
+        /**
+         * "summary" (the full experiment report) or one of regret, robust, pareto,
+         * voi, flipPoints, pathHeatmap, policyTree.
+         */
+        kind: string;
+      };
+    };
+    responses: {
+      200: {
+        schema: unknown;
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_GetRun: {
+    parameters: {
+      path: {
+        id: string;
+        /** Replication index, in [0, runs). */
+        index: number;
+      };
+      query: {
+        /** World to replay; defaults to the experiment's first world. */
+        world?: string;
+        /** Policy to replay; defaults to the world's best policy. */
+        policy?: string;
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1GetRunResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_StreamExperimentProgress: {
+    parameters: {
+      path: {
+        id: string;
+      };
+    };
+    responses: {
+      /** A successful response.(streaming responses) */
+      200: {
+        schema: {
+          result?: definitions["v1StreamExperimentProgressResponse"];
+          error?: definitions["rpcStatus"];
+        };
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_CancelExperiment: {
+    parameters: {
+      path: {
+        id: string;
+      };
+      body: {
+        body: definitions["SimulationServiceCancelExperimentBody"];
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1CancelExperimentResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_ListModels: {
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1ListModelsResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_SaveModel: {
+    parameters: {
+      body: {
+        /** SaveModelRequest stores a model as the next version of its id. */
+        body: definitions["v1SaveModelRequest"];
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1SaveModelResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_GetModel: {
+    parameters: {
+      path: {
+        id: string;
+      };
+      query: {
+        /** Version to fetch; empty means the latest. */
+        version?: string;
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1GetModelResponse"];
+      };
+      /** An unexpected error response. */
+      default: {
+        schema: definitions["rpcStatus"];
+      };
+    };
+  };
+  SimulationService_ValidateModel: {
+    parameters: {
+      body: {
+        /** ValidateModelRequest carries a simulation model inline. */
+        body: definitions["v1ValidateModelRequest"];
+      };
+    };
+    responses: {
+      /** A successful response. */
+      200: {
+        schema: definitions["v1ValidateModelResponse"];
       };
       /** An unexpected error response. */
       default: {

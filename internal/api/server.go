@@ -24,6 +24,7 @@ type GRPCServer struct {
 	service    *Server
 	healthSrv  *health.Server
 	logger     *slog.Logger
+	simulation bool
 }
 
 // NewGRPCServer constructs and configures a new GRPCServer instance.
@@ -75,6 +76,17 @@ func NewGRPCServer(
 	}
 }
 
+// simulationServiceName is the health-check name of SimulationService.
+const simulationServiceName = "gargi.v1.SimulationService"
+
+// RegisterSimulation registers the SimulationService implementation and
+// marks it serving in the health service. Call it before Serve.
+func (s *GRPCServer) RegisterSimulation(svc gargiv1.SimulationServiceServer) {
+	gargiv1.RegisterSimulationServiceServer(s.grpcServer, svc)
+	s.simulation = true
+	s.healthSrv.SetServingStatus(simulationServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
+}
+
 // Service returns the underlying GargiServiceServer implementation.
 func (s *GRPCServer) Service() *Server {
 	return s.service
@@ -104,6 +116,9 @@ func (s *GRPCServer) GracefulStop() {
 	s.logger.Info("Gracefully stopping gRPC server")
 	s.healthSrv.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 	s.healthSrv.SetServingStatus("gargi.v1.GargiService", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	if s.simulation {
+		s.healthSrv.SetServingStatus(simulationServiceName, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	}
 	s.grpcServer.GracefulStop()
 }
 

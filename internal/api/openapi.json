@@ -8,6 +8,10 @@
     {
       "name": "GargiService",
       "description": "GargiService exposes execution lifecycle management over gRPC and REST."
+    },
+    {
+      "name": "SimulationService",
+      "description": "SimulationService exposes simulation models and experiments over gRPC and\nREST."
     }
   ],
   "consumes": [
@@ -321,6 +325,366 @@
           "GargiService"
         ]
       }
+    },
+    "/v1/experiments": {
+      "post": {
+        "summary": "CreateExperiment validates and queues an experiment; it runs\nasynchronously.",
+        "operationId": "SimulationService_CreateExperiment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateExperimentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "CreateExperimentRequest submits an experiment for asynchronous execution.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateExperimentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/experiments/{id}": {
+      "get": {
+        "summary": "GetExperiment returns an experiment's status and summary.",
+        "operationId": "SimulationService_GetExperiment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetExperimentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/experiments/{id}/reports/{kind}": {
+      "get": {
+        "summary": "GetReport returns one report of a finished experiment.",
+        "operationId": "SimulationService_GetReport",
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {}
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "kind",
+            "description": "\"summary\" (the full experiment report) or one of regret, robust, pareto,\nvoi, flipPoints, pathHeatmap, policyTree.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/experiments/{id}/runs/{index}": {
+      "get": {
+        "summary": "GetRun replays one simulated run as an engine event stream.",
+        "operationId": "SimulationService_GetRun",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRunResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "index",
+            "description": "Replication index, in [0, runs).",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "world",
+            "description": "World to replay; defaults to the experiment's first world.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "policy",
+            "description": "Policy to replay; defaults to the world's best policy.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/experiments/{id}/stream": {
+      "get": {
+        "summary": "StreamExperimentProgress streams progress events until the experiment\nfinishes. Over REST, use the Server-Sent Events endpoint\nGET /v1/experiments/{id}/events.",
+        "operationId": "SimulationService_StreamExperimentProgress",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1StreamExperimentProgressResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1StreamExperimentProgressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/experiments/{id}:cancel": {
+      "post": {
+        "summary": "CancelExperiment cancels a queued or running experiment.",
+        "operationId": "SimulationService_CancelExperiment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CancelExperimentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SimulationServiceCancelExperimentBody"
+            }
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "summary": "ListModels lists the latest version of every model.",
+        "operationId": "SimulationService_ListModels",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListModelsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "SimulationService"
+        ]
+      },
+      "post": {
+        "summary": "SaveModel validates a model and stores it as the next version of its id.",
+        "operationId": "SimulationService_SaveModel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SaveModelResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "SaveModelRequest stores a model as the next version of its id.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SaveModelRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/models/{id}": {
+      "get": {
+        "summary": "GetModel fetches one model version (the latest by default).",
+        "operationId": "SimulationService_GetModel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetModelResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "Version to fetch; empty means the latest.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
+    },
+    "/v1/models:validate": {
+      "post": {
+        "summary": "ValidateModel validates a model without storing it.",
+        "operationId": "SimulationService_ValidateModel",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ValidateModelResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "description": "ValidateModelRequest carries a simulation model inline.",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ValidateModelRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SimulationService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -342,6 +706,10 @@
         "payload": {}
       },
       "description": "SignalNodeRequest delivers an external event or signal to a waiting node."
+    },
+    "SimulationServiceCancelExperimentBody": {
+      "type": "object",
+      "description": "CancelExperimentRequest cancels a queued or running experiment."
     },
     "protobufAny": {
       "type": "object",
@@ -395,6 +763,48 @@
       },
       "description": "CancelExecutionResponse returns the updated status."
     },
+    "v1CancelExperimentResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExperimentStatus"
+        }
+      },
+      "description": "CancelExperimentResponse returns the experiment's status after the request."
+    },
+    "v1CreateExperimentRequest": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/v1ModelRef",
+          "description": "Model to evaluate. The experiment document's own model field is ignored."
+        },
+        "experiment": {
+          "type": "string",
+          "description": "experiment/v1 document."
+        },
+        "format": {
+          "type": "string",
+          "description": "Format of the experiment document: \"yaml\" (default) or \"json\"."
+        }
+      },
+      "description": "CreateExperimentRequest submits an experiment for asynchronous execution."
+    },
+    "v1CreateExperimentResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExperimentStatus"
+        }
+      },
+      "description": "CreateExperimentResponse returns the queued experiment."
+    },
     "v1ExecutionStatus": {
       "type": "string",
       "enum": [
@@ -435,6 +845,106 @@
       },
       "description": "ExecutionSummary represents summary metadata for an execution."
     },
+    "v1Experiment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/definitions/v1ModelRef",
+          "description": "Evaluated model version."
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExperimentStatus"
+        },
+        "error": {
+          "type": "string",
+          "description": "Why the experiment failed or was cancelled."
+        },
+        "progress": {
+          "$ref": "#/definitions/v1ExperimentProgress"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "definition": {
+          "type": "string",
+          "description": "experiment/v1 document as submitted, and its format."
+        },
+        "format": {
+          "type": "string"
+        },
+        "reportKinds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Report kinds GetReport serves for this experiment: \"summary\" plus the\nkinds the experiment requested. Empty until the experiment succeeds."
+        },
+        "best": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WorldBest"
+          },
+          "description": "Best policy per world, in experiment order, once the experiment succeeds."
+        }
+      },
+      "description": "Experiment is the status and summary of an experiment job."
+    },
+    "v1ExperimentProgress": {
+      "type": "object",
+      "properties": {
+        "done": {
+          "type": "string",
+          "format": "int64",
+          "description": "Completed units of work (episodes, or exact (world, policy) pairs)."
+        },
+        "total": {
+          "type": "string",
+          "format": "int64",
+          "description": "Total units of work; 0 until known."
+        },
+        "best": {
+          "type": "string",
+          "description": "Best policy of the first world, once known."
+        },
+        "bestMean": {
+          "type": "number",
+          "format": "double",
+          "description": "Objective mean of the best policy."
+        },
+        "ciWidth": {
+          "type": "number",
+          "format": "double",
+          "description": "Width of the best policy's 95% confidence interval (0 when exact)."
+        }
+      },
+      "description": "ExperimentProgress is a progress snapshot of an experiment."
+    },
+    "v1ExperimentStatus": {
+      "type": "string",
+      "enum": [
+        "EXPERIMENT_STATUS_UNSPECIFIED",
+        "EXPERIMENT_STATUS_QUEUED",
+        "EXPERIMENT_STATUS_RUNNING",
+        "EXPERIMENT_STATUS_SUCCEEDED",
+        "EXPERIMENT_STATUS_FAILED",
+        "EXPERIMENT_STATUS_CANCELLED"
+      ],
+      "default": "EXPERIMENT_STATUS_UNSPECIFIED",
+      "description": "ExperimentStatus is the lifecycle state of a simulation experiment job."
+    },
     "v1GetExecutionResponse": {
       "type": "object",
       "properties": {
@@ -474,6 +984,24 @@
       },
       "description": "GetExecutionResponse contains the full execution snapshot."
     },
+    "v1GetExperimentResponse": {
+      "type": "object",
+      "properties": {
+        "experiment": {
+          "$ref": "#/definitions/v1Experiment"
+        }
+      },
+      "description": "GetExperimentResponse returns the experiment."
+    },
+    "v1GetModelResponse": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/v1Model"
+        }
+      },
+      "description": "GetModelResponse returns the model version."
+    },
     "v1GetNodeStateResponse": {
       "type": "object",
       "properties": {
@@ -485,6 +1013,54 @@
         }
       },
       "description": "GetNodeStateResponse contains the state of the queried node."
+    },
+    "v1GetReportResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "report": {}
+      },
+      "description": "GetReportResponse carries the report as JSON. Over REST the body is the\nreport itself."
+    },
+    "v1GetRunResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "world": {
+          "type": "string"
+        },
+        "policyId": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "seed": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Sampler seed of the replication."
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1StreamExecutionUpdatesResponse"
+          },
+          "description": "Events in the shape of StreamExecutionUpdates."
+        },
+        "record": {
+          "$ref": "#/definitions/v1RunRecord"
+        }
+      },
+      "description": "GetRunResponse is one replayed run as the engine event stream a production\nexecution would emit (virtual-clock timestamps from 1970-01-01T00:00:00Z)."
     },
     "v1ListExecutionsResponse": {
       "type": "object",
@@ -498,6 +1074,79 @@
         }
       },
       "description": "ListExecutionsResponse returns a list of execution summaries."
+    },
+    "v1ListModelsResponse": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ModelSummary"
+          }
+        }
+      },
+      "description": "ListModelsResponse lists the latest version of every model, sorted by id."
+    },
+    "v1Model": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "description": "Store-assigned version: \"1\", \"2\", ..."
+        },
+        "sim": {
+          "type": "string"
+        },
+        "graph": {
+          "type": "string"
+        },
+        "policies": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "format": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "Model is one stored version of a simulation model."
+    },
+    "v1ModelRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "description": "ModelRef names a model version; an empty version means the latest."
+    },
+    "v1ModelSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "ModelSummary describes the latest version of a model."
     },
     "v1NodeStateDetail": {
       "type": "object",
@@ -549,6 +1198,93 @@
       "default": "NODE_STATUS_UNSPECIFIED",
       "description": "NodeStatus represents the state of an individual node in the graph."
     },
+    "v1RunRecord": {
+      "type": "object",
+      "properties": {
+        "objective": {
+          "type": "number",
+          "format": "double"
+        },
+        "cost": {
+          "type": "number",
+          "format": "double"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "abandoned": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nodes executed, in order."
+        },
+        "decisions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Option chosen at every decision node."
+        },
+        "constraints": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "Whether every per-run constraint held."
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          },
+          "description": "Declared metric values."
+        },
+        "finalStatus": {
+          "type": "string",
+          "description": "Final graph status, e.g. \"Succeeded\"."
+        }
+      },
+      "description": "RunRecord summarizes one simulated run."
+    },
+    "v1SaveModelRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Model id; defaults to the sim document's id."
+        },
+        "sim": {
+          "type": "string"
+        },
+        "graph": {
+          "type": "string"
+        },
+        "policies": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "format": {
+          "type": "string"
+        }
+      },
+      "description": "SaveModelRequest stores a model as the next version of its id."
+    },
+    "v1SaveModelResponse": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/v1Model"
+        }
+      },
+      "description": "SaveModelResponse returns the stored model version."
+    },
     "v1SignalNodeResponse": {
       "type": "object",
       "properties": {
@@ -593,6 +1329,35 @@
         }
       },
       "description": "StreamExecutionUpdatesResponse represents an event streamed to subscribers."
+    },
+    "v1StreamExperimentProgressResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "eventType": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/definitions/v1ExperimentStatus"
+        },
+        "progress": {
+          "$ref": "#/definitions/v1ExperimentProgress"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "description": "StreamExperimentProgressResponse is one progress event. event_type is\n\"progress\" for every update and \"done\" once the experiment reaches a\nterminal status; the stream ends after \"done\"."
     },
     "v1SubmitExecutionRequest": {
       "type": "object",
@@ -655,6 +1420,90 @@
         }
       },
       "description": "SubmitExecutionResponse defines the response after submitting an execution."
+    },
+    "v1ValidateModelRequest": {
+      "type": "object",
+      "properties": {
+        "sim": {
+          "type": "string",
+          "description": "sim/v1 document."
+        },
+        "graph": {
+          "type": "string",
+          "description": "graph/v1 document referenced by the sim document's graph field (matched\nby base name)."
+        },
+        "policies": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "policy/v1 documents keyed by file base name, e.g. \"recession-v1.yaml\"."
+        },
+        "format": {
+          "type": "string",
+          "description": "Format of the sim document: \"yaml\" (default) or \"json\". Graph and policy\nformats follow their file extensions."
+        }
+      },
+      "description": "ValidateModelRequest carries a simulation model inline."
+    },
+    "v1ValidateModelResponse": {
+      "type": "object",
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ValidationIssue"
+          },
+          "description": "Every problem found, sorted by path, code and message."
+        }
+      },
+      "description": "ValidateModelResponse reports whether the model is valid. Validation\nproblems are not an RPC error."
+    },
+    "v1ValidationIssue": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "JSON path of the problem, e.g. \"$.behaviors.ai_score.cost\" or, inside a\nreferenced document, \"$.graph:$.nodes[0].type\"."
+        },
+        "code": {
+          "type": "string",
+          "description": "Stable machine-readable error code, e.g. \"missing_required\"."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description."
+        }
+      },
+      "description": "ValidationIssue is one validation problem of a submitted document."
+    },
+    "v1WorldBest": {
+      "type": "object",
+      "properties": {
+        "world": {
+          "type": "string"
+        },
+        "policyId": {
+          "type": "string"
+        },
+        "mean": {
+          "type": "number",
+          "format": "double"
+        },
+        "ci95Low": {
+          "type": "number",
+          "format": "double"
+        },
+        "ci95High": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "description": "WorldBest is the best policy of one world of a finished experiment."
     }
   }
 }

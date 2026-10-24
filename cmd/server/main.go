@@ -6,19 +6,27 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gargi-indic/gargi-flow/internal/api"
 	"github.com/gargi-indic/gargi-flow/internal/config"
 	"github.com/gargi-indic/gargi-flow/internal/logging"
 	"github.com/gargi-indic/gargi-flow/internal/orchestrator"
+	"github.com/gargi-indic/gargi-flow/internal/sim/jobs"
 	"github.com/gargi-indic/gargi-flow/internal/store"
+	"github.com/gargi-indic/gargi-flow/internal/store/memory"
 	"github.com/gargi-indic/gargi-flow/internal/telemetry"
 	"go.temporal.io/sdk/client"
 )
+
+// runnerShutdownTimeout bounds how long shutdown waits for queued and
+// running simulation experiments to finish before cancelling them.
+const runnerShutdownTimeout = 10 * time.Second
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -85,8 +93,29 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		logger.Warn("Temporal client unavailable; running in degraded mode", "error", err)
 	}
 
+	// Simulation: in-memory experiment store and in-process job runner
+	// (ADR-0004 manual DI; ADR-0009 keeps internal/sim free of store and
+	// API imports).
+	simRegistry, err := jobs.NewRegistry()
+	if err != nil {
+		return fmt.Errorf("initializing simulation registry: %w", err)
+	}
+	simStore := memory.NewExperimentStore()
+	simRunner, err := jobs.New(simStore, simRegistry, jobs.Options{
+		Now:    func() time.Time { return time.Now().UTC() },
+		Logger: logger,
+	})
+	if err != nil {
+		return fmt.Errorf("initializing simulation job runner: %w", err)
+	}
+	// Close is idempotent; this covers the early returns below, the
+	// shutdown path closes the runner before stopping the servers.
+	defer closeRunner(simRunner, logger)
+	simService := api.NewSimulationServer(simStore, simRunner, simRegistry, logger)
+
 	grpcServer := api.NewGRPCServer(temporalClient, cfg.Temporal, st, logger)
-	httpServer, err := api.NewHTTPServer(ctx, grpcServer.Service(), cfg.Server.HTTPAddress, cfg.Server.HTTP.CORS.AllowedOrigins, logger)
+	grpcServer.RegisterSimulation(simService)
+	httpServer, err := api.NewHTTPServer(ctx, grpcServer.Service(), cfg.Server.HTTPAddress, cfg.Server.HTTP.CORS.AllowedOrigins, logger, api.WithSimulationService(simService))
 	if err != nil {
 		return fmt.Errorf("initializing HTTP REST server: %w", err)
 	}
@@ -111,14 +140,31 @@ func run(ctx context.Context, args []string, getenv func(string) (string, bool),
 		errCh <- httpServer.Serve(httpLis)
 	}()
 
+	var serveErr error
+	pending := 2
 	select {
 	case <-ctx.Done():
-		grpcServer.GracefulStop()
-		_ = httpServer.Shutdown(context.Background())
-		return nil
-	case err := <-errCh:
-		grpcServer.GracefulStop()
-		_ = httpServer.Shutdown(context.Background())
-		return err
+	case serveErr = <-errCh:
+		pending--
+	}
+	// Drain the simulation runner first so experiment progress streams
+	// (gRPC and SSE) end and do not hold up the graceful server stops.
+	closeRunner(simRunner, logger)
+	grpcServer.GracefulStop()
+	_ = httpServer.Shutdown(context.Background())
+	// Wait for the remaining Serve goroutines to return.
+	for range pending {
+		<-errCh
+	}
+	return serveErr
+}
+
+// closeRunner drains the simulation job runner, cancelling whatever is
+// still queued or running after runnerShutdownTimeout.
+func closeRunner(r *jobs.Runner, logger *slog.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), runnerShutdownTimeout)
+	defer cancel()
+	if err := r.Close(ctx); err != nil {
+		logger.Warn("Simulation runner did not drain before the shutdown timeout; cancelled remaining experiments", "error", err)
 	}
 }

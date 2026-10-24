@@ -22,6 +22,8 @@ import EdgeDrawer from './components/EdgeDrawer';
 import { ExecutionsSidebar } from './components/ExecutionsSidebar';
 import { ExperimentsGallery } from './components/ExperimentsGallery';
 import { NodePalette } from './components/NodePalette';
+import SimModelEditor from './components/SimModelEditor';
+import type { SimDocs } from './sim/validate';
 import { apiClient } from './api/client';
 import type { definitions } from './api/schema';
 
@@ -35,6 +37,9 @@ const EXAMPLES = [
   { label: 'Saga Compensation (YAML)', path: '/examples/saga_compensation.yaml' },
   { label: 'Wait Signal (YAML)', path: '/examples/wait_signal.yaml' },
 ];
+
+const SIM_EXAMPLE_PATH = '/examples/simulation/loan';
+const SIM_EXAMPLE_LABEL = 'Loan Underwriting (Simulation)';
 
 export type EventLog = {
   timestamp: string;
@@ -81,6 +86,8 @@ const getLayoutedElements = (nodes: ReactFlowNode[], edges: Edge[], direction = 
 function AppFlow() {
   const [inputData, setInputData] = useState<string>('');
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [simMode, setSimMode] = useState(false);
+  const [simDocs, setSimDocs] = useState<SimDocs>({ graph: '', sim: '', experiment: '' });
 
   // Execution state
   const [executionId, setExecutionId] = useState<string | null>(null);
@@ -146,6 +153,23 @@ function AppFlow() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleLoadSimExample = async () => {
+    try {
+      const [graph, sim, experiment] = await Promise.all(
+        ['graph', 'sim', 'experiment'].map(async (d) => {
+          const res = await fetch(`${SIM_EXAMPLE_PATH}/${d}.yaml`);
+          if (!res.ok) throw new Error(`${d}.yaml: HTTP ${res.status}`);
+          return res.text();
+        }),
+      );
+      setSimDocs({ graph, sim, experiment });
+      setSimMode(true);
+      setFetchError(null);
+    } catch (err: unknown) {
+      setFetchError(`Failed to load example: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -611,12 +635,30 @@ function AppFlow() {
     <div className="App" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <header style={{ padding: '10px 20px', background: '#282c34', color: 'white', display: 'flex', gap: '20px', alignItems: 'center' }}>
         <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Gargi Flow</h1>
-        <select onChange={(e) => handleLoadExample(e.target.value)} defaultValue="">
+        <select
+          onChange={(e) => {
+            if (e.target.value === SIM_EXAMPLE_PATH) {
+              void handleLoadSimExample();
+            } else {
+              setSimMode(false);
+              void handleLoadExample(e.target.value);
+            }
+          }}
+          defaultValue=""
+        >
           <option value="" disabled>Load Example...</option>
           {EXAMPLES.map(ex => (
             <option key={ex.path} value={ex.path}>{ex.label}</option>
           ))}
+          <option value={SIM_EXAMPLE_PATH}>{SIM_EXAMPLE_LABEL}</option>
         </select>
+        <button
+          data-testid="sim-toggle"
+          onClick={() => setSimMode((m) => !m)}
+          style={{ padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', background: simMode ? '#ff9800' : '#607d8b', color: 'white' }}
+        >
+          {simMode ? 'Canvas' : 'Simulation'}
+        </button>
         <input type="file" accept=".json,.yaml,.yml" onChange={handleFileUpload} style={{ color: 'white' }} />
 
         <button
@@ -701,7 +743,12 @@ function AppFlow() {
         )}
       </header>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      {simMode && (
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <SimModelEditor docs={simDocs} onChange={setSimDocs} />
+        </div>
+      )}
+      <div style={{ display: simMode ? 'none' : 'flex', flex: 1, overflow: 'hidden' }}>
         <ExecutionsSidebar onSelectExecution={handleSelectExecution} currentExecutionId={executionId} />
         <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex' }}>

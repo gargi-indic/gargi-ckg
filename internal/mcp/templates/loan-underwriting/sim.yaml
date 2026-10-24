@@ -1,0 +1,23 @@
+apiVersion: sim/v1
+id: loan-underwriting
+graph: ./graph.yaml
+worlds:
+  base: {p_bad: 0.20, loss: 4000}
+  recession: {p_bad: 0.35, loss: 6000}
+latents:
+  bad: {bernoulli: {p: "world.p_bad"}}
+behaviors:
+  ai_score:
+    cost: 20
+    output:
+      band: {choice: {low: "latent.bad ? 0.3 : 0.9", high: "latent.bad ? 0.7 : 0.1"}}
+  human_review:
+    cost: 150
+    duration: 48h
+    abandon: {p: "latent.bad ? 0.0 : 0.3"}
+    output:
+      result: {choice: {pass: "latent.bad ? 0.10 : 0.95", fail: "latent.bad ? 0.90 : 0.05"}}
+objective:
+  name: profit
+  value: "-run.cost + (nodes.approve.status == 'Succeeded' ? (latent.bad ? -double(world.loss) : 1000.0) : 0.0)"
+  maximize: mean

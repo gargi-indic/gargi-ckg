@@ -1,0 +1,17 @@
+apiVersion: policy/v1
+id: loan-underwriting
+version: recession-v1
+decisions:
+  screen:
+    rules:
+      - else: score
+  route:
+    rules:
+      - when: "ai_score.output.band == 'high'"
+        choose: reject
+      - else: review
+  final:
+    rules:
+      - when: "human_review.output.result == 'pass'"
+        choose: approve
+      - else: reject

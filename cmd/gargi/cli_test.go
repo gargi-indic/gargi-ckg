@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -544,4 +545,20 @@ func TestPolicyExplain_UsageErrors(t *testing.T) {
 		require.Equal(t, 2, code, "args %q", args)
 		require.Contains(t, errOut, "usage", "args %q", args)
 	}
+}
+
+func TestMCPServeUsageError(t *testing.T) {
+	t.Run("neither flag", func(t *testing.T) {
+		var stderr bytes.Buffer
+		code := run([]string{"mcp", "serve"}, io.Discard, &stderr)
+		require.Equal(t, exitUsage, code)
+		require.Contains(t, stderr.String(), "exactly one of --stdio or --http")
+	})
+
+	t.Run("both flags", func(t *testing.T) {
+		var stderr bytes.Buffer
+		code := run([]string{"mcp", "serve", "--stdio", "--http", ":8090"}, io.Discard, &stderr)
+		require.Equal(t, exitUsage, code)
+		require.Contains(t, stderr.String(), "exactly one of --stdio or --http")
+	})
 }

@@ -1,0 +1,3 @@
+# TODO: minimal valid graph.yaml
+apiVersion: graph/v1
+nodes: []

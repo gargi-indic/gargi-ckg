@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ type fakeStore struct {
 	models      map[string][]sim.ModelBundle
 	experiments map[string]sim.ExperimentRecord
 	history     map[string][]sim.ExperimentRecord
+	listErr     error
 }
 
 var _ sim.ExperimentStore = (*fakeStore)(nil)
@@ -95,8 +97,47 @@ func (s *fakeStore) GetExperiment(_ context.Context, id string) (sim.ExperimentR
 	return cloneRecord(rec), nil
 }
 
-func (s *fakeStore) ListExperiments(context.Context, sim.ListExperimentsOptions) ([]sim.ExperimentRecord, string, error) {
-	return nil, "", errors.New("not implemented")
+// fakePageSize is the fake store's default ListExperiments page size; it is
+// small so tests page.
+const fakePageSize = 2
+
+// ListExperiments lists newest first (CreatedAt, then ID, descending); the
+// page token is the index of the next record. listErr, when set, fails it.
+func (s *fakeStore) ListExperiments(_ context.Context, opts sim.ListExperimentsOptions) ([]sim.ExperimentRecord, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listErr != nil {
+		return nil, "", s.listErr
+	}
+	all := slices.Collect(maps.Values(s.experiments))
+	slices.SortFunc(all, func(a, b sim.ExperimentRecord) int {
+		if c := b.CreatedAt.Compare(a.CreatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(b.ID, a.ID)
+	})
+	start := 0
+	if opts.PageToken != "" {
+		n, err := strconv.Atoi(opts.PageToken)
+		if err != nil || n < 0 || n > len(all) {
+			return nil, "", sim.ErrInvalidPageToken
+		}
+		start = n
+	}
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = fakePageSize
+	}
+	end := min(start+limit, len(all))
+	page := make([]sim.ExperimentRecord, 0, end-start)
+	for _, rec := range all[start:end] {
+		page = append(page, cloneRecord(rec))
+	}
+	next := ""
+	if end < len(all) {
+		next = strconv.Itoa(end)
+	}
+	return page, next, nil
 }
 
 func (s *fakeStore) UpdateExperiment(_ context.Context, id string, fn func(*sim.ExperimentRecord) error) (sim.ExperimentRecord, error) {

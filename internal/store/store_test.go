@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/gargi-indic/gargi-flow/internal/store/memory"
 	"github.com/gargi-indic/gargi-flow/internal/store/storetest"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
 
 func TestCompositeStore_Conformance(t *testing.T) {
@@ -321,6 +323,78 @@ func TestFactory_NewFailFast(t *testing.T) {
 		_, err := store.New(ctx, cfg)
 		if err == nil {
 			t.Fatal("expected error for missing neo4j settings, got nil")
+		}
+	})
+}
+
+func TestCompositeStore_Experiments(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("NewComposite defaults to an in-memory experiment store", func(t *testing.T) {
+		st, err := store.NewComposite(memory.NewStore(), nil, nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := st.Experiments().(*memory.ExperimentStore); !ok {
+			t.Fatalf("Experiments() = %T, want *memory.ExperimentStore", st.Experiments())
+		}
+	})
+
+	t.Run("builder injects the experiment store", func(t *testing.T) {
+		exps := memory.NewExperimentStore()
+		st, err := store.NewBuilder().WithStateStore(memory.NewStore()).WithExperimentStore(exps).Build()
+		if err != nil {
+			t.Fatalf("builder failed: %v", err)
+		}
+		if st.Experiments() != exps {
+			t.Fatal("Experiments() is not the injected store")
+		}
+		st2, err := store.NewBuilder().WithStateStore(memory.NewStore()).Build()
+		if err != nil {
+			t.Fatalf("builder failed: %v", err)
+		}
+		if st2.Experiments() == nil {
+			t.Fatal("Experiments() is nil without an injected store")
+		}
+	})
+
+	t.Run("factory selects memory by default", func(t *testing.T) {
+		for _, cfg := range []config.StoreConfig{
+			{},
+			{Driver: "memory"},
+			{Driver: "memory", Capabilities: config.StoreCapabilitiesConfig{Experiments: "memory"}},
+		} {
+			st, err := store.New(ctx, cfg)
+			if err != nil {
+				t.Fatalf("store.New(%+v): %v", cfg, err)
+			}
+			if _, ok := st.Experiments().(*memory.ExperimentStore); !ok {
+				t.Fatalf("store.New(%+v).Experiments() = %T, want *memory.ExperimentStore", cfg, st.Experiments())
+			}
+			if _, err := st.Experiments().SaveModel(ctx, sim.ModelBundle{ID: "m"}); err != nil {
+				t.Fatalf("SaveModel: %v", err)
+			}
+			_ = st.Close()
+		}
+	})
+
+	t.Run("factory rejects unsupported experiment drivers", func(t *testing.T) {
+		for driver, want := range map[string]string{
+			"redis":     "redis does not support capability 'experiments' (allowed: memory, postgres)",
+			"neo4j":     "neo4j does not support capability 'experiments' (allowed: memory, postgres)",
+			"cassandra": "invalid store experiments capability driver: cassandra",
+		} {
+			_, err := store.New(ctx, config.StoreConfig{Driver: "memory", Capabilities: config.StoreCapabilitiesConfig{Experiments: driver}})
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("experiments %q: error = %v, want %q", driver, err, want)
+			}
+		}
+	})
+
+	t.Run("factory postgres experiments require a dsn", func(t *testing.T) {
+		_, err := store.New(ctx, config.StoreConfig{Driver: "memory", Capabilities: config.StoreCapabilitiesConfig{Experiments: "postgres"}})
+		if err == nil || !strings.Contains(err.Error(), "postgres configuration requires dsn") {
+			t.Fatalf("error = %v, want the missing dsn error", err)
 		}
 	})
 }

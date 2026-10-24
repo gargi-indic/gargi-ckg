@@ -11,6 +11,7 @@ import (
 	"github.com/gargi-indic/gargi-flow/internal/store/postgres"
 	"github.com/gargi-indic/gargi-flow/internal/store/redis"
 	"github.com/gargi-indic/gargi-flow/pkg/engine"
+	"github.com/gargi-indic/gargi-flow/pkg/sim"
 )
 
 // Builder facilitates dependency injection and composition of capability adapters.
@@ -19,6 +20,7 @@ type Builder struct {
 	lockManager    engine.LockManager
 	eventPublisher engine.EventPublisher
 	executionLog   engine.ExecutionLog
+	experiments    sim.ExperimentStore
 	closers        []func() error
 }
 
@@ -51,6 +53,13 @@ func (b *Builder) WithExecutionLog(l engine.ExecutionLog) *Builder {
 	return b
 }
 
+// WithExperimentStore injects the simulation experiment store adapter. When
+// none is injected the composite uses a fresh in-memory store.
+func (b *Builder) WithExperimentStore(e sim.ExperimentStore) *Builder {
+	b.experiments = e
+	return b
+}
+
 // WithCloser registers a cleanup closer function to be invoked when the CompositeStore is closed.
 func (b *Builder) WithCloser(closer func() error) *Builder {
 	if closer != nil {
@@ -61,11 +70,12 @@ func (b *Builder) WithCloser(closer func() error) *Builder {
 
 // Build constructs and returns the wired CompositeStore.
 func (b *Builder) Build() (CompositeStore, error) {
-	return NewComposite(
+	return newComposite(
 		b.stateStore,
 		b.lockManager,
 		b.eventPublisher,
 		b.executionLog,
+		b.experiments,
 		b.closers...,
 	)
 }
@@ -127,8 +137,12 @@ func (c *adapterCache) get(driver string) (any, error) {
 			if c.cfg.Postgres == nil || c.cfg.Postgres.DSN == "" {
 				return nil, errors.New("postgres configuration requires dsn")
 			}
+			// Apply the embedded migrations (state store and simulation
+			// tables) at startup; postgres.Config.AutoMigrate is a plain
+			// bool, so it must be set explicitly.
 			s, err := postgres.New(c.ctx, postgres.Config{
-				ConnString: c.cfg.Postgres.DSN,
+				ConnString:  c.cfg.Postgres.DSN,
+				AutoMigrate: true,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("initializing postgres adapter: %w", err)
@@ -158,6 +172,26 @@ func (c *adapterCache) get(driver string) (any, error) {
 
 	default:
 		return nil, fmt.Errorf("unknown store driver: %s", driver)
+	}
+}
+
+// experiments returns the simulation experiment store of driver. The
+// postgres one shares the cached Postgres adapter's pool, so state and
+// experiments over postgres use one connection pool.
+func (c *adapterCache) experiments(driver string) (sim.ExperimentStore, error) {
+	switch driver {
+	case "memory":
+		return memory.NewExperimentStore(), nil
+	case "postgres":
+		a, err := c.get("postgres")
+		if err != nil {
+			return nil, fmt.Errorf("configuring experiments capability with driver %q: %w", driver, err)
+		}
+		return postgres.NewExperimentStore(a.(*postgres.Store)), nil
+	case "redis", "neo4j":
+		return nil, fmt.Errorf("%s does not support capability 'experiments' (allowed: memory, postgres)", driver)
+	default:
+		return nil, fmt.Errorf("invalid store experiments capability driver: %s. Allowed values: memory, postgres", driver)
 	}
 }
 
@@ -231,11 +265,17 @@ func New(ctx context.Context, cfg config.StoreConfig) (CompositeStore, error) {
 		executionLog = el
 	}
 
-	composite, err := NewComposite(
+	experiments, err := cache.experiments(cfg.EffectiveExperimentsDriver())
+	if err != nil {
+		return nil, err
+	}
+
+	composite, err := newComposite(
 		stateStore,
 		lockManager,
 		eventPublisher,
 		executionLog,
+		experiments,
 		cache.closers...,
 	)
 	if err != nil {

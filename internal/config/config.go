@@ -19,6 +19,10 @@ type StoreCapabilitiesConfig struct {
 	Lock         string `yaml:"lock,omitempty"`
 	Events       string `yaml:"events,omitempty"`
 	ExecutionLog string `yaml:"execution_log,omitempty"`
+	// Experiments selects the simulation experiment store (models,
+	// policies, experiments and reports): memory or postgres. Empty
+	// selects postgres when Driver is postgres, otherwise memory.
+	Experiments string `yaml:"experiments,omitempty"`
 }
 
 // StoreConfig holds the configuration for the storage adapter.
@@ -77,6 +81,19 @@ func (s StoreConfig) EffectiveExecutionLogDriver() string {
 	return s.Driver
 }
 
+// EffectiveExperimentsDriver returns the driver configured for the
+// simulation experiment store. Falls back to postgres when Driver is
+// postgres and to memory otherwise (redis and neo4j do not implement it).
+func (s StoreConfig) EffectiveExperimentsDriver() string {
+	if s.Capabilities.Experiments != "" {
+		return s.Capabilities.Experiments
+	}
+	if s.Driver == "postgres" {
+		return "postgres"
+	}
+	return "memory"
+}
+
 // DriversInUse returns a deduplicated list of drivers required across all configured capabilities.
 func (s StoreConfig) DriversInUse() []string {
 	seen := make(map[string]bool)
@@ -93,6 +110,7 @@ func (s StoreConfig) DriversInUse() []string {
 	add(s.EffectiveLockDriver())
 	add(s.EffectiveEventsDriver())
 	add(s.EffectiveExecutionLogDriver())
+	add(s.EffectiveExperimentsDriver())
 
 	return drivers
 }
@@ -302,6 +320,9 @@ func applyEnvOverrides(cfg *Config) {
 	} else if val, ok := os.LookupEnv("GARGI_STORE_EXECUTION_LOG_DRIVER"); ok {
 		cfg.Store.Capabilities.ExecutionLog = val
 	}
+	if val, ok := os.LookupEnv("GARGI_STORE_CAPABILITIES_EXPERIMENTS"); ok {
+		cfg.Store.Capabilities.Experiments = val
+	}
 
 	if val, ok := os.LookupEnv("GARGI_TEMPORAL_HOST_PORT"); ok {
 		cfg.Temporal.HostPort = val
@@ -452,6 +473,15 @@ func (c *Config) Validate() error {
 		default:
 			return fmt.Errorf("invalid store execution_log capability driver: %s. Allowed values: memory, redis, postgres, neo4j", logDriver)
 		}
+	}
+
+	switch experimentsDriver := c.Store.EffectiveExperimentsDriver(); experimentsDriver {
+	case "memory", "postgres":
+		// valid
+	case "redis", "neo4j":
+		return fmt.Errorf("%s does not support capability 'experiments' (allowed: memory, postgres)", experimentsDriver)
+	default:
+		return fmt.Errorf("invalid store experiments capability driver: %s. Allowed values: memory, postgres", experimentsDriver)
 	}
 
 	for _, d := range c.Store.DriversInUse() {

@@ -131,14 +131,46 @@ func (m *Migrator) Version(ctx context.Context) (int64, bool, error) {
 	return version, dirty, nil
 }
 
-// Up applies all pending migrations in ascending version order.
+// Up applies all pending migrations in ascending version order. Each
+// migration runs in its own transaction that first takes a
+// transaction-scoped advisory lock on the schema's migrations and re-reads
+// the applied version, so processes starting concurrently against one
+// database (for example a server and a worker) apply every migration once.
 func (m *Migrator) Up(ctx context.Context) error {
-	currentVersion, dirty, err := m.Version(ctx)
+	for {
+		applied, err := m.upNext(ctx)
+		if err != nil {
+			return err
+		}
+		if !applied {
+			return nil
+		}
+	}
+}
+
+// upNext applies the next pending migration, if any, and reports whether it
+// applied one.
+func (m *Migrator) upNext(ctx context.Context) (bool, error) {
+	tx, err := m.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return false, fmt.Errorf("postgres migrator: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('gargi.schema_migrations'), hashtext(COALESCE(current_schema(), '')))`); err != nil {
+		return false, fmt.Errorf("postgres migrator: lock migrations: %w", err)
+	}
+	if err := m.ensureMigrationsTable(ctx, tx); err != nil {
+		return false, fmt.Errorf("postgres migrator: ensure table: %w", err)
+	}
+	var currentVersion int64
+	var dirty bool
+	err = tx.QueryRow(ctx, "SELECT version, dirty FROM schema_migrations ORDER BY version DESC LIMIT 1").Scan(&currentVersion, &dirty)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, fmt.Errorf("postgres migrator: query version: %w", err)
 	}
 	if dirty {
-		return fmt.Errorf("postgres migrator: database is in dirty state at version %d; manual intervention required", currentVersion)
+		return false, fmt.Errorf("postgres migrator: database is in dirty state at version %d; manual intervention required", currentVersion)
 	}
 
 	for _, item := range m.migrations {
@@ -148,45 +180,33 @@ func (m *Migrator) Up(ctx context.Context) error {
 
 		content, err := migrationFS.ReadFile(item.upFile)
 		if err != nil {
-			return fmt.Errorf("postgres migrator: read up file %s: %w", item.upFile, err)
-		}
-
-		tx, err := m.pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("postgres migrator: begin tx for version %d: %w", item.version, err)
-		}
-
-		if err := m.ensureMigrationsTable(ctx, tx); err != nil {
-			_ = tx.Rollback(ctx)
-			return err
+			return false, fmt.Errorf("postgres migrator: read up file %s: %w", item.upFile, err)
 		}
 
 		// Mark dirty
 		_, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version, dirty, applied_at) VALUES ($1, TRUE, NOW()) ON CONFLICT (version) DO UPDATE SET dirty = TRUE, applied_at = NOW()", item.version)
 		if err != nil {
-			_ = tx.Rollback(ctx)
-			return fmt.Errorf("postgres migrator: mark dirty for version %d: %w", item.version, err)
+			return false, fmt.Errorf("postgres migrator: mark dirty for version %d: %w", item.version, err)
 		}
 
 		// Execute migration SQL
 		if _, err := tx.Exec(ctx, string(content)); err != nil {
-			_ = tx.Rollback(ctx)
-			return fmt.Errorf("postgres migrator: execute up migration %s: %w", item.upFile, err)
+			return false, fmt.Errorf("postgres migrator: execute up migration %s: %w", item.upFile, err)
 		}
 
 		// Mark clean
 		_, err = tx.Exec(ctx, "UPDATE schema_migrations SET dirty = FALSE WHERE version = $1", item.version)
 		if err != nil {
-			_ = tx.Rollback(ctx)
-			return fmt.Errorf("postgres migrator: clear dirty for version %d: %w", item.version, err)
+			return false, fmt.Errorf("postgres migrator: clear dirty for version %d: %w", item.version, err)
 		}
 
 		if err := tx.Commit(ctx); err != nil {
-			return fmt.Errorf("postgres migrator: commit tx for version %d: %w", item.version, err)
+			return false, fmt.Errorf("postgres migrator: commit tx for version %d: %w", item.version, err)
 		}
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 // Down rolls back the latest applied migration. If all is true, rolls back all applied migrations.

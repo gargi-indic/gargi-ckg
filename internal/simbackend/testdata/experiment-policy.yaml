@@ -1,0 +1,7 @@
+apiVersion: experiment/v1
+model: ./sim.yaml
+worlds: [base, recession]
+policies: {files: [./recession-v1.yaml]}
+evaluator: exact
+runs: 1
+seed: 42

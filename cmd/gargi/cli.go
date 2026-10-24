@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,13 +34,16 @@ const (
 	exitUsage = 2
 )
 
-// errServerMode is printed by sim run without --local.
-const errServerMode = "server mode arrives in P1; pass --local"
+// errServerMode is printed by sim run without --local or --server.
+const errServerMode = "pass --local or --server URL"
 
 const usage = `usage:
   gargi model validate [--json] <sim.yaml>
   gargi sim run <experiment.yaml> --local [--workers N] [--json] [--out report.json] [--emit-best DIR] [--top K]
+  gargi sim run <experiment.yaml> --server URL [--json] [--out report.json] [--top K]
+  gargi sim report <experiment-id> --server URL [--kind summary]
   gargi policy explain <policy.yaml|policy.json>
+  gargi policy explain <model-id>[@<version>]:<policy-name> --server URL
   gargi version
 `
 
@@ -65,9 +69,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return modelValidate(args[2:], stdout, stderr)
 	case "sim":
-		if len(args) < 2 || args[1] != "run" {
+		if len(args) < 2 || (args[1] != "run" && args[1] != "report") {
 			printf(stderr, "%s", usage)
 			return exitUsage
+		}
+		if args[1] == "report" {
+			return simReport(args[2:], stdout, stderr)
 		}
 		return simRun(args[2:], stdout, stderr)
 	case "policy":
@@ -144,11 +151,28 @@ func writeJSON(w io.Writer, v any) error {
 // rendering of a policy/v1 document. A .json file parses as JSON; anything
 // else parses as YAML.
 func policyExplain(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
+	fs := flag.NewFlagSet("gargi policy explain", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	server := fs.String("server", "", "Explain a policy stored in the model of the gargi server at this URL")
+	refs, err := parseInterspersed(fs, args)
+	if err != nil {
+		return parseExit(err)
+	}
+	if len(refs) != 1 {
 		printf(stderr, "%s\n", "usage: gargi policy explain <policy.yaml|policy.json>")
+		printf(stderr, "%s\n", "       gargi policy explain <model-id>[@<version>]:<policy-name> --server URL")
 		return exitUsage
 	}
-	out, err := simbackend.NewLocal().ExplainPolicy(context.Background(), args[0])
+	var backend simbackend.Backend = simbackend.NewLocal()
+	if *server != "" {
+		remote, err := simbackend.NewRemote(*server, nil)
+		if err != nil {
+			printf(stderr, "gargi: %v\n", err)
+			return exitUsage
+		}
+		backend = remote
+	}
+	out, err := backend.ExplainPolicy(context.Background(), refs[0])
 	if err != nil {
 		printf(stderr, "gargi policy explain: %v\n", err)
 		return exitError
@@ -201,6 +225,7 @@ func simRun(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("gargi sim run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	local := fs.Bool("local", false, "Run the experiment in-process")
+	server := fs.String("server", "", "Run the experiment on the gargi server at this URL")
 	workers := fs.Int("workers", 0, "Number of workers (default: the experiment's workers, else GOMAXPROCS)")
 	top := fs.Int("top", 0, "Number of top policies to report per world (default: the experiment's top, else 5)")
 	asJSON := fs.Bool("json", false, "Print the report as JSON")
@@ -210,20 +235,37 @@ func simRun(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return parseExit(err)
 	}
-	if !*local {
+	if *local && *server != "" {
+		printf(stderr, "%s\n", "gargi: --local and --server are mutually exclusive")
+		return exitUsage
+	}
+	if !*local && *server == "" {
 		printf(stderr, "%s\n", errServerMode)
 		return exitUsage
 	}
 	if len(files) != 1 {
-		printf(stderr, "%s\n", "usage: gargi sim run <experiment.yaml> --local [--workers N] [--json] [--out report.json] [--emit-best DIR] [--top K]")
+		printf(stderr, "%s\n", "usage: gargi sim run <experiment.yaml> (--local [--workers N] [--emit-best DIR] | --server URL) [--json] [--out report.json] [--top K]")
 		return exitUsage
 	}
 	if *workers < 0 || *top < 0 {
 		printf(stderr, "%s\n", "gargi: --workers and --top must not be negative")
 		return exitUsage
 	}
+	var backend simbackend.Backend = simbackend.NewLocal()
+	if *server != "" {
+		if *emitBest != "" || *workers != 0 {
+			printf(stderr, "%s\n", "gargi: --emit-best and --workers require --local")
+			return exitUsage
+		}
+		remote, err := simbackend.NewRemote(*server, nil)
+		if err != nil {
+			printf(stderr, "gargi: %v\n", err)
+			return exitUsage
+		}
+		backend = remote
+	}
 
-	res, err := simbackend.NewLocal().RunExperiment(context.Background(), files[0], simbackend.RunOptions{Workers: *workers, Top: *top})
+	res, err := backend.RunExperiment(context.Background(), files[0], simbackend.RunOptions{Workers: *workers, Top: *top})
 	if err != nil {
 		var internal *simbackend.InternalError
 		if errors.As(err, &internal) {
@@ -234,6 +276,9 @@ func simRun(args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	report, policies := res.Report, res.Policies
+	if res.ExperimentID != "" {
+		printf(stderr, "experiment %s\n", res.ExperimentID)
+	}
 
 	if *out != "" {
 		if err := writeReportFile(*out, report); err != nil {
@@ -253,6 +298,44 @@ func simRun(args []string, stdout, stderr io.Writer) int {
 		err = printReport(stdout, report)
 	}
 	if err != nil {
+		printf(stderr, "gargi: %v\n", err)
+		return exitError
+	}
+	return exitOK
+}
+
+// simReport implements gargi sim report: it prints one report of a stored
+// experiment as indented JSON.
+func simReport(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("gargi sim report", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	server := fs.String("server", "", "URL of the gargi server holding the experiment")
+	kind := fs.String("kind", "summary", "Report kind: summary, regret, robust, pareto, voi, flipPoints, pathHeatmap or policyTree")
+	ids, err := parseInterspersed(fs, args)
+	if err != nil {
+		return parseExit(err)
+	}
+	if len(ids) != 1 || *server == "" {
+		printf(stderr, "%s\n", "usage: gargi sim report <experiment-id> --server URL [--kind summary]")
+		return exitUsage
+	}
+	remote, err := simbackend.NewRemote(*server, nil)
+	if err != nil {
+		printf(stderr, "gargi: %v\n", err)
+		return exitUsage
+	}
+	raw, err := remote.Report(context.Background(), ids[0], *kind)
+	if err != nil {
+		printf(stderr, "gargi: %v\n", err)
+		return exitError
+	}
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		printf(stderr, "gargi: %v\n", err)
+		return exitError
+	}
+	buf.WriteByte('\n')
+	if _, err := stdout.Write(buf.Bytes()); err != nil {
 		printf(stderr, "gargi: %v\n", err)
 		return exitError
 	}
